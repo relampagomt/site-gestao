@@ -20,6 +20,8 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
+        brand:
+          "brand-gradient text-white shadow-xs hover:brand-shadow-hover focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--vinho-escuro)] transition-all duration-300 hover:-translate-y-0.5",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
@@ -53,3 +55,4 @@ function Button({
 }
 
 export { Button, buttonVariants }
+

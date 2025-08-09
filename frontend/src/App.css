@@ -44,13 +44,20 @@
 :root {
   --radius: 0.625rem;
   
-  /* Cores da marca Relâmpago */
+  /* Cores da marca Relâmpago - Design System consolidado */
   --vinho-escuro: #8E0000;
   --vinho-medio: #A50C0D;
   --laranja-destaque: #FF9E0C;
   --fundo-claro: #f8f9fa;
   --branco: #ffffff;
   --texto-escuro: #333333;
+  
+  /* Gradiente da marca para uso consistente */
+  --brand-bg: linear-gradient(135deg, var(--vinho-escuro), var(--vinho-medio));
+  
+  /* Sombra padrão unificada para todo o projeto */
+  --brand-shadow: 0 4px 12px rgba(142, 0, 0, 0.15);
+  --brand-shadow-hover: 0 8px 25px rgba(142, 0, 0, 0.25);
   
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -129,37 +136,42 @@
   }
 }
 
+/* Classes utilitárias da marca Relâmpago */
+.brand-gradient {
+  background: var(--brand-bg);
+}
+
+.brand-shadow {
+  box-shadow: var(--brand-shadow);
+}
+
+.brand-shadow-hover {
+  box-shadow: var(--brand-shadow-hover);
+}
+
+.brand-text-vinho {
+  color: var(--vinho-escuro);
+}
+
+.brand-text-laranja {
+  color: var(--laranja-destaque);
+}
+
+.brand-bg-vinho {
+  background-color: var(--vinho-escuro);
+}
+
+.brand-bg-laranja {
+  background-color: var(--laranja-destaque);
+}
+
 /* Estilos customizados para a Relâmpago */
 .hero-gradient {
-  background: linear-gradient(135deg, var(--vinho-escuro), var(--vinho-medio));
+  background: var(--brand-bg);
 }
 
 .hero-overlay {
   background: linear-gradient(135deg, rgba(142, 0, 0, 0.9), rgba(165, 12, 13, 0.8));
-}
-
-.btn-relampago {
-  background: linear-gradient(135deg, var(--vinho-escuro), var(--vinho-medio));
-  transition: all 0.3s ease;
-}
-
-.btn-relampago:hover {
-  background: linear-gradient(135deg, var(--vinho-medio), var(--laranja-destaque));
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(142, 0, 0, 0.3);
-}
-
-.btn-laranja {
-  background-color: var(--laranja-destaque);
-  color: var(--vinho-escuro);
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.btn-laranja:hover {
-  background-color: #e88a00;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(255, 158, 12, 0.3);
 }
 
 .card-hover {
@@ -167,26 +179,51 @@
 }
 
 .card-hover:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px);
+  box-shadow: var(--brand-shadow-hover);
 }
 
 .stats-card {
-  background: linear-gradient(135deg, var(--vinho-escuro), var(--vinho-medio));
+  background: var(--brand-bg);
   transition: transform 0.3s ease;
 }
 
 .stats-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-3px);
 }
 
 .stats-number {
   color: var(--laranja-destaque);
 }
 
-/* Animações suaves */
-.fade-in {
-  animation: fadeIn 0.8s ease-in-out;
+/* Animações suaves com suporte a prefers-reduced-motion */
+@media (prefers-reduced-motion: no-preference) {
+  .fade-in {
+    animation: fadeIn 0.8s ease-in-out;
+  }
+
+  .slide-in-left {
+    animation: slideInLeft 0.8s ease-out;
+  }
+
+  .slide-in-right {
+    animation: slideInRight 0.8s ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in,
+  .slide-in-left,
+  .slide-in-right {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  
+  .card-hover:hover,
+  .stats-card:hover {
+    transform: none;
+  }
 }
 
 @keyframes fadeIn {
@@ -200,10 +237,6 @@
   }
 }
 
-.slide-in-left {
-  animation: slideInLeft 0.8s ease-out;
-}
-
 @keyframes slideInLeft {
   from {
     opacity: 0;
@@ -213,10 +246,6 @@
     opacity: 1;
     transform: translateX(0);
   }
-}
-
-.slide-in-right {
-  animation: slideInRight 0.8s ease-out;
 }
 
 @keyframes slideInRight {
