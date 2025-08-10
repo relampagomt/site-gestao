@@ -115,13 +115,7 @@ const Settings = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Configurações do Sistema</h1>
-        <Badge className="bg-blue-100 text-blue-800">
-          <SettingsIcon className="w-3 h-3 mr-1" />
-          Painel de Configurações
-        </Badge>
-      </div>
+
 
       <Tabs defaultValue="company" className="space-y-6">
         <TabsList className="grid w-full grid-cols-5">

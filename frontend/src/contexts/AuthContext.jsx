@@ -92,6 +92,25 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
+      // Modo de desenvolvimento - simula login sem backend
+      if (import.meta.env.DEV && username === 'admin' && password === 'admin123') {
+        const mockUser = {
+          id: 1,
+          name: 'Administrador',
+          username: 'admin',
+          role: 'admin',
+          email: 'admin@relampago.com'
+        };
+        
+        const mockToken = 'mock-token-dev';
+        
+        localStorage.setItem('token', mockToken);
+        localStorage.setItem('user', JSON.stringify(mockUser));
+        setUser(mockUser);
+        
+        return { success: true };
+      }
+      
       const data = await loginRequest(username, password);
 
       // Aceita formatos comuns de resposta

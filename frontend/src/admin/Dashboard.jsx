@@ -47,22 +47,17 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <Badge className="bg-green-100 text-green-800">
-          Sistema Online
-        </Badge>
-      </div>
+
 
       {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total de Clientes</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalClients.toLocaleString()}</div>
+            <div className="text-xl sm:text-2xl font-bold">{stats.totalClients.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
               +12% em relação ao mês passado
             </p>
@@ -75,7 +70,7 @@ const Dashboard = () => {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.activeActions}</div>
+            <div className="text-xl sm:text-2xl font-bold">{stats.activeActions}</div>
             <p className="text-xs text-muted-foreground">
               +3 novas esta semana
             </p>
@@ -88,7 +83,7 @@ const Dashboard = () => {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">R$ {stats.monthlyRevenue.toLocaleString()}</div>
+            <div className="text-xl sm:text-2xl font-bold">R$ {stats.monthlyRevenue.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
               +8% em relação ao mês passado
             </p>
@@ -101,7 +96,7 @@ const Dashboard = () => {
             <Award className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.completedCampaigns}</div>
+            <div className="text-xl sm:text-2xl font-bold">{stats.completedCampaigns}</div>
             <p className="text-xs text-muted-foreground">
               Este mês
             </p>
@@ -110,17 +105,17 @@ const Dashboard = () => {
       </div>
 
       {/* Gráficos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
         {/* Gráfico de Linha - Receita Mensal */}
         <Card>
           <CardHeader>
-            <CardTitle>Receita Mensal</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Receita Mensal</CardTitle>
             <CardDescription>
               Evolução da receita nos últimos 6 meses
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <LineChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
@@ -135,13 +130,13 @@ const Dashboard = () => {
         {/* Gráfico de Barras - Campanhas por Mês */}
         <Card>
           <CardHeader>
-            <CardTitle>Campanhas por Mês</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Campanhas por Mês</CardTitle>
             <CardDescription>
               Número de campanhas realizadas mensalmente
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <BarChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
@@ -154,17 +149,17 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
         {/* Gráfico de Pizza - Distribuição de Serviços */}
         <Card>
           <CardHeader>
-            <CardTitle>Distribuição de Serviços</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Distribuição de Serviços</CardTitle>
             <CardDescription>
               Percentual de cada tipo de serviço
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie
                   data={serviceData}
@@ -189,7 +184,7 @@ const Dashboard = () => {
         {/* Atividades Recentes */}
         <Card>
           <CardHeader>
-            <CardTitle>Atividades Recentes</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Atividades Recentes</CardTitle>
             <CardDescription>
               Últimas ações realizadas no sistema
             </CardDescription>
@@ -198,16 +193,16 @@ const Dashboard = () => {
             <div className="space-y-4">
               {recentActivities.map((activity) => (
                 <div key={activity.id} className="flex items-center space-x-4">
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                  <div className="flex-1 space-y-1">
+                  <Activity className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 space-y-1 min-w-0">
                     <p className="text-sm font-medium leading-none">
                       {activity.action}
                     </p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground truncate">
                       {activity.client}
                     </p>
                   </div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">
                     {activity.time}
                   </div>
                 </div>
@@ -220,23 +215,23 @@ const Dashboard = () => {
       {/* Resumo Rápido */}
       <Card>
         <CardHeader>
-          <CardTitle>Resumo Executivo</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Resumo Executivo</CardTitle>
           <CardDescription>
             Visão geral do desempenho da empresa
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">98.5%</div>
+              <div className="text-xl sm:text-2xl font-bold text-green-600">98.5%</div>
               <p className="text-sm text-muted-foreground">Taxa de Satisfação</p>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">15.2 dias</div>
+              <div className="text-xl sm:text-2xl font-bold text-blue-600">15.2 dias</div>
               <p className="text-sm text-muted-foreground">Tempo Médio de Campanha</p>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">2.3M</div>
+              <div className="text-xl sm:text-2xl font-bold text-purple-600">2.3M</div>
               <p className="text-sm text-muted-foreground">Panfletos Distribuídos</p>
             </div>
           </div>

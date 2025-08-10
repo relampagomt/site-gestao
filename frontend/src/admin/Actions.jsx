@@ -197,9 +197,8 @@ const Actions = () => {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Gestão de Ações Promocionais</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex justify-end">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button 
@@ -222,7 +221,8 @@ const Actions = () => {
               }}
             >
               <Plus className="h-4 w-4 mr-2" />
-              Nova Ação
+              <span className="hidden sm:inline">Nova Ação</span>
+              <span className="sm:hidden">Nova</span>
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">

@@ -166,23 +166,19 @@ const Clients = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
-          <p className="text-gray-600">Gerencie os clientes da empresa</p>
-        </div>
-        
+      <div className="flex justify-end">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={resetForm} className="flex items-center space-x-2">
               <Plus className="w-4 h-4" />
-              <span>Novo Cliente</span>
+              <span className="hidden sm:inline">Novo Cliente</span>
+              <span className="sm:hidden">Novo</span>
             </Button>
           </DialogTrigger>
           
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl mx-4">
             <DialogHeader>
               <DialogTitle>
                 {editingClient ? 'Editar Cliente' : 'Novo Cliente'}
@@ -193,7 +189,7 @@ const Clients = () => {
             </DialogHeader>
             
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="name">Nome *</Label>
                   <Input
@@ -215,7 +211,7 @@ const Clients = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="phone">Telefone *</Label>
                   <Input
@@ -238,7 +234,7 @@ const Clients = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="segment">Segmento</Label>
                   <Select value={formData.segment} onValueChange={(value) => setFormData({...formData, segment: value})}>
@@ -282,7 +278,7 @@ const Clients = () => {
                 />
               </div>
               
-              <div className="flex justify-end space-x-2">
+              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancelar
                 </Button>
@@ -333,75 +329,80 @@ const Clients = () => {
               </p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Empresa</TableHead>
-                  <TableHead>Contato</TableHead>
-                  <TableHead>Segmento</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredClients.map((client) => (
-                  <TableRow key={client.id}>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <User className="w-4 h-4 text-gray-400" />
-                        <span className="font-medium">{client.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Building className="w-4 h-4 text-gray-400" />
-                        <span>{client.company}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-2 text-sm">
-                          <Phone className="w-3 h-3 text-gray-400" />
-                          <span>{client.phone}</span>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead className="hidden sm:table-cell">Empresa</TableHead>
+                    <TableHead className="hidden md:table-cell">Contato</TableHead>
+                    <TableHead className="hidden lg:table-cell">Segmento</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredClients.map((client) => (
+                    <TableRow key={client.id}>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <User className="w-4 h-4 text-gray-400" />
+                          <div>
+                            <span className="font-medium">{client.name}</span>
+                            <div className="sm:hidden text-xs text-gray-500">{client.company}</div>
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-2 text-sm">
-                          <Mail className="w-3 h-3 text-gray-400" />
-                          <span>{client.email}</span>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <div className="flex items-center space-x-2">
+                          <Building className="w-4 h-4 text-gray-400" />
+                          <span>{client.company}</span>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="capitalize">{client.segment || 'Não informado'}</span>
-                    </TableCell>
-                    <TableCell>
-                      {getStatusBadge(client.status)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(client)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        {isAdmin() && (
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2 text-sm">
+                            <Phone className="w-3 h-3 text-gray-400" />
+                            <span>{client.phone}</span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-sm">
+                            <Mail className="w-3 h-3 text-gray-400" />
+                            <span>{client.email}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <span className="capitalize">{client.segment || 'Não informado'}</span>
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(client.status)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-1 sm:space-x-2">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDelete(client.id)}
-                            className="text-red-600 hover:text-red-700"
+                            onClick={() => handleEdit(client)}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Edit className="w-4 h-4" />
                           </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                          {isAdmin() && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(client.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

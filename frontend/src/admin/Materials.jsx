@@ -188,23 +188,19 @@ const Materials = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Materiais</h1>
-          <p className="text-gray-600">Gerencie o recebimento e coleta de materiais</p>
-        </div>
-        
+      <div className="flex justify-end">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={resetForm} className="flex items-center space-x-2">
               <Plus className="w-4 h-4" />
-              <span>Novo Material</span>
+              <span className="hidden sm:inline">Novo Material</span>
+              <span className="sm:hidden">Novo</span>
             </Button>
           </DialogTrigger>
           
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl mx-4">
             <DialogHeader>
               <DialogTitle>
                 {editingMaterial ? 'Editar Material' : 'Novo Material'}
@@ -215,7 +211,7 @@ const Materials = () => {
             </DialogHeader>
             
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="date">Data *</Label>
                   <Input
@@ -287,7 +283,7 @@ const Materials = () => {
                 />
               </div>
               
-              <div className="flex justify-end space-x-2">
+              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancelar
                 </Button>

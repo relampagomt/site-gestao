@@ -72,7 +72,7 @@ const AdminDashboard = () => {
                 }`}
               >
                 <Icon className="w-5 h-5 mr-3" />
-                {item.label}
+                <span className="text-sm lg:text-base">{item.label}</span>
               </button>
             );
           })}
@@ -92,13 +92,11 @@ const AdminDashboard = () => {
                 >
                   <Menu className="w-6 h-6" />
                 </button>
-                <h2 className="text-xl font-semibold text-gray-900">
-                  {menuItems.find(item => item.id === activeTab)?.label || 'Dashboard'}
-                </h2>
+
               </div>
 
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 sm:space-x-4">
+                <div className="hidden sm:flex items-center space-x-2">
                   <User className="w-4 h-4 text-gray-500" />
                   <span className="text-sm text-gray-700">{user?.name}</span>
                   <Badge variant={isAdmin() ? "default" : "secondary"}>
@@ -110,10 +108,10 @@ const AdminDashboard = () => {
                   variant="outline"
                   size="sm"
                   onClick={handleLogout}
-                  className="flex items-center space-x-2"
+                  className="flex items-center space-x-1 sm:space-x-2"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>Sair</span>
+                  <span className="hidden sm:inline">Sair</span>
                 </Button>
               </div>
             </div>
@@ -121,7 +119,7 @@ const AdminDashboard = () => {
         </header>
 
         {/* Page Content */}
-        <main className="p-6">
+        <main className="p-3 sm:p-6">
           <ActiveComponent />
         </main>
       </div>
