@@ -1,40 +1,83 @@
 import os
 import json
+import base64
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, storage
 
-db = None
+_app = None
+_db = None
+_bucket = None
+
+def _load_credential():
+    """
+    Ordem de leitura das credenciais:
+      1) FIREBASE_CREDENTIALS_B64  (JSON em base64)  ← recomendado em produção
+      2) FIREBASE_CREDENTIALS_JSON (JSON cru como string)
+      3) FIREBASE_CREDENTIALS_PATH ou GOOGLE_APPLICATION_CREDENTIALS (caminho p/ arquivo .json)
+    Se nada for encontrado, lança erro (evita cair em ApplicationDefault sem arquivo).
+    """
+    b64 = os.getenv("FIREBASE_CREDENTIALS_B64")
+    if b64:
+        try:
+            data = base64.b64decode(b64).decode("utf-8")
+            info = json.loads(data)
+            return credentials.Certificate(info)
+        except Exception as e:
+            raise RuntimeError("FIREBASE_CREDENTIALS_B64 inválido") from e
+
+    raw = os.getenv("FIREBASE_CREDENTIALS_JSON")
+    if raw:
+        try:
+            info = json.loads(raw)
+            return credentials.Certificate(info)
+        except Exception as e:
+            raise RuntimeError("FIREBASE_CREDENTIALS_JSON inválido") from e
+
+    path = os.getenv("FIREBASE_CREDENTIALS_PATH") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if path and os.path.exists(path):
+        return credentials.Certificate(path)
+
+    raise RuntimeError(
+        "Credenciais do Firebase não configuradas. Defina FIREBASE_CREDENTIALS_B64 "
+        "(recomendado) OU FIREBASE_CREDENTIALS_JSON OU FIREBASE_CREDENTIALS_PATH/GOOGLE_APPLICATION_CREDENTIALS."
+    )
 
 def init_firebase():
-    """Inicializa o Firebase Admin SDK"""
-    global db
-    
-    if not firebase_admin._apps:
-        # Obter credenciais do Firebase das variáveis de ambiente
-        firebase_credentials_json = os.environ.get('FIREBASE_CREDENTIALS_JSON')
-        
-        if firebase_credentials_json:
-            # Parse do JSON das credenciais
-            cred_dict = json.loads(firebase_credentials_json)
-            cred = credentials.Certificate(cred_dict)
-        else:
-            # Fallback para arquivo de credenciais (desenvolvimento)
-            cred_path = os.environ.get('FIREBASE_CREDENTIALS_PATH', 'firebase-credentials.json')
-            if os.path.exists(cred_path):
-                cred = credentials.Certificate(cred_path)
-            else:
-                # Usar credenciais padrão do ambiente
-                cred = credentials.ApplicationDefault()
-        
-        firebase_admin.initialize_app(cred)
-    
-    db = firestore.client()
-    return db
+    """Inicializa o Firebase uma única vez e prepara Firestore/Storage."""
+    global _app, _db, _bucket
+
+    if firebase_admin._apps:
+        _app = firebase_admin.get_app()
+    else:
+        cred = _load_credential()
+        options = {}
+        proj = os.getenv("FIREBASE_PROJECT_ID")
+        bucket = os.getenv("FIREBASE_STORAGE_BUCKET")
+        if proj:
+            options["projectId"] = proj
+        if bucket:
+            options["storageBucket"] = bucket
+        _app = firebase_admin.initialize_app(cred, options or None)
+
+    _db = firestore.client(_app)
+    try:
+        _bucket = storage.bucket(app=_app)
+    except Exception:
+        _bucket = None
+    return _app
 
 def get_firestore_client():
-    """Retorna o cliente Firestore"""
-    global db
-    if db is None:
-        db = init_firebase()
-    return db
+    """Retorna o cliente do Firestore (inicializa se necessário)."""
+    if not firebase_admin._apps:
+        init_firebase()
+    return firestore.client()
+
+def get_storage_bucket():
+    """Retorna o bucket do Storage (pode ser None se não configurado)."""
+    if not firebase_admin._apps:
+        init_firebase()
+    try:
+        return storage.bucket()
+    except Exception:
+        return None
 

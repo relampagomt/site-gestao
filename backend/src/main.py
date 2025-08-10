@@ -1,45 +1,73 @@
-import os
-import sys
-from dotenv import load_dotenv
+# backend/src/services/firebase_service.py
+import os, json, base64
+import firebase_admin
+from firebase_admin import credentials, firestore, storage
 
-load_dotenv()
+_app = None
+_db = None
+_bucket = None
 
-# DON'T CHANGE THIS !!!
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+def _load_credential():
+    # 1) Base64 (recomendado no Render)
+    b64 = os.getenv("FIREBASE_CREDENTIALS_B64")
+    if b64:
+        try:
+            data = base64.b64decode(b64).decode("utf-8")
+            info = json.loads(data)
+            return credentials.Certificate(info)
+        except Exception as e:
+            raise RuntimeError("FIREBASE_CREDENTIALS_B64 inválido") from e
 
-from flask import Flask, jsonify
-from flask_cors import CORS
-from flask_jwt_extended import JWTManager
+    # 2) JSON cru em env
+    raw = os.getenv("FIREBASE_CREDENTIALS_JSON")
+    if raw:
+        try:
+            info = json.loads(raw)
+            return credentials.Certificate(info)
+        except Exception as e:
+            raise RuntimeError("FIREBASE_CREDENTIALS_JSON inválido") from e
 
-from src.routes.auth import auth_bp
-from src.services.firebase_service import init_firebase
-from src.services.user_service import create_admin_user
+    # 3) Caminho para arquivo
+    path = os.getenv("FIREBASE_CREDENTIALS_PATH") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if path and os.path.exists(path):
+        return credentials.Certificate(path)
 
-app = Flask(__name__)
+    # Nada configurado → erro claro
+    raise RuntimeError(
+        "Credenciais não configuradas. Defina FIREBASE_CREDENTIALS_B64 (recomendado) "
+        "ou FIREBASE_CREDENTIALS_JSON ou FIREBASE_CREDENTIALS_PATH/GOOGLE_APPLICATION_CREDENTIALS."
+    )
 
-# Configurações
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'asdf#FGSgvasgf$5$WGT')
-app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-string-change-in-production')
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False  # Token não expira
+def init_firebase():
+    global _app, _db, _bucket
+    if firebase_admin._apps:
+        _app = firebase_admin.get_app()
+    else:
+        cred = _load_credential()
+        opts = {}
+        proj = os.getenv("FIREBASE_PROJECT_ID")
+        bucket = os.getenv("FIREBASE_STORAGE_BUCKET")
+        if proj:   opts["projectId"] = proj
+        if bucket: opts["storageBucket"] = bucket
+        _app = firebase_admin.initialize_app(cred, opts or None)
 
-# Inicializar extensões
-CORS(app, origins="*")  # Permitir todas as origens
-jwt = JWTManager(app)
+    _db = firestore.client(_app)
+    try:
+        _bucket = storage.bucket(app=_app)
+    except Exception:
+        _bucket = None
+    return _app
 
-# Inicializar Firebase
-init_firebase()
+def get_firestore_client():
+    if not firebase_admin._apps:
+        init_firebase()
+    return firestore.client()
 
-# Registrar blueprints
-app.register_blueprint(auth_bp, url_prefix='/api/auth')
-
-@app.route("/healthcheck", methods=["GET"])
-def healthcheck():
-    return jsonify({"status": "ok"}), 200
-
-# Criar usuário admin automaticamente na inicialização
-with app.app_context():
-    create_admin_user()
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+def get_storage_bucket():
+    if not firebase_admin._apps:
+        init_firebase()
+    try:
+        return storage.bucket()
+    except Exception:
+        return None
 
