@@ -1,52 +1,47 @@
+# backend/src/models/job_vacancy.py
+from __future__ import annotations
+from typing import Dict, Any, List, Optional
 from src.services.firestore_service import firestore_service
 
 class JobVacancy:
-    def __init__(self, name, phone, email, others=None):
-        self.name = name
-        self.phone = phone
-        self.email = email
-        self.others = others
-
-    def to_dict(self):
-        return {
-            "name": self.name,
-            "phone": self.phone,
-            "email": self.email,
-            "others": self.others
-        }
+    COLLECTION = "job_vacancies"
 
     @staticmethod
-    def from_dict(source):
-        return JobVacancy(
-            source["name"],
-            source["phone"],
-            source["email"],
-            source.get("others")
-        )
+    def _normalize(doc: Dict[str, Any]) -> Dict[str, Any]:
+        """Garante campos básicos e tipos consistentes para o frontend."""
+        data = dict(doc)
+        data.setdefault("name", "")
+        data.setdefault("phone", "")
+        data.setdefault("address", "")
+        data.setdefault("age", None)
+        data.setdefault("sex", "Outro")
+        data.setdefault("department", "")
+        data.setdefault("job_type", "")
+        data.setdefault("status", "Aberta")
+        data.setdefault("salary", 0)
+        return data
 
-    @staticmethod
-    def create(job_vacancy_data):
-        doc_id, _ = firestore_service.add_document("job_vacancies", job_vacancy_data)
+    @classmethod
+    def create(cls, payload: Dict[str, Any]) -> str:
+        data = cls._normalize(payload)
+        doc_id, _ = firestore_service.add_document(cls.COLLECTION, data)
         return doc_id
 
-    @staticmethod
-    def get_all():
-        return firestore_service.get_all_documents("job_vacancies")
+    @classmethod
+    def get_all(cls) -> List[Dict[str, Any]]:
+        docs = firestore_service.get_all_documents(cls.COLLECTION) or []
+        return [cls._normalize(d) for d in docs]
 
-    @staticmethod
-    def get_by_id(job_vacancy_id):
-        job_vacancy = firestore_service.get_document("job_vacancies", job_vacancy_id)
-        if job_vacancy:
-            job_vacancy['id'] = job_vacancy_id
-            return job_vacancy
-        return None
+    @classmethod
+    def get_by_id(cls, job_vacancy_id: str) -> Optional[Dict[str, Any]]:
+        doc = firestore_service.get_document(cls.COLLECTION, job_vacancy_id)
+        return cls._normalize(doc) if doc else None
 
-    @staticmethod
-    def update(job_vacancy_id, job_vacancy_data):
-        return firestore_service.update_document("job_vacancies", job_vacancy_id, job_vacancy_data)
+    @classmethod
+    def update(cls, job_vacancy_id: str, payload: Dict[str, Any]) -> bool:
+        data = cls._normalize(payload)
+        return firestore_service.update_document(cls.COLLECTION, job_vacancy_id, data)
 
-    @staticmethod
-    def delete(job_vacancy_id):
-        return firestore_service.delete_document("job_vacancies", job_vacancy_id)
-
-
+    @classmethod
+    def delete(cls, job_vacancy_id: str) -> bool:
+        return firestore_service.delete_document(cls.COLLECTION, job_vacancy_id)
