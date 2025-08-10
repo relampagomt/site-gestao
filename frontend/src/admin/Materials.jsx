@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../components/ui/textarea';
 import { useAuth } from '../contexts/AuthContext';
 import { Plus, Search, Edit, Trash2, Package, Calendar, User, AlertCircle, Upload, Image } from 'lucide-react';
-import api from '../api'; // ✅ usar base dinâmica (/api em prod)
+import api from '../api';
 
 const Materials = () => {
   const { isAdmin } = useAuth();
