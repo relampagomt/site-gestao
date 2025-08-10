@@ -134,7 +134,7 @@ function Contact() {
                   <Button 
                     size="lg" 
                     variant="outline" 
-                    className="w-full border-white text-white hover:bg-white hover:text-[var(--vinho-escuro)] text-lg py-4 focus-visible:ring-white"
+                    className="w-full text-lg py-4"
                     aria-label="Ligar para a empresa"
                   >
                     <Phone className="w-5 h-5 mr-2" />

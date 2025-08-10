@@ -85,7 +85,8 @@ function Highlights() {
             <div className="flex flex-col sm:flex-row gap-4">
               <Button 
                 size="lg" 
-                className="bg-[var(--laranja-destaque)] text-[var(--vinho-escuro)] hover:bg-[var(--laranja-destaque)]/90 text-lg px-8 py-4"
+                variant="yellow"
+                className="text-lg px-8 py-4"
                 aria-label="Ligar para a empresa"
               >
                 <Phone className="w-5 h-5 mr-2" />
@@ -93,8 +94,8 @@ function Highlights() {
               </Button>
               <Button 
                 size="lg" 
-                variant="outline" 
-                className="border-white text-white hover:bg-white hover:text-[var(--vinho-escuro)] text-lg px-8 py-4 focus-visible:ring-white"
+                variant="brand"
+                className="text-lg px-8 py-4"
                 aria-label="Falar no WhatsApp"
               >
                 <MessageCircle className="w-5 h-5 mr-2" />
@@ -125,7 +126,10 @@ function Highlights() {
                   <span className="text-xl">ter um produto ou serviço incrível</span>, mas não conseguir<br />
                   alcançar seu público alvo?
                 </p>
-                <Button className="mt-4 bg-[var(--vinho-escuro)] text-white hover:bg-[var(--vinho-escuro)]/90">
+                <Button 
+                  className="mt-4" 
+                  variant="brand"
+                >
                   NÓS PODEMOS TE AJUDAR!
                 </Button>
               </div>
