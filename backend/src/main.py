@@ -25,14 +25,21 @@ def create_app():
     JWTManager(app)
 
     # Imports tardios para evitar ciclos durante o import da factory
-    from src.services.firebase_service import init_firebase
+    # from src.services.firebase_service import init_firebase
     from src.routes.auth import auth_bp
+    from src.routes.client import client_bp
+    from src.routes.material import material_bp
+    from src.routes.action import action_bp
+    from src.routes.job_vacancy import job_vacancy_bp
     from src.services.user_service import create_admin_user
 
     # Firebase + blueprints
-    init_firebase()
-    app.register_blueprint(auth_bp, url_prefix='/api/auth')
-
+    # init_firebase()  # Desabilitado para desenvolvimento
+    app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    app.register_blueprint(client_bp, url_prefix="/api")
+    app.register_blueprint(material_bp, url_prefix="/api")
+    app.register_blueprint(action_bp, url_prefix="/api")
+    app.register_blueprint(job_vacancy_bp, url_prefix="/api")
     @app.get("/healthcheck")
     def healthcheck():
         return jsonify({"status": "ok"}), 200

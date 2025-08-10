@@ -68,9 +68,9 @@ def init_firebase():
 
 def get_firestore_client():
     """Retorna o cliente do Firestore (inicializa se necessário)."""
-    if not firebase_admin._apps:
-        init_firebase()
-    return firestore.client()
+    # Para desenvolvimento, usar banco em memória
+    from src.services.memory_db import memory_db
+    return memory_db
 
 def get_storage_bucket():
     """Retorna o bucket do Storage (pode ser None se não configurado)."""
@@ -80,4 +80,8 @@ def get_storage_bucket():
         return storage.bucket()
     except Exception:
         return None
+
+
+# Variável global para facilitar o acesso ao Firestore
+# db = get_firestore_client()
 

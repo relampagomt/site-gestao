@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Configuração base do axios
 const api = axios.create({
-  baseURL: '/api', // Usar proxy configurado no vercel.json
+  baseURL: 'http://localhost:5000/api', // URL do backend durante desenvolvimento
   headers: {
     'Content-Type': 'application/json',
   },

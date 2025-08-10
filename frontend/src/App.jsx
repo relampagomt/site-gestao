@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import AdminDashboard from './admin/AdminDashboard';
+import SupervisorDashboard from './pages/SupervisorDashboard';
 import './App.css';
 
 function App() {
@@ -20,6 +21,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <AdminDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/supervisor" 
+              element={
+                <ProtectedRoute>
+                  <SupervisorDashboard />
                 </ProtectedRoute>
               } 
             />
