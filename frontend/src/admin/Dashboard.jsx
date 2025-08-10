@@ -1,20 +1,65 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
-import { Badge } from '@/components/ui/badge.jsx';
-import { 
-  Users, 
-  Target, 
-  TrendingUp, 
-  DollarSign,
-  Calendar,
-  MapPin,
-  Award,
-  Activity,
-  Package,
-  Briefcase
-} from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { Activity, Briefcase, Package, Target, Users } from 'lucide-react';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, PieChart, Pie, Cell
+} from 'recharts';
 import api from '@/services/api';
+
+const COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#2563eb', '#7c3aed'];
+
+function monthKey(d) {
+  // chave AAAA-MM
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, '0');
+  return `${y}-${m}`;
+}
+function monthLabelPT(d) {
+  return d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').replace(/^\w/, c => c.toUpperCase());
+}
+function lastNMonths(n = 6) {
+  const out = [];
+  const base = new Date();
+  base.setDate(1);
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(base);
+    d.setMonth(d.getMonth() - i);
+    out.push(d);
+  }
+  return out;
+}
+
+/** Fallbacks calculando a partir das ações */
+function buildMonthlyFromActions(actions, monthsDates) {
+  const buckets = Object.fromEntries(monthsDates.map(d => [monthKey(d), { month: monthLabelPT(d), campanhas: 0, receita: 0 }]));
+  actions.forEach(a => {
+    const rawDate = a.date || a.start_date || a.created_at || a.updated_at;
+    if (!rawDate) return;
+    const dt = new Date(rawDate);
+    if (isNaN(dt)) return;
+    const key = monthKey(new Date(dt.getFullYear(), dt.getMonth(), 1));
+    if (!buckets[key]) return;
+    buckets[key].campanhas += 1;
+    // se houver orçamento/valor na ação, some como "receita" (opcional)
+    const val = Number(a.budget || a.amount || a.value || 0);
+    if (!Number.isNaN(val)) buckets[key].receita += val;
+  });
+  return Object.values(buckets);
+}
+
+function buildDistributionFromActions(actions) {
+  const map = new Map();
+  actions.forEach(a => {
+    const t = (a.service_type || a.type || a.category || a.action_type || 'Outro').toString();
+    map.set(t, (map.get(t) || 0) + 1);
+  });
+  return Array.from(map.entries()).map(([name, value], idx) => ({
+    name,
+    value,
+    color: COLORS[idx % COLORS.length],
+  }));
+}
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -24,8 +69,9 @@ const Dashboard = () => {
     totalVacancies: 0,
     loading: true
   });
-
   const [recentActivities, setRecentActivities] = useState([]);
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [serviceData, setServiceData] = useState([]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -34,90 +80,86 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setStats(prev => ({ ...prev, loading: true }));
-      
-      const [clientsRes, materialsRes, actionsRes, vacanciesRes] = await Promise.all([
+
+      const monthsDates = lastNMonths(6);
+
+      const [
+        clientsRes, materialsRes, actionsRes, vacanciesRes,
+        distRes, monthlyRes
+      ] = await Promise.all([
         api.get('/clients').catch(() => ({ data: [] })),
         api.get('/materials').catch(() => ({ data: [] })),
         api.get('/actions').catch(() => ({ data: [] })),
-        api.get('/job-vacancies').catch(() => ({ data: [] }))
+        api.get('/job-vacancies').catch(() => ({ data: [] })),
+        api.get('/metrics/service-distribution').catch(() => ({ data: null })),
+        api.get('/metrics/monthly-campaigns').catch(() => ({ data: null })),
       ]);
 
+      const clients = clientsRes.data || [];
+      const materials = materialsRes.data || [];
+      const actions = actionsRes.data || [];
+      const vacancies = vacanciesRes.data || [];
+
+      // contadores
       setStats({
-        totalClients: clientsRes.data?.length || 0,
-        totalMaterials: materialsRes.data?.length || 0,
-        totalActions: actionsRes.data?.length || 0,
-        totalVacancies: vacanciesRes.data?.length || 0,
+        totalClients: clients.length,
+        totalMaterials: materials.length,
+        totalActions: actions.length,
+        totalVacancies: vacancies.length,
         loading: false
       });
 
-      // Criar atividades recentes baseadas nos dados reais
+      // atividades recentes simples
       const activities = [];
-      
-      if (clientsRes.data?.length > 0) {
-        activities.push({
-          id: 1,
-          action: 'Cliente cadastrado',
-          client: clientsRes.data[clientsRes.data.length - 1]?.name || 'Cliente',
-          time: 'Recente'
-        });
-      }
-
-      if (actionsRes.data?.length > 0) {
-        activities.push({
-          id: 2,
-          action: 'Ação criada',
-          client: actionsRes.data[actionsRes.data.length - 1]?.client_name || 'Cliente',
-          time: 'Recente'
-        });
-      }
-
-      if (materialsRes.data?.length > 0) {
-        activities.push({
-          id: 3,
-          action: 'Material registrado',
-          client: materialsRes.data[materialsRes.data.length - 1]?.client_name || 'Cliente',
-          time: 'Recente'
-        });
-      }
-
-      if (vacanciesRes.data?.length > 0) {
-        activities.push({
-          id: 4,
-          action: 'Vaga publicada',
-          client: vacanciesRes.data[vacanciesRes.data.length - 1]?.company || 'Empresa',
-          time: 'Recente'
-        });
-      }
-
+      if (clients.length > 0) activities.push({ id: 'c', action: 'Cliente cadastrado', client: clients.at(-1)?.name || 'Cliente', time: 'Recente' });
+      if (actions.length > 0) activities.push({ id: 'a', action: 'Ação criada', client: actions.at(-1)?.client_name || 'Cliente', time: 'Recente' });
+      if (materials.length > 0) activities.push({ id: 'm', action: 'Material registrado', client: materials.at(-1)?.client_name || 'Cliente', time: 'Recente' });
+      if (vacancies.length > 0) activities.push({ id: 'v', action: 'Vaga publicada', client: vacancies.at(-1)?.company || 'Empresa', time: 'Recente' });
       setRecentActivities(activities);
-    } catch (error) {
-      console.error('Erro ao buscar dados do dashboard:', error);
+
+      // distribuição (API -> fallback a partir das ações)
+      if (Array.isArray(distRes.data?.distribution) && distRes.data.distribution.length) {
+        const dist = distRes.data.distribution.map((d, i) => ({
+          name: d.name ?? d.type ?? d.service ?? `Tipo ${i + 1}`,
+          value: Number(d.count ?? d.value ?? 0),
+          color: COLORS[i % COLORS.length]
+        })).filter(d => d.value > 0);
+        setServiceData(dist);
+      } else {
+        setServiceData(buildDistributionFromActions(actions));
+      }
+
+      // campanhas por mês (API -> fallback)
+      if (Array.isArray(monthlyRes.data) && monthlyRes.data.length) {
+        const normalized = monthlyRes.data.map((row, i) => ({
+          month: row.month ?? row.label ?? monthLabelPT(monthsDates[i] || new Date()),
+          campanhas: Number(row.campaigns ?? row.total ?? row.campanhas ?? 0),
+          receita: Number(row.revenue ?? row.receita ?? 0),
+        }));
+        setMonthlyData(normalized);
+      } else {
+        setMonthlyData(buildMonthlyFromActions(actions, monthsDates));
+      }
+
+    } catch (err) {
+      console.error('Erro ao buscar dados do dashboard:', err);
       setStats(prev => ({ ...prev, loading: false }));
+      setMonthlyData([]);
+      setServiceData([]);
     }
   };
 
-  // Dados simulados para os gráficos (mantidos para demonstração)
-  const monthlyData = [
-    { month: 'Jan', campanhas: 0, receita: 0 },
-    { month: 'Fev', campanhas: 0, receita: 0 },
-    { month: 'Mar', campanhas: 0, receita: 0 },
-    { month: 'Abr', campanhas: 0, receita: 0 },
-    { month: 'Mai', campanhas: 0, receita: 0 },
-    { month: 'Jun', campanhas: stats.totalActions, receita: 0 }
-  ];
-
-  const serviceData = [
-    { name: 'Panfletagem Residencial', value: 35, color: '#dc2626' },
-    { name: 'Sinaleiros/Pedestres', value: 28, color: '#ea580c' },
-    { name: 'Eventos Estratégicos', value: 22, color: '#ca8a04' },
-    { name: 'Ações Promocionais', value: 15, color: '#16a34a' }
-  ];
+  // título do gráfico de linha muda se houver receita > 0
+  const hasRevenue = useMemo(
+    () => monthlyData.some(d => (d.receita || 0) > 0),
+    [monthlyData]
+  );
 
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold tracking-tight mb-4">Dashboard</h2>
 
-      {/* Cards de Estatísticas */}
+      {/* Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -126,15 +168,9 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-xl sm:text-2xl font-bold">
-              {stats.loading ? (
-                <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
-              ) : (
-                stats.totalClients.toLocaleString()
-              )}
+              {stats.loading ? <div className="animate-pulse bg-gray-200 h-6 w-16 rounded" /> : stats.totalClients.toLocaleString()}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Clientes cadastrados
-            </p>
+            <p className="text-xs text-muted-foreground">Clientes cadastrados</p>
           </CardContent>
         </Card>
 
@@ -145,15 +181,9 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-xl sm:text-2xl font-bold">
-              {stats.loading ? (
-                <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
-              ) : (
-                stats.totalActions
-              )}
+              {stats.loading ? <div className="animate-pulse bg-gray-200 h-6 w-16 rounded" /> : stats.totalActions}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Ações promocionais
-            </p>
+            <p className="text-xs text-muted-foreground">Ações promocionais</p>
           </CardContent>
         </Card>
 
@@ -164,15 +194,9 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-xl sm:text-2xl font-bold">
-              {stats.loading ? (
-                <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
-              ) : (
-                stats.totalMaterials
-              )}
+              {stats.loading ? <div className="animate-pulse bg-gray-200 h-6 w-16 rounded" /> : stats.totalMaterials}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Materiais registrados
-            </p>
+            <p className="text-xs text-muted-foreground">Materiais registrados</p>
           </CardContent>
         </Card>
 
@@ -183,28 +207,22 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-xl sm:text-2xl font-bold">
-              {stats.loading ? (
-                <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
-              ) : (
-                stats.totalVacancies
-              )}
+              {stats.loading ? <div className="animate-pulse bg-gray-200 h-6 w-16 rounded" /> : stats.totalVacancies}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Vagas disponíveis
-            </p>
+            <p className="text-xs text-muted-foreground">Vagas disponíveis</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Gráficos */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-        {/* Gráfico de Linha - Receita Mensal */}
+        {/* Linha: campanhas (e receita se houver) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Receita Mensal</CardTitle>
-            <CardDescription>
-              Evolução da receita nos últimos 6 meses
-            </CardDescription>
+            <CardTitle className="text-base sm:text-lg">
+              {hasRevenue ? 'Campanhas e Receita (últimos 6 meses)' : 'Campanhas por Mês (últimos 6 meses)'}
+            </CardTitle>
+            <CardDescription>Dados calculados a partir das ações</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
@@ -212,20 +230,19 @@ const Dashboard = () => {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
-                <Tooltip formatter={(value) => [`R$ ${value.toLocaleString()}`, 'Receita']} />
-                <Line type="monotone" dataKey="receita" stroke="#dc2626" strokeWidth={2} />
+                <Tooltip formatter={(v, k) => k === 'receita' ? [`R$ ${Number(v).toLocaleString()}`, 'Receita'] : [v, 'Campanhas']} />
+                <Line type="monotone" dataKey="campanhas" stroke="#2563eb" strokeWidth={2} />
+                {hasRevenue && <Line type="monotone" dataKey="receita" stroke="#dc2626" strokeWidth={2} />}
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Gráfico de Barras - Campanhas por Mês */}
+        {/* Barras: campanhas */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Campanhas por Mês</CardTitle>
-            <CardDescription>
-              Número de campanhas realizadas mensalmente
-            </CardDescription>
+            <CardDescription>Número de campanhas realizadas</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
@@ -242,13 +259,11 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-        {/* Gráfico de Pizza - Distribuição de Serviços */}
+        {/* Pizza: distribuição de serviços */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Distribuição de Serviços</CardTitle>
-            <CardDescription>
-              Percentual de cada tipo de serviço
-            </CardDescription>
+            <CardDescription>Percentual de cada tipo de serviço</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
@@ -260,11 +275,10 @@ const Dashboard = () => {
                   labelLine={false}
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                   outerRadius={80}
-                  fill="#8884d8"
                   dataKey="value"
                 >
                   {serviceData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+                    <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -277,9 +291,7 @@ const Dashboard = () => {
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Atividades Recentes</CardTitle>
-            <CardDescription>
-              Últimas ações realizadas no sistema
-            </CardDescription>
+            <CardDescription>Últimas ações realizadas no sistema</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -288,16 +300,10 @@ const Dashboard = () => {
                   <div key={activity.id} className="flex items-center space-x-4">
                     <Activity className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                     <div className="flex-1 space-y-1 min-w-0">
-                      <p className="text-sm font-medium leading-none">
-                        {activity.action}
-                      </p>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {activity.client}
-                      </p>
+                      <p className="text-sm font-medium leading-none">{activity.action}</p>
+                      <p className="text-sm text-muted-foreground truncate">{activity.client}</p>
                     </div>
-                    <div className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">
-                      {activity.time}
-                    </div>
+                    <div className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">{activity.time}</div>
                   </div>
                 ))
               ) : (
@@ -316,5 +322,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-
-

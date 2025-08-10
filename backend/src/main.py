@@ -24,29 +24,30 @@ def create_app():
     CORS(app, origins="*")
     JWTManager(app)
 
-    # Imports tardios para evitar ciclos durante o import da factory
-    # from src.services.firebase_service import init_firebase
+    # Imports tardios para evitar ciclos
     from src.routes.auth import auth_bp
     from src.routes.client import client_bp
     from src.routes.material import material_bp
     from src.routes.action import action_bp
     from src.routes.job_vacancy import job_vacancy_bp
-    from src.services.user_service import create_admin_user
+    from src.routes.metrics import metrics_bp        # <— NOVO (gráfico real)
+    from src.services.user_service import ensure_admin_seed  # <— corrige o import
 
-    # Firebase + blueprints
-    # init_firebase()  # Desabilitado para desenvolvimento
+    # Blueprints
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(client_bp, url_prefix="/api")
     app.register_blueprint(material_bp, url_prefix="/api")
     app.register_blueprint(action_bp, url_prefix="/api")
     app.register_blueprint(job_vacancy_bp, url_prefix="/api")
+    app.register_blueprint(metrics_bp, url_prefix="/api/metrics")  # <— NOVO
+
     @app.get("/healthcheck")
     def healthcheck():
         return jsonify({"status": "ok"}), 200
 
-    # cria admin na subida
+    # cria admin na subida (se não existir)
     with app.app_context():
-        create_admin_user()
+        ensure_admin_seed()
 
     return app
 
@@ -55,5 +56,4 @@ def create_app():
 app = create_app()
 
 if __name__ == '__main__':
-    # apenas para rodar local
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)

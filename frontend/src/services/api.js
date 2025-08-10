@@ -1,13 +1,9 @@
+// frontend/src/services/api.js
 import axios from 'axios';
 
-// Em produção use "/api" (Vercel faz rewrite -> Render).
-// Em dev, o Vite já proxia "/api" para http://localhost:5000.
-// Se quiser, você pode definir VITE_PUBLIC_API_URL (ex.: http://localhost:5000/api),
-// mas não é obrigatório.
 const baseURL =
-  (typeof import.meta !== 'undefined' &&
-    import.meta.env &&
-    import.meta.env.VITE_PUBLIC_API_URL) ||
+  import.meta.env.VITE_API_BASE_URL?.trim() ||
+  // Em produção, seu backend está por trás de /api (proxy/render)
   '/api';
 
 const api = axios.create({
@@ -17,7 +13,7 @@ const api = axios.create({
   },
 });
 
-// Interceptor para anexar token
+// Interceptor para JWT
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -27,22 +23,24 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor para tratar 401
+// Interceptor para 401
 api.interceptors.response.use(
-  (response) => response,
+  (resp) => resp,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error?.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      if (location.pathname !== '/login') {
-        window.location.href = '/login';
+      // redireciona para login somente se não estiver já lá
+      if (!location.pathname.includes('/login')) {
+        location.href = '/login';
       }
     }
     return Promise.reject(error);
   }
 );
 
-// Serviços de autenticação
+// --------- Serviços ---------
+
 export const authService = {
   login: async (username, password) => {
     const { data } = await api.post('/auth/login', { username, password });
@@ -55,6 +53,16 @@ export const authService = {
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+  },
+};
+
+// NOVO: métricas
+export const metricsService = {
+  // GET /api/metrics/services/distribution
+  getServiceDistribution: async () => {
+    const { data } = await api.get('/metrics/services/distribution');
+    // data = { "Panfletagem Residencial": 10, "Sinaleiros/Pedestres": 3, ... }
+    return data;
   },
 };
 
