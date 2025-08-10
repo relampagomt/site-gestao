@@ -8,7 +8,7 @@ load_dotenv()
 # DON'T CHANGE THIS !!!
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_mail import Mail
@@ -32,7 +32,7 @@ from src.routes.contacts import contacts_bp
 from src.routes.dashboard import dashboard_bp
 from src.routes.materials import materials_bp
 
-app = Flask(__name__, static_folder='static', static_url_path='/static')
+app = Flask(__name__)
 
 # Configurações
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'asdf#FGSgvasgf$5$WGT')
@@ -78,26 +78,6 @@ app.register_blueprint(materials_bp, url_prefix='/api/materials')
 @app.route("/healthcheck", methods=["GET"])
 def healthcheck():
     return jsonify({"status": "ok"}), 200
-
-
-# Rotas para servir o frontend
-@app.route("/")
-def serve_index():
-    return send_from_directory(app.static_folder, "index.html")
-
-
-@app.route("/<path:path>")
-def serve_frontend(path):
-    # Se o path começa com 'api/', deixa o Flask processar normalmente
-    if path.startswith('api/'):
-        return jsonify({"error": "API route not found"}), 404
-    
-    # Se o arquivo existe no static folder, serve ele
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    
-    # Caso contrário, serve o index.html (para SPA routing)
-    return send_from_directory(app.static_folder, "index.html")
 
 
 if __name__ == '__main__':
