@@ -182,3 +182,7 @@ __all__ = [
     "delete_document",
     "firestore_service",
 ]
+
+
+def get_user_by_id():
+    return None
