@@ -27,12 +27,14 @@ def _doc_to_obj(doc) -> Dict[str, Any]:
         return data
     return dict(doc)
 
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-def _users_col():
-    """Retorna a referência/coleção de 'users' no DB atual (Firestore ou memory_db)."""
-    db = get_db()
-    return db.collection("users")
-
+def verify_password(password: str, password_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except Exception:
+        return False
 
 # ---------------------------
 # CRUD básico de usuário
@@ -40,23 +42,20 @@ def _users_col():
 
 def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
     """
-    Obtém usuário pelo ID do documento.
-    Usa a fachada de compat do firestore_service para não quebrar em memória.
+    Obtém usuário pelo ID do documento (compatível com Firestore e memory_db).
     """
-    user = get_document("users", user_id)
-    return user
-
+    return get_document("users", user_id)
 
 def find_user_by_username(username: str) -> Optional[Dict[str, Any]]:
     """
     Busca usuário por username.
-    Tenta usar query Firestore; se não suportado (memory_db), faz filtro em Python.
+    Tenta query Firestore; se indisponível (memory_db), faz filtro em Python.
+    IMPORTANTE: tudo dentro do try para não chamar db.collection() fora do Firestore.
     """
-    col = _users_col()
-    # Tenta query nativa (Firestore)
     try:
-        query = col.where("username", "==", username).limit(1)
-        results = query.get()
+        db = get_db()
+        col = db.collection("users")
+        results = col.where("username", "==", username).limit(1).get()
         for snap in results:
             return _doc_to_obj(snap)
         return None
@@ -66,18 +65,6 @@ def find_user_by_username(username: str) -> Optional[Dict[str, Any]]:
             if u.get("username") == username:
                 return u
         return None
-
-
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-def verify_password(password: str, password_hash: str) -> bool:
-    try:
-        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
-    except Exception:
-        return False
-
 
 def create_user(username: str, password: str, role: str = "supervisor", name: str = "") -> Dict[str, Any]:
     """
@@ -97,22 +84,19 @@ def create_user(username: str, password: str, role: str = "supervisor", name: st
     }
     user_id, _ = add_document("users", data)
     created = get_user_by_id(user_id) or {}
-    if "password_hash" in created:
-        del created["password_hash"]
+    created.pop("password_hash", None)
     return created
-
 
 def update_user(user_id: str, payload: Dict[str, Any]) -> bool:
     """
     Atualiza campos do usuário. Se vier 'password', converte para 'password_hash'.
     """
     data = dict(payload)
-    if "password" in data and data["password"]:
+    if data.get("password"):
         data["password_hash"] = hash_password(data.pop("password"))
     # Nunca escreva o campo em claro
     data.pop("password", None)
     return update_document("users", user_id, data)
-
 
 # ---------------------------
 # Autenticação
@@ -130,11 +114,9 @@ def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
     if not password_hash or not verify_password(password, password_hash):
         return None
 
-    # Não exponha o hash
     user = dict(user)
     user.pop("password_hash", None)
     return user
-
 
 # ---------------------------
 # Seed opcional (admin)
@@ -153,6 +135,10 @@ def ensure_admin_seed():
     create_user(username="admin", password="admin", role="admin", name="Administrador")
     print("Usuário admin criado: admin")
 
+# --- Compat: main.py importa create_admin_user ---
+def create_admin_user():
+    """Wrapper de compatibilidade: cria o admin padrão se não existir."""
+    ensure_admin_seed()
 
 __all__ = [
     "get_user_by_id",
@@ -161,5 +147,6 @@ __all__ = [
     "update_user",
     "authenticate_user",
     "ensure_admin_seed",
+    "create_admin_user",   # importante pro main.py
     "verify_password",
 ]
