@@ -1,124 +1,151 @@
-import React, { useState } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Target, 
-  Briefcase, 
+import React, { useEffect, useState } from 'react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Users,
+  Target,
+  Briefcase,
   Settings,
   Menu,
   X,
   LogOut,
-  User,
-  Package
+  Package,
 } from 'lucide-react';
 
+const NAV_ITEMS = [
+  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { to: '/admin/clients', label: 'Clientes', icon: Users },
+  { to: '/admin/materials', label: 'Materiais', icon: Package },
+  { to: '/admin/actions', label: 'Ações', icon: Target },
+  { to: '/admin/vacancies', label: 'Vagas', icon: Briefcase },
+  { to: '/admin/settings', label: 'Configurações', icon: Settings },
+];
+
 const AdminLayout = () => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
-  const menuItems = [
-    { path: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/admin/clients', icon: Users, label: 'Clientes' },
-    { path: '/admin/actions', icon: Target, label: 'Ações' },
-    { path: '/admin/materials', icon: Package, label: 'Materiais' },
-    { path: '/admin/vacancies', icon: Briefcase, label: 'Vagas' },
-    { path: '/admin/settings', icon: Settings, label: 'Configurações' }
-  ];
+  const isActive = (to, exact = false) => {
+    if (exact) return location.pathname === to;
+    return location.pathname.startsWith(to);
+  };
 
-  const isActive = (path) => location.pathname === path;
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    } catch {}
+    navigate('/login');
+  };
+
+  // trava/destrava o scroll do body quando o menu está aberto no mobile
+  useEffect(() => {
+    const root = document.documentElement;
+    if (open) root.classList.add('overflow-hidden');
+    else root.classList.remove('overflow-hidden');
+    return () => root.classList.remove('overflow-hidden');
+  }, [open]);
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="min-h-dvh bg-muted/20 text-foreground">
+      {/* Overlay claro (não preto) no mobile */}
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-background/70 backdrop-blur-sm md:hidden"
+          onClick={() => setOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className={`${isSidebarOpen ? 'w-64' : 'w-16'} bg-red-700 text-white transition-all duration-300 flex flex-col`}>
-        {/* Header */}
-        <div className="p-4 border-b border-red-600">
-          <div className="flex items-center justify-between">
-            {isSidebarOpen && (
-              <div>
-                <h2 className="text-xl font-bold">RELÂMPAGO</h2>
-                <p className="text-red-200 text-sm">Painel Administrativo</p>
-              </div>
-            )}
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 rounded-lg hover:bg-red-600 transition-colors"
-            >
-              {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-          </div>
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 transition-transform duration-200 ease-out
+        ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
+      >
+        <div className="flex h-16 items-center justify-between px-4">
+          <Link to="/admin" className="inline-flex items-center gap-2" onClick={() => setOpen(false)}>
+            <div className="h-8 w-8 rounded-xl bg-primary/90 text-primary-foreground grid place-content-center font-semibold">
+              R
+            </div>
+            <span className="font-semibold tracking-tight">Relâmpago</span>
+          </Link>
+          <button
+            className="md:hidden rounded-lg p-2 hover:bg-muted"
+            onClick={() => setOpen(false)}
+            aria-label="Fechar menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <li key={item.path}>
-                  <Link
-                    to={item.path}
-                    className={`flex items-center p-3 rounded-lg transition-colors ${
-                      isActive(item.path)
-                        ? 'bg-red-600 text-white'
-                        : 'text-red-100 hover:bg-red-600 hover:text-white'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    {isSidebarOpen && <span className="ml-3">{item.label}</span>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+        <nav className="mt-2 px-2">
+          {NAV_ITEMS.map(({ to, label, icon: Icon, exact }) => {
+            const active = isActive(to, exact);
+            return (
+              <Link
+                key={to}
+                to={to}
+                onClick={() => setOpen(false)}
+                className={`group mt-1 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition
+                ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              >
+                <Icon className={`h-4 w-4 ${active ? '' : 'text-muted-foreground'}`} />
+                <span className="truncate">{label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
-        {/* User Section */}
-        <div className="p-4 border-t border-red-600">
-          <div className="flex items-center">
-            <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
-              <User className="w-4 h-4" />
-            </div>
-            {isSidebarOpen && (
-              <div className="ml-3 flex-1">
-                <p className="text-sm font-medium">Administrador</p>
-                <p className="text-xs text-red-200">admin@relampago.com</p>
+        <div className="absolute bottom-0 left-0 right-0 border-t p-3">
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="grid h-8 w-8 place-content-center rounded-full bg-primary/10 text-primary">A</div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium leading-tight truncate">Administrador</p>
+                <p className="text-xs text-muted-foreground leading-tight truncate">Admin</p>
               </div>
-            )}
-          </div>
-          {isSidebarOpen && (
-            <button className="mt-3 w-full flex items-center justify-center p-2 text-red-200 hover:text-white hover:bg-red-600 rounded-lg transition-colors">
-              <LogOut className="w-4 h-4 mr-2" />
+            </div>
+            <button
+              className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-background"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
               Sair
             </button>
-          )}
+          </div>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
-        <header className="bg-white shadow-sm border-b border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-semibold text-gray-900">
-              {menuItems.find(item => isActive(item.path))?.label || 'Painel Administrativo'}
-            </h1>
-            <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-600">
-                {new Date().toLocaleDateString('pt-BR', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}
-              </div>
-            </div>
-          </div>
-        </header>
+      {/* Topbar (sem título duplicado) */}
+      <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex h-16 items-center gap-3 px-4 md:pl-72">
+          <button
+            className="md:hidden rounded-lg p-2 hover:bg-muted"
+            onClick={() => setOpen(true)}
+            aria-label="Abrir menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
 
-        {/* Page Content */}
-        <div className="flex-1 overflow-auto p-6">
+          <div className="ml-auto hidden items-center gap-3 md:flex">
+            <div className="rounded-lg bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+              Administrador
+            </div>
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Conteúdo */}
+      <main className="md:pl-64">
+        <div className="p-6">
           <Outlet />
         </div>
       </main>
@@ -127,5 +154,3 @@ const AdminLayout = () => {
 };
 
 export default AdminLayout;
-
-
