@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
+import { useAuth } from '../contexts/AuthContext';
+import api from '@/services/api';
 import { 
   Plus, 
   Search, 
@@ -20,73 +22,30 @@ import {
   TrendingUp,
   Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Package,
+  User,
+  Building
 } from 'lucide-react';
 
 const Actions = () => {
-  const [actions, setActions] = useState([
-    {
-      id: 1,
-      title: 'Campanha Black Friday - Supermercado Central',
-      client: 'Supermercado Central',
-      type: 'Panfletagem Residencial',
-      description: 'Distribuição de panfletos promocionais para a Black Friday em bairros residenciais',
-      startDate: '2024-11-20',
-      endDate: '2024-11-29',
-      budget: 5000,
-      status: 'Em Andamento',
-      location: 'Centro, Cuiabá/MT',
-      team: 'Equipe A',
-      materials: 10000,
-      progress: 65
-    },
-    {
-      id: 2,
-      title: 'Ação Promocional - Farmácia Popular',
-      client: 'Farmácia Popular',
-      type: 'Sinaleiros/Pedestres',
-      description: 'Distribuição de materiais promocionais em pontos de grande circulação',
-      startDate: '2024-11-15',
-      endDate: '2024-11-25',
-      budget: 3500,
-      status: 'Planejada',
-      location: 'Jardim Europa, Cuiabá/MT',
-      team: 'Equipe B',
-      materials: 5000,
-      progress: 0
-    },
-    {
-      id: 3,
-      title: 'Evento Inauguração - Loja Fashion',
-      client: 'Loja de Roupas Fashion',
-      type: 'Eventos Estratégicos',
-      description: 'Ação promocional para inauguração da nova loja no shopping',
-      startDate: '2024-10-01',
-      endDate: '2024-10-05',
-      budget: 8000,
-      status: 'Concluída',
-      location: 'Shopping Center, Várzea Grande/MT',
-      team: 'Equipe C',
-      materials: 15000,
-      progress: 100
-    }
-  ]);
+  const { isAdmin } = useAuth();
+  const [actions, setActions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAction, setEditingAction] = useState(null);
   const [formData, setFormData] = useState({
-    title: '',
-    client: '',
-    type: '',
-    description: '',
-    startDate: '',
-    endDate: '',
-    budget: '',
-    status: 'Planejada',
-    location: '',
-    team: '',
-    materials: ''
+    client_name: '',
+    company_name: '',
+    action_type: '',
+    start_date: '',
+    end_date: '',
+    periods_of_day: '',
+    material_quantity: '',
+    material_photo_url: '',
+    observations: ''
   });
 
   const actionTypes = [
@@ -97,74 +56,90 @@ const Actions = () => {
     'Marketing de Guerrilha'
   ];
 
-  const teams = ['Equipe A', 'Equipe B', 'Equipe C', 'Equipe D'];
-  const statusOptions = ['Planejada', 'Em Andamento', 'Pausada', 'Concluída', 'Cancelada'];
+  useEffect(() => {
+    fetchActions();
+  }, []);
+
+  const fetchActions = async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get('/actions');
+      setActions(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar ações:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredActions = actions.filter(action =>
-    action.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    action.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    action.type.toLowerCase().includes(searchTerm.toLowerCase())
+    action.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    action.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    action.action_type?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (editingAction) {
-      setActions(actions.map(action => 
-        action.id === editingAction.id 
-          ? { ...action, ...formData, budget: parseFloat(formData.budget), materials: parseInt(formData.materials) }
-          : action
-      ));
-    } else {
-      const newAction = {
-        id: Math.max(...actions.map(a => a.id)) + 1,
-        ...formData,
-        budget: parseFloat(formData.budget),
-        materials: parseInt(formData.materials),
-        progress: 0
-      };
-      setActions([...actions, newAction]);
+    try {
+      if (editingAction) {
+        await api.put(`/actions/${editingAction.id}`, formData);
+      } else {
+        await api.post('/actions', formData);
+      }
+      await fetchActions();
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Erro ao salvar ação:', error);
+      alert(error?.response?.data?.message || 'Erro ao salvar ação');
     }
-
-    setFormData({
-      title: '',
-      client: '',
-      type: '',
-      description: '',
-      startDate: '',
-      endDate: '',
-      budget: '',
-      status: 'Planejada',
-      location: '',
-      team: '',
-      materials: ''
-    });
-    setEditingAction(null);
-    setIsDialogOpen(false);
   };
 
   const handleEdit = (action) => {
     setEditingAction(action);
     setFormData({
-      title: action.title,
-      client: action.client,
-      type: action.type,
-      description: action.description,
-      startDate: action.startDate,
-      endDate: action.endDate,
-      budget: action.budget.toString(),
-      status: action.status,
-      location: action.location,
-      team: action.team,
-      materials: action.materials.toString()
+      client_name: action.client_name || '',
+      company_name: action.company_name || '',
+      action_type: action.action_type || '',
+      start_date: action.start_date || '',
+      end_date: action.end_date || '',
+      periods_of_day: action.periods_of_day || '',
+      material_quantity: action.material_quantity || '',
+      material_photo_url: action.material_photo_url || '',
+      observations: action.observations || ''
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (actionId) => {
-    if (window.confirm('Tem certeza que deseja excluir esta ação?')) {
-      setActions(actions.filter(action => action.id !== actionId));
+  const handleDelete = async (actionId) => {
+    if (!isAdmin()) {
+      alert('Apenas administradores podem excluir ações');
+      return;
     }
+    if (window.confirm('Tem certeza que deseja excluir esta ação?')) {
+      try {
+        await api.delete(`/actions/${actionId}`);
+        await fetchActions();
+      } catch (error) {
+        console.error('Erro ao excluir ação:', error);
+        alert(error?.response?.data?.message || 'Erro ao excluir ação');
+      }
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      client_name: '',
+      company_name: '',
+      action_type: '',
+      start_date: '',
+      end_date: '',
+      periods_of_day: '',
+      material_quantity: '',
+      material_photo_url: '',
+      observations: ''
+    });
+    setEditingAction(null);
   };
 
   const getStatusBadge = (status) => {
@@ -204,22 +179,7 @@ const Actions = () => {
           <DialogTrigger asChild>
             <Button 
               className="bg-red-700 hover:bg-red-800"
-              onClick={() => {
-                setEditingAction(null);
-                setFormData({
-                  title: '',
-                  client: '',
-                  type: '',
-                  description: '',
-                  startDate: '',
-                  endDate: '',
-                  budget: '',
-                  status: 'Planejada',
-                  location: '',
-                  team: '',
-                  materials: ''
-                });
-              }}
+              onClick={resetForm}
             >
               <Plus className="h-4 w-4 mr-2" />
               <span className="hidden sm:inline">Nova Ação</span>
@@ -241,139 +201,107 @@ const Actions = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="title">Título da Ação</Label>
+                  <Label htmlFor="client_name">Nome do Cliente</Label>
                   <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({...formData, title: e.target.value})}
+                    id="client_name"
+                    value={formData.client_name}
+                    onChange={(e) => setFormData({...formData, client_name: e.target.value})}
                     required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="client">Cliente</Label>
+                  <Label htmlFor="company_name">Nome da Empresa</Label>
                   <Input
-                    id="client"
-                    value={formData.client}
-                    onChange={(e) => setFormData({...formData, client: e.target.value})}
+                    id="company_name"
+                    value={formData.company_name}
+                    onChange={(e) => setFormData({...formData, company_name: e.target.value})}
                     required
                   />
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="type">Tipo de Ação</Label>
-                  <select
-                    id="type"
-                    value={formData.type}
-                    onChange={(e) => setFormData({...formData, type: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    required
-                  >
-                    <option value="">Selecione o tipo</option>
-                    {actionTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="status">Status</Label>
-                  <select
-                    id="status"
-                    value={formData.status}
-                    onChange={(e) => setFormData({...formData, status: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                  >
-                    {statusOptions.map(status => (
-                      <option key={status} value={status}>{status}</option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <Label htmlFor="action_type">Tipo de Ação</Label>
+                <select
+                  id="action_type"
+                  value={formData.action_type}
+                  onChange={(e) => setFormData({...formData, action_type: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  required
+                >
+                  <option value="">Selecione o tipo</option>
+                  {actionTypes.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
-                <Label htmlFor="description">Descrição</Label>
+                <Label htmlFor="observations">Observações</Label>
                 <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  id="observations"
+                  value={formData.observations}
+                  onChange={(e) => setFormData({...formData, observations: e.target.value})}
                   rows={3}
-                  required
+                  placeholder="Descrição da ação, objetivos, etc."
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="startDate">Data de Início</Label>
+                  <Label htmlFor="start_date">Data de Início</Label>
                   <Input
-                    id="startDate"
+                    id="start_date"
                     type="date"
-                    value={formData.startDate}
-                    onChange={(e) => setFormData({...formData, startDate: e.target.value})}
+                    value={formData.start_date}
+                    onChange={(e) => setFormData({...formData, start_date: e.target.value})}
                     required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="endDate">Data de Término</Label>
+                  <Label htmlFor="end_date">Data de Término</Label>
                   <Input
-                    id="endDate"
+                    id="end_date"
                     type="date"
-                    value={formData.endDate}
-                    onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+                    value={formData.end_date}
+                    onChange={(e) => setFormData({...formData, end_date: e.target.value})}
                     required
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="budget">Orçamento (R$)</Label>
+                  <Label htmlFor="periods_of_day">Períodos do Dia</Label>
                   <Input
-                    id="budget"
-                    type="number"
-                    step="0.01"
-                    value={formData.budget}
-                    onChange={(e) => setFormData({...formData, budget: e.target.value})}
-                    required
+                    id="periods_of_day"
+                    value={formData.periods_of_day}
+                    onChange={(e) => setFormData({...formData, periods_of_day: e.target.value})}
+                    placeholder="Ex: Manhã, Tarde, Noite"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="materials">Qtd. Materiais</Label>
+                  <Label htmlFor="material_quantity">Quantidade de Material</Label>
                   <Input
-                    id="materials"
+                    id="material_quantity"
                     type="number"
-                    value={formData.materials}
-                    onChange={(e) => setFormData({...formData, materials: e.target.value})}
+                    value={formData.material_quantity}
+                    onChange={(e) => setFormData({...formData, material_quantity: e.target.value})}
                     required
                   />
-                </div>
-                <div>
-                  <Label htmlFor="team">Equipe</Label>
-                  <select
-                    id="team"
-                    value={formData.team}
-                    onChange={(e) => setFormData({...formData, team: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    required
-                  >
-                    <option value="">Selecione a equipe</option>
-                    {teams.map(team => (
-                      <option key={team} value={team}>{team}</option>
-                    ))}
-                  </select>
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="location">Localização</Label>
+                <Label htmlFor="material_photo_url">URL da Foto do Material</Label>
                 <Input
-                  id="location"
-                  value={formData.location}
-                  onChange={(e) => setFormData({...formData, location: e.target.value})}
-                  required
+                  id="material_photo_url"
+                  type="url"
+                  value={formData.material_photo_url}
+                  onChange={(e) => setFormData({...formData, material_photo_url: e.target.value})}
+                  placeholder="https://exemplo.com/foto-material.jpg"
                 />
               </div>
-
               <div className="flex justify-end space-x-2">
                 <Button 
                   type="button" 
@@ -407,11 +335,22 @@ const Actions = () => {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center">
-              <TrendingUp className="h-8 w-8 text-green-600" />
+              <Calendar className="h-8 w-8 text-green-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Em Andamento</p>
+                <p className="text-sm font-medium text-gray-600">Ações Ativas</p>
+                <p className="text-2xl font-bold">{actions.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <Package className="h-8 w-8 text-purple-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Total Materiais</p>
                 <p className="text-2xl font-bold">
-                  {actions.filter(a => a.status === 'Em Andamento').length}
+                  {actions.reduce((sum, a) => sum + (parseInt(a.material_quantity) || 0), 0).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -420,24 +359,11 @@ const Actions = () => {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center">
-              <DollarSign className="h-8 w-8 text-purple-600" />
+              <Users className="h-8 w-8 text-orange-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Orçamento Total</p>
+                <p className="text-sm font-medium text-gray-600">Clientes Atendidos</p>
                 <p className="text-2xl font-bold">
-                  R$ {actions.reduce((sum, a) => sum + a.budget, 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <CheckCircle className="h-8 w-8 text-orange-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Concluídas</p>
-                <p className="text-2xl font-bold">
-                  {actions.filter(a => a.status === 'Concluída').length}
+                  {new Set(actions.map(a => a.client_name)).size}
                 </p>
               </div>
             </div>
@@ -451,7 +377,7 @@ const Actions = () => {
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Buscar ações por título, cliente ou tipo..."
+              placeholder="Buscar ações por cliente, empresa ou tipo..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -469,77 +395,99 @@ const Actions = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <div className="min-w-[800px]">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[200px]">Título</TableHead>
-                    <TableHead className="min-w-[120px]">Cliente</TableHead>
-                    <TableHead className="min-w-[150px]">Tipo</TableHead>
-                    <TableHead className="min-w-[120px]">Período</TableHead>
-                    <TableHead className="min-w-[100px]">Orçamento</TableHead>
-                    <TableHead className="min-w-[100px]">Status</TableHead>
-                    <TableHead className="min-w-[120px]">Progresso</TableHead>
-                    <TableHead className="min-w-[100px]">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredActions.map((action) => (
-                    <TableRow key={action.id}>
-                      <TableCell className="font-medium">
-                        <div className="max-w-[180px]">
-                          <p className="truncate">{action.title}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="truncate">{action.client}</span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="whitespace-nowrap">{action.type}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <div className="whitespace-nowrap">{new Date(action.startDate).toLocaleDateString('pt-BR')}</div>
-                          <div className="text-gray-500 text-xs whitespace-nowrap">até {new Date(action.endDate).toLocaleDateString('pt-BR')}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="whitespace-nowrap">R$ {action.budget.toLocaleString()}</span>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(action.status)}</TableCell>
-                      <TableCell>
-                        <div className="space-y-1 min-w-[100px]">
-                          {getProgressBar(action.progress)}
-                          <div className="text-xs text-gray-500">{action.progress}%</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(action)}
-                            className="whitespace-nowrap"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(action.id)}
-                            className="text-red-600 hover:text-red-800 whitespace-nowrap"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Carregando ações...</p>
             </div>
-          </div>
+          ) : filteredActions.length === 0 ? (
+            <div className="text-center py-8">
+              <AlertCircle className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhuma ação encontrada</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {searchTerm ? 'Tente ajustar sua busca' : 'Comece criando uma nova ação promocional'}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <div className="min-w-[800px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[150px]">Cliente</TableHead>
+                      <TableHead className="min-w-[150px]">Empresa</TableHead>
+                      <TableHead className="min-w-[150px]">Tipo</TableHead>
+                      <TableHead className="min-w-[120px]">Período</TableHead>
+                      <TableHead className="min-w-[100px]">Quantidade</TableHead>
+                      <TableHead className="min-w-[100px]">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredActions.map((action) => (
+                      <TableRow key={action.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center space-x-2">
+                            <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{action.client_name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Building className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{action.company_name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="whitespace-nowrap">{action.action_type}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {action.start_date && (
+                              <div className="whitespace-nowrap">{new Date(action.start_date).toLocaleDateString('pt-BR')}</div>
+                            )}
+                            {action.end_date && (
+                              <div className="text-gray-500 text-xs whitespace-nowrap">até {new Date(action.end_date).toLocaleDateString('pt-BR')}</div>
+                            )}
+                            {action.periods_of_day && (
+                              <div className="text-gray-500 text-xs">{action.periods_of_day}</div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Package className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="whitespace-nowrap">{action.material_quantity || 0}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(action)}
+                              className="whitespace-nowrap"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            {isAdmin() && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDelete(action.id)}
+                                className="text-red-600 hover:text-red-700 whitespace-nowrap"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

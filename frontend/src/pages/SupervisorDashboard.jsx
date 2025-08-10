@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -14,6 +14,7 @@ import {
   Menu,
   X
 } from 'lucide-react';
+import api from '../services/api';
 import Clients from '../admin/Clients';
 import Materials from '../admin/Materials';
 import Actions from '../admin/Actions';
@@ -23,6 +24,41 @@ const SupervisorDashboard = () => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [dashboardData, setDashboardData] = useState({
+    clients: 0,
+    materials: 0,
+    actions: 0,
+    vacancies: 0,
+    loading: true
+  });
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setDashboardData(prev => ({ ...prev, loading: true }));
+      
+      const [clientsRes, materialsRes, actionsRes, vacanciesRes] = await Promise.all([
+        api.get('/clients').catch(() => ({ data: [] })),
+        api.get('/materials').catch(() => ({ data: [] })),
+        api.get('/actions').catch(() => ({ data: [] })),
+        api.get('/job-vacancies').catch(() => ({ data: [] }))
+      ]);
+
+      setDashboardData({
+        clients: clientsRes.data?.length || 0,
+        materials: materialsRes.data?.length || 0,
+        actions: actionsRes.data?.length || 0,
+        vacancies: vacanciesRes.data?.length || 0,
+        loading: false
+      });
+    } catch (error) {
+      console.error('Erro ao buscar dados do dashboard:', error);
+      setDashboardData(prev => ({ ...prev, loading: false }));
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -52,7 +88,13 @@ const SupervisorDashboard = () => {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">-</div>
+            <div className="text-2xl font-bold">
+              {dashboardData.loading ? (
+                <div className="animate-pulse bg-gray-200 h-6 w-8 rounded"></div>
+              ) : (
+                dashboardData.clients
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               Gerencie seus clientes
             </p>
@@ -65,7 +107,13 @@ const SupervisorDashboard = () => {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">-</div>
+            <div className="text-2xl font-bold">
+              {dashboardData.loading ? (
+                <div className="animate-pulse bg-gray-200 h-6 w-8 rounded"></div>
+              ) : (
+                dashboardData.materials
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               Controle de materiais
             </p>
@@ -78,7 +126,13 @@ const SupervisorDashboard = () => {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">-</div>
+            <div className="text-2xl font-bold">
+              {dashboardData.loading ? (
+                <div className="animate-pulse bg-gray-200 h-6 w-8 rounded"></div>
+              ) : (
+                dashboardData.actions
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               Campanhas ativas
             </p>
@@ -91,7 +145,13 @@ const SupervisorDashboard = () => {
             <Briefcase className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">-</div>
+            <div className="text-2xl font-bold">
+              {dashboardData.loading ? (
+                <div className="animate-pulse bg-gray-200 h-6 w-8 rounded"></div>
+              ) : (
+                dashboardData.vacancies
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               Oportunidades de emprego
             </p>

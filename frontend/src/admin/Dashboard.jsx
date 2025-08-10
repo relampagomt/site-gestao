@@ -9,26 +9,101 @@ import {
   Calendar,
   MapPin,
   Award,
-  Activity
+  Activity,
+  Package,
+  Briefcase
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import api from '@/services/api';
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
-    totalClients: 1247,
-    activeActions: 23,
-    monthlyRevenue: 125000,
-    completedCampaigns: 89
+    totalClients: 0,
+    totalMaterials: 0,
+    totalActions: 0,
+    totalVacancies: 0,
+    loading: true
   });
 
-  // Dados simulados para os gráficos
+  const [recentActivities, setRecentActivities] = useState([]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setStats(prev => ({ ...prev, loading: true }));
+      
+      const [clientsRes, materialsRes, actionsRes, vacanciesRes] = await Promise.all([
+        api.get('/clients').catch(() => ({ data: [] })),
+        api.get('/materials').catch(() => ({ data: [] })),
+        api.get('/actions').catch(() => ({ data: [] })),
+        api.get('/job-vacancies').catch(() => ({ data: [] }))
+      ]);
+
+      setStats({
+        totalClients: clientsRes.data?.length || 0,
+        totalMaterials: materialsRes.data?.length || 0,
+        totalActions: actionsRes.data?.length || 0,
+        totalVacancies: vacanciesRes.data?.length || 0,
+        loading: false
+      });
+
+      // Criar atividades recentes baseadas nos dados reais
+      const activities = [];
+      
+      if (clientsRes.data?.length > 0) {
+        activities.push({
+          id: 1,
+          action: 'Cliente cadastrado',
+          client: clientsRes.data[clientsRes.data.length - 1]?.name || 'Cliente',
+          time: 'Recente'
+        });
+      }
+
+      if (actionsRes.data?.length > 0) {
+        activities.push({
+          id: 2,
+          action: 'Ação criada',
+          client: actionsRes.data[actionsRes.data.length - 1]?.client_name || 'Cliente',
+          time: 'Recente'
+        });
+      }
+
+      if (materialsRes.data?.length > 0) {
+        activities.push({
+          id: 3,
+          action: 'Material registrado',
+          client: materialsRes.data[materialsRes.data.length - 1]?.client_name || 'Cliente',
+          time: 'Recente'
+        });
+      }
+
+      if (vacanciesRes.data?.length > 0) {
+        activities.push({
+          id: 4,
+          action: 'Vaga publicada',
+          client: vacanciesRes.data[vacanciesRes.data.length - 1]?.company || 'Empresa',
+          time: 'Recente'
+        });
+      }
+
+      setRecentActivities(activities);
+    } catch (error) {
+      console.error('Erro ao buscar dados do dashboard:', error);
+      setStats(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  // Dados simulados para os gráficos (mantidos para demonstração)
   const monthlyData = [
-    { month: 'Jan', campanhas: 12, receita: 85000 },
-    { month: 'Fev', campanhas: 19, receita: 95000 },
-    { month: 'Mar', campanhas: 15, receita: 110000 },
-    { month: 'Abr', campanhas: 22, receita: 125000 },
-    { month: 'Mai', campanhas: 18, receita: 135000 },
-    { month: 'Jun', campanhas: 25, receita: 150000 }
+    { month: 'Jan', campanhas: 0, receita: 0 },
+    { month: 'Fev', campanhas: 0, receita: 0 },
+    { month: 'Mar', campanhas: 0, receita: 0 },
+    { month: 'Abr', campanhas: 0, receita: 0 },
+    { month: 'Mai', campanhas: 0, receita: 0 },
+    { month: 'Jun', campanhas: stats.totalActions, receita: 0 }
   ];
 
   const serviceData = [
@@ -38,17 +113,9 @@ const Dashboard = () => {
     { name: 'Ações Promocionais', value: 15, color: '#16a34a' }
   ];
 
-  const recentActivities = [
-    { id: 1, action: 'Nova campanha criada', client: 'Supermercado Central', time: '2 horas atrás' },
-    { id: 2, action: 'Relatório gerado', client: 'Farmácia Popular', time: '4 horas atrás' },
-    { id: 3, action: 'Cliente cadastrado', client: 'Loja de Roupas Fashion', time: '6 horas atrás' },
-    { id: 4, action: 'Campanha finalizada', client: 'Restaurante Sabor', time: '1 dia atrás' }
-  ];
-
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold tracking-tight mb-4">Dashboard</h2>
-
 
       {/* Cards de Estatísticas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -58,48 +125,72 @@ const Dashboard = () => {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">{stats.totalClients.toLocaleString()}</div>
+            <div className="text-xl sm:text-2xl font-bold">
+              {stats.loading ? (
+                <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
+              ) : (
+                stats.totalClients.toLocaleString()
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
-              +12% em relação ao mês passado
+              Clientes cadastrados
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ações Ativas</CardTitle>
+            <CardTitle className="text-sm font-medium">Total de Ações</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">{stats.activeActions}</div>
+            <div className="text-xl sm:text-2xl font-bold">
+              {stats.loading ? (
+                <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
+              ) : (
+                stats.totalActions
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
-              +3 novas esta semana
+              Ações promocionais
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Receita Mensal</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total de Materiais</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">R$ {stats.monthlyRevenue.toLocaleString()}</div>
+            <div className="text-xl sm:text-2xl font-bold">
+              {stats.loading ? (
+                <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
+              ) : (
+                stats.totalMaterials
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
-              +8% em relação ao mês passado
+              Materiais registrados
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Campanhas Concluídas</CardTitle>
-            <Award className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total de Vagas</CardTitle>
+            <Briefcase className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">{stats.completedCampaigns}</div>
+            <div className="text-xl sm:text-2xl font-bold">
+              {stats.loading ? (
+                <div className="animate-pulse bg-gray-200 h-6 w-16 rounded"></div>
+              ) : (
+                stats.totalVacancies
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
-              Este mês
+              Vagas disponíveis
             </p>
           </CardContent>
         </Card>
@@ -192,52 +283,34 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentActivities.map((activity) => (
-                <div key={activity.id} className="flex items-center space-x-4">
-                  <Activity className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <div className="flex-1 space-y-1 min-w-0">
-                    <p className="text-sm font-medium leading-none">
-                      {activity.action}
-                    </p>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {activity.client}
-                    </p>
+              {recentActivities.length > 0 ? (
+                recentActivities.map((activity) => (
+                  <div key={activity.id} className="flex items-center space-x-4">
+                    <Activity className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <div className="flex-1 space-y-1 min-w-0">
+                      <p className="text-sm font-medium leading-none">
+                        {activity.action}
+                      </p>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {activity.client}
+                      </p>
+                    </div>
+                    <div className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">
+                      {activity.time}
+                    </div>
                   </div>
-                  <div className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">
-                    {activity.time}
-                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4">
+                  <Activity className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">Nenhuma atividade recente</p>
+                  <p className="text-xs text-muted-foreground">Comece adicionando clientes, ações ou materiais</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Resumo Rápido */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Resumo Executivo</CardTitle>
-          <CardDescription>
-            Visão geral do desempenho da empresa
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-            <div className="text-center">
-              <div className="text-xl sm:text-2xl font-bold text-green-600">98.5%</div>
-              <p className="text-sm text-muted-foreground">Taxa de Satisfação</p>
-            </div>
-            <div className="text-center">
-              <div className="text-xl sm:text-2xl font-bold text-blue-600">15.2 dias</div>
-              <p className="text-sm text-muted-foreground">Tempo Médio de Campanha</p>
-            </div>
-            <div className="text-center">
-              <div className="text-xl sm:text-2xl font-bold text-purple-600">2.3M</div>
-              <p className="text-sm text-muted-foreground">Panfletos Distribuídos</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };
