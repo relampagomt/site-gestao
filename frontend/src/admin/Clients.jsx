@@ -167,6 +167,7 @@ const Clients = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <h2 className="text-2xl font-bold tracking-tight mb-4">Clientes</h2>
       {/* Header */}
       <div className="flex justify-end">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -330,78 +331,81 @@ const Clients = () => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead className="hidden sm:table-cell">Empresa</TableHead>
-                    <TableHead className="hidden md:table-cell">Contato</TableHead>
-                    <TableHead className="hidden lg:table-cell">Segmento</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredClients.map((client) => (
-                    <TableRow key={client.id}>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <User className="w-4 h-4 text-gray-400" />
-                          <div>
-                            <span className="font-medium">{client.name}</span>
-                            <div className="sm:hidden text-xs text-gray-500">{client.company}</div>
+              <div className="min-w-[700px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[150px]">Cliente</TableHead>
+                      <TableHead className="min-w-[150px] hidden sm:table-cell">Empresa</TableHead>
+                      <TableHead className="min-w-[200px] hidden md:table-cell">Contato</TableHead>
+                      <TableHead className="min-w-[120px] hidden lg:table-cell">Segmento</TableHead>
+                      <TableHead className="min-w-[100px]">Status</TableHead>
+                      <TableHead className="min-w-[100px]">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredClients.map((client) => (
+                      <TableRow key={client.id}>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <span className="font-medium truncate block">{client.name}</span>
+                              <div className="sm:hidden text-xs text-gray-500 truncate">{client.company}</div>
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <div className="flex items-center space-x-2">
-                          <Building className="w-4 h-4 text-gray-400" />
-                          <span>{client.company}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-2 text-sm">
-                            <Phone className="w-3 h-3 text-gray-400" />
-                            <span>{client.phone}</span>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <div className="flex items-center space-x-2">
+                            <Building className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{client.company}</span>
                           </div>
-                          <div className="flex items-center space-x-2 text-sm">
-                            <Mail className="w-3 h-3 text-gray-400" />
-                            <span>{client.email}</span>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <div className="space-y-1">
+                            <div className="flex items-center space-x-2 text-sm">
+                              <Phone className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                              <span className="truncate">{client.phone}</span>
+                            </div>
+                            <div className="flex items-center space-x-2 text-sm">
+                              <Mail className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                              <span className="truncate">{client.email}</span>
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <span className="capitalize">{client.segment || 'Não informado'}</span>
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(client.status)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1 sm:space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(client)}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          {isAdmin() && (
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <span className="capitalize whitespace-nowrap">{client.segment || 'Não informado'}</span>
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(client.status)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-1">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleDelete(client.id)}
-                              className="text-red-600 hover:text-red-700"
+                              onClick={() => handleEdit(client)}
+                              className="whitespace-nowrap"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Edit className="w-4 h-4" />
                             </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                            {isAdmin() && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDelete(client.id)}
+                                className="text-red-600 hover:text-red-700 whitespace-nowrap"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>

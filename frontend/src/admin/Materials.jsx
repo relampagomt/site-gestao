@@ -189,6 +189,7 @@ const Materials = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <h2 className="text-2xl font-bold tracking-tight mb-4">Materiais</h2>
       {/* Header */}
       <div className="flex justify-end">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -334,85 +335,90 @@ const Materials = () => {
               </p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Quantidade</TableHead>
-                  <TableHead>Responsável</TableHead>
-                  <TableHead>Amostras</TableHead>
-                  <TableHead>Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMaterials.map((material) => (
-                  <TableRow key={material.id}>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Calendar className="w-4 h-4 text-gray-400" />
-                        <span>{formatDate(material.date)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <User className="w-4 h-4 text-gray-400" />
-                        <span className="font-medium">{material.client_name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Package className="w-4 h-4 text-gray-400" />
-                        <span>{material.quantity}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span>{material.responsible}</span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        {material.material_sample_url && (
-                          <Badge variant="outline" className="text-xs">
-                            <Image className="w-3 h-3 mr-1" />
-                            Material
-                          </Badge>
-                        )}
-                        {material.protocol_sample_url && (
-                          <Badge variant="outline" className="text-xs">
-                            <Image className="w-3 h-3 mr-1" />
-                            Protocolo
-                          </Badge>
-                        )}
-                        {!material.material_sample_url && !material.protocol_sample_url && (
-                          <span className="text-gray-400 text-sm">Sem amostras</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(material)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        {isAdmin() && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(material.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <div className="min-w-[700px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[100px]">Data</TableHead>
+                      <TableHead className="min-w-[150px]">Cliente</TableHead>
+                      <TableHead className="min-w-[100px]">Quantidade</TableHead>
+                      <TableHead className="min-w-[150px]">Responsável</TableHead>
+                      <TableHead className="min-w-[120px]">Amostras</TableHead>
+                      <TableHead className="min-w-[100px]">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredMaterials.map((material) => (
+                      <TableRow key={material.id}>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="whitespace-nowrap">{formatDate(material.date)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="font-medium truncate">{material.client_name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Package className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="whitespace-nowrap">{material.quantity}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="truncate">{material.responsible}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            {material.material_sample_url && (
+                              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                                <Image className="w-3 h-3 mr-1" />
+                                Material
+                              </Badge>
+                            )}
+                            {material.protocol_sample_url && (
+                              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                                <Image className="w-3 h-3 mr-1" />
+                                Protocolo
+                              </Badge>
+                            )}
+                            {!material.material_sample_url && !material.protocol_sample_url && (
+                              <span className="text-gray-400 text-sm whitespace-nowrap">Sem amostras</span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(material)}
+                              className="whitespace-nowrap"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            {isAdmin() && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDelete(material.id)}
+                                className="text-red-600 hover:text-red-700 whitespace-nowrap"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

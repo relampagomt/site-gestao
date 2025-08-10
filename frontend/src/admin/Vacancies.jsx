@@ -179,6 +179,7 @@ const Vacancies = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <h2 className="text-2xl font-bold tracking-tight mb-4">Gestão de Vagas</h2>
       <div className="flex justify-end">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -436,61 +437,74 @@ const Vacancies = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Título</TableHead>
-                <TableHead>Departamento</TableHead>
-                <TableHead>Localização</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Salário</TableHead>
-                <TableHead>Candidatos</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredVacancies.map((vacancy) => (
-                <TableRow key={vacancy.id}>
-                  <TableCell className="font-medium">{vacancy.title}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{vacancy.department}</Badge>
-                  </TableCell>
-                  <TableCell>{vacancy.location}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{vacancy.type}</Badge>
-                  </TableCell>
-                  <TableCell>R$ {vacancy.salary.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center">
-                      <Users className="h-4 w-4 mr-1 text-gray-500" />
-                      {vacancy.applications}
-                    </div>
-                  </TableCell>
-                  <TableCell>{getStatusBadge(vacancy.status)}</TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(vacancy)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDelete(vacancy.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="overflow-x-auto">
+            <div className="min-w-[800px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[200px]">Título</TableHead>
+                    <TableHead className="min-w-[120px]">Departamento</TableHead>
+                    <TableHead className="min-w-[150px]">Localização</TableHead>
+                    <TableHead className="min-w-[80px]">Tipo</TableHead>
+                    <TableHead className="min-w-[100px]">Salário</TableHead>
+                    <TableHead className="min-w-[100px]">Candidatos</TableHead>
+                    <TableHead className="min-w-[100px]">Status</TableHead>
+                    <TableHead className="min-w-[100px]">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredVacancies.map((vacancy) => (
+                    <TableRow key={vacancy.id}>
+                      <TableCell className="font-medium">
+                        <div className="max-w-[180px]">
+                          <p className="truncate">{vacancy.title}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="whitespace-nowrap">{vacancy.department}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="truncate">{vacancy.location}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="whitespace-nowrap">{vacancy.type}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="whitespace-nowrap">R$ {vacancy.salary.toLocaleString()}</span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <Users className="h-4 w-4 mr-1 text-gray-500 flex-shrink-0" />
+                          <span className="whitespace-nowrap">{vacancy.applications}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{getStatusBadge(vacancy.status)}</TableCell>
+                      <TableCell>
+                        <div className="flex space-x-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(vacancy)}
+                            className="whitespace-nowrap"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(vacancy.id)}
+                            className="text-red-600 hover:text-red-800 whitespace-nowrap"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

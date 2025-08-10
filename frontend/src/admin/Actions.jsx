@@ -198,6 +198,7 @@ const Actions = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <h2 className="text-2xl font-bold tracking-tight mb-4">Gestão de Ações Promocionais</h2>
       <div className="flex justify-end">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -468,64 +469,77 @@ const Actions = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Título</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Período</TableHead>
-                <TableHead>Orçamento</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Progresso</TableHead>
-                <TableHead>Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredActions.map((action) => (
-                <TableRow key={action.id}>
-                  <TableCell className="font-medium">{action.title}</TableCell>
-                  <TableCell>{action.client}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{action.type}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <div>{new Date(action.startDate).toLocaleDateString('pt-BR')}</div>
-                      <div className="text-gray-500">até {new Date(action.endDate).toLocaleDateString('pt-BR')}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>R$ {action.budget.toLocaleString()}</TableCell>
-                  <TableCell>{getStatusBadge(action.status)}</TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      {getProgressBar(action.progress)}
-                      <div className="text-xs text-gray-500">{action.progress}%</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(action)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDelete(action.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="overflow-x-auto">
+            <div className="min-w-[800px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[200px]">Título</TableHead>
+                    <TableHead className="min-w-[120px]">Cliente</TableHead>
+                    <TableHead className="min-w-[150px]">Tipo</TableHead>
+                    <TableHead className="min-w-[120px]">Período</TableHead>
+                    <TableHead className="min-w-[100px]">Orçamento</TableHead>
+                    <TableHead className="min-w-[100px]">Status</TableHead>
+                    <TableHead className="min-w-[120px]">Progresso</TableHead>
+                    <TableHead className="min-w-[100px]">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredActions.map((action) => (
+                    <TableRow key={action.id}>
+                      <TableCell className="font-medium">
+                        <div className="max-w-[180px]">
+                          <p className="truncate">{action.title}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="truncate">{action.client}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="whitespace-nowrap">{action.type}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <div className="whitespace-nowrap">{new Date(action.startDate).toLocaleDateString('pt-BR')}</div>
+                          <div className="text-gray-500 text-xs whitespace-nowrap">até {new Date(action.endDate).toLocaleDateString('pt-BR')}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="whitespace-nowrap">R$ {action.budget.toLocaleString()}</span>
+                      </TableCell>
+                      <TableCell>{getStatusBadge(action.status)}</TableCell>
+                      <TableCell>
+                        <div className="space-y-1 min-w-[100px]">
+                          {getProgressBar(action.progress)}
+                          <div className="text-xs text-gray-500">{action.progress}%</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(action)}
+                            className="whitespace-nowrap"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(action.id)}
+                            className="text-red-600 hover:text-red-800 whitespace-nowrap"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

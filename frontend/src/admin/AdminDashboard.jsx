@@ -57,7 +57,7 @@ const AdminDashboard = () => {
           </button>
         </div>
 
-        <nav className="mt-6">
+        <nav className="mt-6 overflow-y-auto">
           {menuItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -71,8 +71,8 @@ const AdminDashboard = () => {
                   activeTab === item.id ? 'bg-red-50 text-red-600 border-r-2 border-red-600' : 'text-gray-700'
                 }`}
               >
-                <Icon className="w-5 h-5 mr-3" />
-                <span className="text-sm lg:text-base">{item.label}</span>
+                <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
+                <span className="text-sm lg:text-base truncate">{item.label}</span>
               </button>
             );
           })}
@@ -80,25 +80,25 @@ const AdminDashboard = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-0">
+      <div className="flex-1 lg:ml-0 min-w-0">
         {/* Header */}
-        <header className="bg-white border-b shadow-sm">
+        <header className="bg-white border-b shadow-sm sticky top-0 z-30">
           <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
-              <div className="flex items-center">
+              <div className="flex items-center min-w-0">
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="lg:hidden mr-4"
+                  className="lg:hidden mr-4 flex-shrink-0"
                 >
                   <Menu className="w-6 h-6" />
                 </button>
-
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight hidden sm:block truncate">{menuItems.find(item => item.id === activeTab)?.label}</h2>
               </div>
 
-              <div className="flex items-center space-x-2 sm:space-x-4">
+              <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
                 <div className="hidden sm:flex items-center space-x-2">
                   <User className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm text-gray-700">{user?.name}</span>
+                  <span className="text-sm text-gray-700 truncate max-w-32">{user?.name}</span>
                   <Badge variant={isAdmin() ? "default" : "secondary"}>
                     {user?.role === 'admin' ? 'Admin' : 'Supervisor'}
                   </Badge>
@@ -119,8 +119,10 @@ const AdminDashboard = () => {
         </header>
 
         {/* Page Content */}
-        <main className="p-3 sm:p-6">
-          <ActiveComponent />
+        <main className="p-3 sm:p-6 lg:p-8 max-w-full overflow-x-hidden">
+          <div className="max-w-7xl mx-auto">
+            <ActiveComponent />
+          </div>
         </main>
       </div>
 
