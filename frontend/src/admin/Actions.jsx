@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
@@ -9,458 +9,574 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea.jsx';
 import { useAuth } from '../contexts/AuthContext';
 import api from '@/services/api';
-import { Plus, Search, Edit, Trash2, Target, Calendar, Users, DollarSign, TrendingUp, Clock, Filter, X } from 'lucide-react';
-import { io } from 'socket.io-client';
+// ✅ ADICIONADO: Selects do shadcn/ui
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Target,
+  Calendar,
+  MapPin,
+  Users,
+  DollarSign,
+  TrendingUp,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  Package,
+  User,
+  Building
+} from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_BASE_URL || window.location.origin;
-
-/**
- * Permissões:
- * - supervisor: só pode ver/editar/excluir ações com createdBy === user.uid
- * - admin: pode tudo
- */
-function canEditOrDelete(acao, user) {
-  if (!user) return false;
-  if (user.role === 'admin') return true;
-  if (user.role === 'supervisor') return acao?.createdBy === user.uid;
-  return false;
-}
-
-const PERIODOS = ['Manhã', 'Tarde', 'Noite'];
-
-const defaultForm = {
-  nomeCliente: '',
-  nomeEmpresa: '',
-  tipoAcao: '',
-  dataInicio: '',
-  dataFim: '',
-  periodosDia: [],
-  quantidadeMaterial: '',
-  fotoMaterial: null, // File
-  observacoes: '',
-};
-
-export default function Acoes() {
-  const { user } = useAuth(); // espera { uid, role, nome } no AuthProvider
-  const [acoes, setAcoes] = useState([]);
+const Actions = () => {
+  const { isAdmin } = useAuth();
+  const [actions, setActions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState('');
-  const [busca, setBusca] = useState('');
-  const [modalAberto, setModalAberto] = useState(false);
-  const [editando, setEditando] = useState(null); // registro sendo editado
-  const [form, setForm] = useState(defaultForm);
-  const [enviando, setEnviando] = useState(false);
-  const [previewFoto, setPreviewFoto] = useState('');
 
-  // Carregar e conectar socket
+  const [searchTerm, setSearchTerm] = useState('');
+  const [actionTypeFilter, setActionTypeFilter] = useState('todos');
+  const [statusFilter, setStatusFilter] = useState('todos');
+  const [dateFilter, setDateFilter] = useState('todos');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingAction, setEditingAction] = useState(null);
+  const [formData, setFormData] = useState({
+    client_name: '',
+    company_name: '',
+    action_type: '',
+    start_date: '',
+    end_date: '',
+    periods_of_day: '',
+    material_quantity: '',
+    material_photo_url: '',
+    observations: ''
+  });
+
+  const actionTypes = [
+    'Panfletagem Residencial',
+    'Sinaleiros/Pedestres',
+    'Eventos Estratégicos',
+    'Ações Promocionais',
+    'Marketing de Guerrilha'
+  ];
+
   useEffect(() => {
-    let ativo = true;
+    fetchActions();
+  }, []);
 
-    async function carregar() {
-      try {
-        setLoading(true);
-        const { data } = await api.get('/acoes');
-        if (!ativo) return;
-
-        // Se for supervisor, filtra só dele
-        const lista = (data || []).filter(a =>
-          user?.role === 'admin' ? true : a.createdBy === user?.uid
-        );
-
-        setAcoes(lista);
-      } catch (e) {
-        setErro(e?.response?.data?.message || e.message || 'Falha ao carregar ações');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    carregar();
-
-    // Socket
-    const socket = io(SOCKET_URL, { transports: ['websocket'] });
-
-    const handleCreated = (novo) => {
-      // supervisor só recebe suas próprias (ou admin recebe todas)
-      if (user?.role === 'admin' || novo.createdBy === user?.uid) {
-        setAcoes(prev => {
-          const existe = prev.some(a => a.id === novo.id);
-          return existe ? prev : [novo, ...prev];
-        });
-      }
-    };
-
-    const handleUpdated = (atualizado) => {
-      if (user?.role === 'admin' || atualizado.createdBy === user?.uid) {
-        setAcoes(prev => prev.map(a => (a.id === atualizado.id ? atualizado : a)));
-      }
-    };
-
-    const handleDeleted = (id) => {
-      setAcoes(prev => prev.filter(a => a.id !== id));
-    };
-
-    socket.on('actions:created', handleCreated);
-    socket.on('actions:updated', handleUpdated);
-    socket.on('actions:deleted', handleDeleted);
-
-    return () => {
-      ativo = false;
-      socket.off('actions:created', handleCreated);
-      socket.off('actions:updated', handleUpdated);
-      socket.off('actions:deleted', handleDeleted);
-      socket.close();
-    };
-  }, [user]);
-
-  // Filtro de busca (nome cliente/empresa/tipo)
-  const filtradas = useMemo(() => {
-    const q = busca.trim().toLowerCase();
-    if (!q) return acoes;
-    return acoes.filter(a => {
-      return (
-        a.nomeCliente?.toLowerCase().includes(q) ||
-        a.nomeEmpresa?.toLowerCase().includes(q) ||
-        a.tipoAcao?.toLowerCase().includes(q)
-      );
-    });
-  }, [acoes, busca]);
-
-  function abrirNovo() {
-    setEditando(null);
-    setForm(defaultForm);
-    setPreviewFoto('');
-    setModalAberto(true);
-  }
-
-  function abrirEdicao(acao) {
-    setEditando(acao);
-    setForm({
-      nomeCliente: acao.nomeCliente || '',
-      nomeEmpresa: acao.nomeEmpresa || '',
-      tipoAcao: acao.tipoAcao || '',
-      dataInicio: acao.dataInicio?.slice(0, 10) || '',
-      dataFim: acao.dataFim?.slice(0, 10) || '',
-      periodosDia: Array.isArray(acao.periodosDia) ? acao.periodosDia : [],
-      quantidadeMaterial: String(acao.quantidadeMaterial || ''),
-      fotoMaterial: null, // só envia se trocar
-      observacoes: acao.observacoes || '',
-    });
-    setPreviewFoto(acao.fotoMaterialUrl || '');
-    setModalAberto(true);
-  }
-
-  function fecharModal() {
-    setModalAberto(false);
-    setTimeout(() => {
-      setEditando(null);
-      setForm(defaultForm);
-      setPreviewFoto('');
-    }, 200);
-  }
-
-  function onChange(e) {
-    const { name, value, type, checked, files } = e.target;
-    if (name === 'fotoMaterial' && files?.[0]) {
-      const file = files[0];
-      setForm(prev => ({ ...prev, fotoMaterial: file }));
-      const url = URL.createObjectURL(file);
-      setPreviewFoto(url);
-      return;
-    }
-    if (name === 'periodosDia') {
-      const p = value;
-      setForm(prev => {
-        const atual = new Set(prev.periodosDia || []);
-        if (checked) atual.add(p);
-        else atual.delete(p);
-        return { ...prev, periodosDia: Array.from(atual) };
-      });
-      return;
-    }
-    setForm(prev => ({ ...prev, [name]: type === 'number' ? Number(value) : value }));
-  }
-
-  async function salvar(e) {
-    e?.preventDefault?.();
-    setEnviando(true);
+  const fetchActions = async () => {
     try {
-      const fd = new FormData();
-      fd.append('nomeCliente', form.nomeCliente);
-      fd.append('nomeEmpresa', form.nomeEmpresa);
-      fd.append('tipoAcao', form.tipoAcao);
-      fd.append('dataInicio', form.dataInicio);
-      fd.append('dataFim', form.dataFim);
-      fd.append('periodosDia', JSON.stringify(form.periodosDia || []));
-      fd.append('quantidadeMaterial', String(form.quantidadeMaterial || ''));
-      fd.append('observacoes', form.observacoes || '');
-      if (form.fotoMaterial) fd.append('fotoMaterial', form.fotoMaterial);
-      // Para controle de autoria no backend
-      if (user?.uid) fd.append('createdBy', user.uid);
-
-      if (editando?.id) {
-        await api.put(`/acoes/${editando.id}`, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-      } else {
-        await api.post('/acoes', fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-      }
-
-      fecharModal(); // lista será atualizada pelo socket
-    } catch (e) {
-      setErro(e?.response?.data?.message || e.message || 'Falha ao salvar ação');
+      setLoading(true);
+      const { data } = await api.get('/actions');
+      setActions(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar ações:', error);
     } finally {
-      setEnviando(false);
+      setLoading(false);
     }
-  }
+  };
 
-  async function excluir(acao) {
-    if (!canEditOrDelete(acao, user)) return;
-    if (!confirm('Excluir esta ação?')) return;
-    try {
-      await api.delete(`/acoes/${acao.id}`);
-      // remoção chegará via socket; removemos otimista também:
-      setAcoes(prev => prev.filter(a => a.id !== acao.id));
-    } catch (e) {
-      setErro(e?.response?.data?.message || e.message || 'Falha ao excluir ação');
+  const filteredActions = actions.filter(action => {
+    const matchesSearch = action.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      action.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      action.action_type?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesActionType = actionTypeFilter === 'todos' || action.action_type === actionTypeFilter;
+    const matchesStatus = statusFilter === 'todos' || action.status === statusFilter;
+
+    let matchesDate = true;
+    if (dateFilter !== 'todos' && action.start_date) {
+      const actionDate = new Date(action.start_date);
+      const today = new Date();
+
+      switch (dateFilter) {
+        case 'hoje':
+          matchesDate = actionDate.toDateString() === today.toDateString();
+          break;
+        case 'semana':
+          const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+          matchesDate = actionDate >= weekAgo;
+          break;
+        case 'mes':
+          matchesDate = actionDate.getMonth() === today.getMonth() &&
+                       actionDate.getFullYear() === today.getFullYear();
+          break;
+        case 'trimestre':
+          const currentQuarter = Math.floor(today.getMonth() / 3);
+          const actionQuarter = Math.floor(actionDate.getMonth() / 3);
+          matchesDate = actionQuarter === currentQuarter &&
+                       actionDate.getFullYear() === today.getFullYear();
+          break;
+      }
     }
-  }
+
+    return matchesSearch && matchesActionType && matchesStatus && matchesDate;
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingAction) {
+        await api.put(`/actions/${editingAction.id}`, formData);
+      } else {
+        await api.post('/actions', formData);
+      }
+      await fetchActions();
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Erro ao salvar ação:', error);
+      alert(error?.response?.data?.message || 'Erro ao salvar ação');
+    }
+  };
+
+  const handleEdit = (action) => {
+    setEditingAction(action);
+    setFormData({
+      client_name: action.client_name || '',
+      company_name: action.company_name || '',
+      action_type: action.action_type || '',
+      start_date: action.start_date || '',
+      end_date: action.end_date || '',
+      periods_of_day: action.periods_of_day || '',
+      material_quantity: action.material_quantity || '',
+      material_photo_url: action.material_photo_url || '',
+      observations: action.observations || ''
+    });
+    setIsDialogOpen(true);
+  };
+
+  const handleDelete = async (actionId) => {
+    if (!isAdmin()) {
+      alert('Apenas administradores podem excluir ações');
+      return;
+    }
+    if (window.confirm('Tem certeza que deseja excluir esta ação?')) {
+      try {
+        await api.delete(`/actions/${actionId}`);
+        await fetchActions();
+      } catch (error) {
+        console.error('Erro ao excluir ação:', error);
+        alert(error?.response?.data?.message || 'Erro ao excluir ação');
+      }
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      client_name: '',
+      company_name: '',
+      action_type: '',
+      start_date: '',
+      end_date: '',
+      periods_of_day: '',
+      material_quantity: '',
+      material_photo_url: '',
+      observations: ''
+    });
+    setEditingAction(null);
+  };
+
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      'Planejada': { color: 'bg-blue-100 text-blue-800', icon: Clock },
+      'Em Andamento': { color: 'bg-yellow-100 text-yellow-800', icon: TrendingUp },
+      'Pausada': { color: 'bg-orange-100 text-orange-800', icon: AlertCircle },
+      'Concluída': { color: 'bg-green-100 text-green-800', icon: CheckCircle },
+      'Cancelada': { color: 'bg-red-100 text-red-800', icon: AlertCircle }
+    };
+
+    const config = statusConfig[status] || statusConfig['Planejada'];
+    const Icon = config.icon;
+
+    return (
+      <Badge className={config.color}>
+        <Icon className="w-3 h-3 mr-1" />
+        {status}
+      </Badge>
+    );
+  };
+
+  const getProgressBar = (progress) => (
+    <div className="w-full bg-gray-200 rounded-full h-2">
+      <div
+        className="bg-red-600 h-2 rounded-full"
+        style={{ width: `${progress}%` }}
+      ></div>
+    </div>
+  );
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto w-full">
-      <Card className="border">
-        <CardHeader className="gap-2">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div>
-              <CardTitle className="text-2xl">Ações</CardTitle>
-              <CardDescription>Cadastre, edite e acompanhe as ações em tempo real.</CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-4 opacity-60" />
-                <Input
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  placeholder="Buscar por cliente, empresa ou tipo…"
-                  className="pl-8 w-[260px]"
+    <div className="space-y-4 sm:space-y-6">
+      <h2 className="text-2xl font-bold tracking-tight mb-4">Ações</h2>
+      <div className="flex justify-end">
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button
+              className="bg-red-700 hover:bg-red-800"
+              onClick={resetForm}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Nova Ação</span>
+              <span className="sm:hidden">Nova</span>
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>
+                {editingAction ? 'Editar Ação' : 'Nova Ação Promocional'}
+              </DialogTitle>
+              <DialogDescription>
+                {editingAction
+                  ? 'Edite as informações da ação abaixo.'
+                  : 'Preencha as informações da nova ação promocional.'
+                }
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="client_name">Nome do Cliente</Label>
+                  <Input
+                    id="client_name"
+                    value={formData.client_name}
+                    onChange={(e) => setFormData({...formData, client_name: e.target.value})}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="company_name">Nome da Empresa</Label>
+                  <Input
+                    id="company_name"
+                    value={formData.company_name}
+                    onChange={(e) => setFormData({...formData, company_name: e.target.value})}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="action_type">Tipo de Ação</Label>
+                <select
+                  id="action_type"
+                  value={formData.action_type}
+                  onChange={(e) => setFormData({...formData, action_type: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  required
+                >
+                  <option value="">Selecione o tipo</option>
+                  {actionTypes.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label htmlFor="observations">Observações</Label>
+                <Textarea
+                  id="observations"
+                  value={formData.observations}
+                  onChange={(e) => setFormData({...formData, observations: e.target.value})}
+                  rows={3}
+                  placeholder="Descrição da ação, objetivos, etc."
                 />
               </div>
-              <Button onClick={abrirNovo} className="whitespace-nowrap">
-                <Plus className="mr-2 size-4" /> Nova ação
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="start_date">Data de Início</Label>
+                  <Input
+                    id="start_date"
+                    type="date"
+                    value={formData.start_date}
+                    onChange={(e) => setFormData({...formData, start_date: e.target.value})}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="end_date">Data de Término</Label>
+                  <Input
+                    id="end_date"
+                    type="date"
+                    value={formData.end_date}
+                    onChange={(e) => setFormData({...formData, end_date: e.target.value})}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="periods_of_day">Períodos do Dia</Label>
+                  <Input
+                    id="periods_of_day"
+                    value={formData.periods_of_day}
+                    onChange={(e) => setFormData({...formData, periods_of_day: e.target.value})}
+                    placeholder="Ex: Manhã, Tarde, Noite"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="material_quantity">Quantidade de Material</Label>
+                  <Input
+                    id="material_quantity"
+                    type="number"
+                    value={formData.material_quantity}
+                    onChange={(e) => setFormData({...formData, material_quantity: e.target.value})}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="material_photo_url">URL da Foto do Material</Label>
+                <Input
+                  id="material_photo_url"
+                  type="url"
+                  value={formData.material_photo_url}
+                  onChange={(e) => setFormData({...formData, material_photo_url: e.target.value})}
+                  placeholder="https://exemplo.com/foto-material.jpg"
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsDialogOpen(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" className="bg-red-700 hover:bg-red-800">
+                  {editingAction ? 'Salvar' : 'Criar'}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Estatísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <Target className="h-8 w-8 text-blue-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Total de Ações</p>
+                <p className="text-2xl font-bold">{actions.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <Calendar className="h-8 w-8 text-green-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Ações Ativas</p>
+                <p className="text-2xl font-bold">{actions.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <Package className="h-8 w-8 text-purple-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Total Materiais</p>
+                <p className="text-2xl font-bold">
+                  {actions.reduce((sum, a) => sum + (parseInt(a.material_quantity) || 0), 0).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <Users className="h-8 w-8 text-orange-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Clientes Atendidos</p>
+                <p className="text-2xl font-bold">
+                  {new Set(actions.map(a => a.client_name)).size}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Busca e Filtros */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Buscar ações por cliente, empresa ou tipo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <Select value={actionTypeFilter} onValueChange={setActionTypeFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os tipos</SelectItem>
+                  <SelectItem value="Panfletagem">Panfletagem</SelectItem>
+                  <SelectItem value="Degustação">Degustação</SelectItem>
+                  <SelectItem value="Promoção">Promoção</SelectItem>
+                  <SelectItem value="Evento">Evento</SelectItem>
+                  <SelectItem value="Outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="Planejada">Planejada</SelectItem>
+                  <SelectItem value="Em Andamento">Em Andamento</SelectItem>
+                  <SelectItem value="Pausada">Pausada</SelectItem>
+                  <SelectItem value="Concluída">Concluída</SelectItem>
+                  <SelectItem value="Cancelada">Cancelada</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={dateFilter} onValueChange={setDateFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por período" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os períodos</SelectItem>
+                  <SelectItem value="hoje">Hoje</SelectItem>
+                  <SelectItem value="semana">Esta semana</SelectItem>
+                  <SelectItem value="mes">Este mês</SelectItem>
+                  <SelectItem value="trimestre">Este trimestre</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button variant="outline" onClick={() => { setSearchTerm(''); setActionTypeFilter('todos'); setStatusFilter('todos'); setDateFilter('todos'); }}>
+                Limpar Filtros
               </Button>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {erro ? (
-            <div className="text-red-600 text-sm">{erro}</div>
-          ) : null}
+        </CardContent>
+      </Card>
 
+      {/* Tabela de Ações */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Lista de Ações Promocionais</CardTitle>
+          <CardDescription>
+            Gerencie todas as campanhas e ações promocionais
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
           {loading ? (
-            <div className="text-sm opacity-70">Carregando…</div>
-          ) : filtradas.length === 0 ? (
-            <div className="text-sm opacity-70">Nenhuma ação encontrada.</div>
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Carregando ações...</p>
+            </div>
+          ) : filteredActions.length === 0 ? (
+            <div className="text-center py-8">
+              <AlertCircle className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhuma ação encontrada</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {searchTerm ? 'Tente ajustar sua busca' : 'Comece criando uma nova ação promocional'}
+              </p>
+            </div>
           ) : (
-            <div className="overflow-x-auto border rounded-md">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Empresa</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead className="min-w-[160px]">Período</TableHead>
-                    <TableHead>Início</TableHead>
-                    <TableHead>Fim</TableHead>
-                    <TableHead className="text-right">Qtd. Material</TableHead>
-                    <TableHead>Responsável</TableHead>
-                    <TableHead className="w-[140px]">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtradas.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="font-medium">{a.nomeCliente}</TableCell>
-                      <TableCell>{a.nomeEmpresa}</TableCell>
-                      <TableCell>{a.tipoAcao}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {(a.periodosDia || []).map((p) => (
-                            <Badge key={p} variant="secondary">{p}</Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>{a.dataInicio?.slice(0, 10)}</TableCell>
-                      <TableCell>{a.dataFim?.slice(0, 10)}</TableCell>
-                      <TableCell className="text-right">{a.quantidadeMaterial ?? '-'}</TableCell>
-                      <TableCell>
-                        {a.createdByName ? (
-                          <span className="inline-flex items-center gap-1">
-                            <Users className="size-4 opacity-60" /> {a.createdByName}
-                          </span>
-                        ) : '—'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => abrirEdicao(a)}
-                            disabled={!canEditOrDelete(a, user)}
-                            title={canEditOrDelete(a, user) ? 'Editar' : 'Sem permissão'}
-                          >
-                            <Edit className="size-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => excluir(a)}
-                            disabled={!canEditOrDelete(a, user)}
-                            title={canEditOrDelete(a, user) ? 'Excluir' : 'Sem permissão'}
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+            <div className="overflow-x-auto">
+              <div className="min-w-[800px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[150px]">Cliente</TableHead>
+                      <TableHead className="min-w-[150px]">Empresa</TableHead>
+                      <TableHead className="min-w-[150px]">Tipo</TableHead>
+                      <TableHead className="min-w-[120px]">Período</TableHead>
+                      <TableHead className="min-w-[100px]">Quantidade</TableHead>
+                      <TableHead className="min-w-[100px]">Ações</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredActions.map((action) => (
+                      <TableRow key={action.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center space-x-2">
+                            <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{action.client_name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Building className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{action.company_name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="whitespace-nowrap">{action.action_type}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {action.start_date && (
+                              <div className="whitespace-nowrap">{new Date(action.start_date).toLocaleDateString('pt-BR')}</div>
+                            )}
+                            {action.end_date && (
+                              <div className="text-gray-500 text-xs whitespace-nowrap">até {new Date(action.end_date).toLocaleDateString('pt-BR')}</div>
+                            )}
+                            {action.periods_of_day && (
+                              <div className="text-gray-500 text-xs">{action.periods_of_day}</div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Package className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="whitespace-nowrap">{action.material_quantity || 0}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(action)}
+                              className="whitespace-nowrap"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            {isAdmin() && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDelete(action.id)}
+                                className="text-red-600 hover:text-red-700 whitespace-nowrap"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
-
-      {/* Modal de Cadastro/Edição */}
-      <Dialog open={modalAberto} onOpenChange={(o) => (o ? setModalAberto(true) : fecharModal())}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{editando ? 'Editar ação' : 'Nova ação'}</DialogTitle>
-            <DialogDescription>Preencha os dados abaixo e salve.</DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={salvar} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="nomeCliente">Nome do cliente</Label>
-                <Input
-                  id="nomeCliente"
-                  name="nomeCliente"
-                  value={form.nomeCliente}
-                  onChange={onChange}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="nomeEmpresa">Nome da empresa</Label>
-                <Input
-                  id="nomeEmpresa"
-                  name="nomeEmpresa"
-                  value={form.nomeEmpresa}
-                  onChange={onChange}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="tipoAcao">Tipo de ação</Label>
-                <Input
-                  id="tipoAcao"
-                  name="tipoAcao"
-                  value={form.tipoAcao}
-                  onChange={onChange}
-                  placeholder="Ex.: Blitz, PDV, Panfletagem…"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label htmlFor="dataInicio">Data de início</Label>
-                  <Input
-                    id="dataInicio"
-                    name="dataInicio"
-                    type="date"
-                    value={form.dataInicio}
-                    onChange={onChange}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="dataFim">Data de término</Label>
-                  <Input
-                    id="dataFim"
-                    name="dataFim"
-                    type="date"
-                    value={form.dataFim}
-                    onChange={onChange}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="md:col-span-2">
-                <Label>Períodos do dia</Label>
-                <div className="flex flex-wrap gap-3 mt-2">
-                  {PERIODOS.map((p) => (
-                    <label key={p} className="inline-flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="periodosDia"
-                        value={p}
-                        checked={form.periodosDia.includes(p)}
-                        onChange={onChange}
-                      />
-                      <span>{p}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="quantidadeMaterial">Quantidade de material</Label>
-                <Input
-                  id="quantidadeMaterial"
-                  name="quantidadeMaterial"
-                  type="number"
-                  min={0}
-                  value={form.quantidadeMaterial}
-                  onChange={onChange}
-                  placeholder="Ex.: 200"
-                />
-              </div>
-              <div>
-                <Label htmlFor="fotoMaterial">Foto do material</Label>
-                <Input id="fotoMaterial" name="fotoMaterial" type="file" accept="image/*" onChange={onChange} />
-                {previewFoto ? (
-                  <img
-                    src={previewFoto}
-                    alt="Pré-visualização"
-                    className="mt-2 h-24 w-24 object-cover rounded-md border"
-                  />
-                ) : null}
-              </div>
-              <div className="md:col-span-2">
-                <Label htmlFor="observacoes">Observações</Label>
-                <Textarea
-                  id="observacoes"
-                  name="observacoes"
-                  value={form.observacoes}
-                  onChange={onChange}
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2">
-              <Button type="button" variant="outline" onClick={fecharModal}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={enviando}>
-                {enviando ? 'Salvando…' : 'Salvar'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
-}
+};
+
+export default Actions;
