@@ -29,16 +29,15 @@ function Footer() {
             <div className="flex space-x-4">
               <Button 
                 size="sm" 
-                className="bg-[var(--laranja-destaque)] text-[var(--vinho-escuro)] hover:bg-[var(--laranja-destaque)]/90"
+                variant="yellow"
                 aria-label="Falar no WhatsApp"
               >
                 <MessageCircle className="w-4 h-4 mr-2" />
                 WhatsApp
               </Button>
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="border-white text-white hover:bg-white hover:text-[var(--vinho-escuro)]"
+              <Button
+                size="sm"
+                variant="outline"
                 aria-label="Ligar para a empresa"
               >
                 <Phone className="w-4 h-4 mr-2" />
