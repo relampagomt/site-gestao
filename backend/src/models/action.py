@@ -1,4 +1,4 @@
-from src.services.firebase_service import get_firestore_client
+from src.services.firestore_service import firestore_service
 
 class Action:
     def __init__(self, client_name, company_name, action_type, start_date, end_date, periods_of_day, material_quantity, material_photo_url, observations):
@@ -41,35 +41,27 @@ class Action:
 
     @staticmethod
     def create(action_data):
-        db = get_firestore_client()
-        doc_ref = db.collection("actions").document()
-        doc_ref.set(action_data)
-        return doc_ref.id
+        doc_id, _ = firestore_service.add_document("actions", action_data)
+        return doc_id
 
     @staticmethod
     def get_all():
-        db = get_firestore_client()
-        actions_ref = db.collection("actions")
-        return [{"id": doc.id, **doc.to_dict()} for doc in actions_ref.stream()]
+        return firestore_service.get_all_documents("actions")
 
     @staticmethod
     def get_by_id(action_id):
-        db = get_firestore_client()
-        doc_ref = db.collection("actions").document(action_id)
-        doc = doc_ref.get()
-        if doc.exists:
-            return {"id": doc.id, **doc.to_dict()}
+        action = firestore_service.get_document("actions", action_id)
+        if action:
+            action['id'] = action_id
+            return action
         return None
 
     @staticmethod
     def update(action_id, action_data):
-        db = get_firestore_client()
-        doc_ref = db.collection("actions").document(action_id)
-        doc_ref.update(action_data)
+        return firestore_service.update_document("actions", action_id, action_data)
 
     @staticmethod
     def delete(action_id):
-        db = get_firestore_client()
-        db.collection("actions").document(action_id).delete()
+        return firestore_service.delete_document("actions", action_id)
 
 

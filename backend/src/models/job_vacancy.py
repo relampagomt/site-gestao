@@ -1,4 +1,4 @@
-from src.services.firebase_service import get_firestore_client
+from src.services.firestore_service import firestore_service
 
 class JobVacancy:
     def __init__(self, name, phone, email, others=None):
@@ -26,35 +26,27 @@ class JobVacancy:
 
     @staticmethod
     def create(job_vacancy_data):
-        db = get_firestore_client()
-        doc_ref = db.collection("job_vacancies").document()
-        doc_ref.set(job_vacancy_data)
-        return doc_ref.id
+        doc_id, _ = firestore_service.add_document("job_vacancies", job_vacancy_data)
+        return doc_id
 
     @staticmethod
     def get_all():
-        db = get_firestore_client()
-        job_vacancies_ref = db.collection("job_vacancies")
-        return [{"id": doc.id, **doc.to_dict()} for doc in job_vacancies_ref.stream()]
+        return firestore_service.get_all_documents("job_vacancies")
 
     @staticmethod
     def get_by_id(job_vacancy_id):
-        db = get_firestore_client()
-        doc_ref = db.collection("job_vacancies").document(job_vacancy_id)
-        doc = doc_ref.get()
-        if doc.exists:
-            return {"id": doc.id, **doc.to_dict()}
+        job_vacancy = firestore_service.get_document("job_vacancies", job_vacancy_id)
+        if job_vacancy:
+            job_vacancy['id'] = job_vacancy_id
+            return job_vacancy
         return None
 
     @staticmethod
     def update(job_vacancy_id, job_vacancy_data):
-        db = get_firestore_client()
-        doc_ref = db.collection("job_vacancies").document(job_vacancy_id)
-        doc_ref.update(job_vacancy_data)
+        return firestore_service.update_document("job_vacancies", job_vacancy_id, job_vacancy_data)
 
     @staticmethod
     def delete(job_vacancy_id):
-        db = get_firestore_client()
-        db.collection("job_vacancies").document(job_vacancy_id).delete()
+        return firestore_service.delete_document("job_vacancies", job_vacancy_id)
 
 

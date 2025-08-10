@@ -1,4 +1,4 @@
-from src.services.firebase_service import get_firestore_client
+from src.services.firestore_service import firestore_service
 
 class Material:
     def __init__(self, date, quantity, client_id, client_name, material_sample_url, protocol_sample_url, responsible):
@@ -35,35 +35,27 @@ class Material:
 
     @staticmethod
     def create(material_data):
-        db = get_firestore_client()
-        doc_ref = db.collection("materials").document()
-        doc_ref.set(material_data)
-        return doc_ref.id
+        doc_id, _ = firestore_service.add_document("materials", material_data)
+        return doc_id
 
     @staticmethod
     def get_all():
-        db = get_firestore_client()
-        materials_ref = db.collection("materials")
-        return [{"id": doc.id, **doc.to_dict()} for doc in materials_ref.stream()]
+        return firestore_service.get_all_documents("materials")
 
     @staticmethod
     def get_by_id(material_id):
-        db = get_firestore_client()
-        doc_ref = db.collection("materials").document(material_id)
-        doc = doc_ref.get()
-        if doc.exists:
-            return {"id": doc.id, **doc.to_dict()}
+        material = firestore_service.get_document("materials", material_id)
+        if material:
+            material['id'] = material_id
+            return material
         return None
 
     @staticmethod
     def update(material_id, material_data):
-        db = get_firestore_client()
-        doc_ref = db.collection("materials").document(material_id)
-        doc_ref.update(material_data)
+        return firestore_service.update_document("materials", material_id, material_data)
 
     @staticmethod
     def delete(material_id):
-        db = get_firestore_client()
-        db.collection("materials").document(material_id).delete()
+        return firestore_service.delete_document("materials", material_id)
 
 

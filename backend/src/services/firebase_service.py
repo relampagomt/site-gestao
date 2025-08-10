@@ -68,9 +68,16 @@ def init_firebase():
 
 def get_firestore_client():
     """Retorna o cliente do Firestore (inicializa se necessário)."""
-    # Para desenvolvimento, usar banco em memória
-    from src.services.memory_db import memory_db
-    return memory_db
+    # Verificar se está em modo de desenvolvimento
+    if os.getenv("FLASK_ENV") == "development" and not os.getenv("USE_FIRESTORE"):
+        # Para desenvolvimento, usar banco em memória
+        from src.services.memory_db import memory_db
+        return memory_db
+    
+    # Para produção ou quando USE_FIRESTORE=true, usar Firestore
+    if not firebase_admin._apps:
+        init_firebase()
+    return _db
 
 def get_storage_bucket():
     """Retorna o bucket do Storage (pode ser None se não configurado)."""
