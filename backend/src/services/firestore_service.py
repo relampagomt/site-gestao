@@ -1,141 +1,66 @@
-import uuid
-from datetime import datetime
-from firebase_admin import firestore
-from src.services.firebase_service import get_firestore_client
+# backend/src/services/firestore_service.py
+import os
+import json
+import base64
+import firebase_admin
+from firebase_admin import credentials, firestore, storage
+from src.services.memory_db import memory_db  # fallback p/ dev/teste
 
-class FirestoreService:
-    def __init__(self):
-        self.db = get_firestore_client()
-    
-    def collection(self, name):
-        """Retorna uma coleção do Firestore ou MemoryDB dependendo da configuração."""
-        return self.db.collection(name)
-    
-    def add_document(self, collection_name, data):
-        """Adiciona um documento a uma coleção."""
-        try:
-            # Adicionar timestamp de criação
-            data['created_at'] = datetime.now()
-            data['updated_at'] = datetime.now()
-            
-            # Se for MemoryDB
-            if hasattr(self.db, 'collections'):
-                doc_id = str(uuid.uuid4())
-                self.db.collections[collection_name][doc_id] = data
-                return doc_id, data
-            
-            # Se for Firestore
-            doc_ref = self.db.collection(collection_name).document()
-            doc_ref.set(data)
-            return doc_ref.id, data
-        except Exception as e:
-            print(f"Erro ao adicionar documento: {e}")
-            raise e
-    
-    def get_document(self, collection_name, doc_id):
-        """Obtém um documento específico."""
-        try:
-            # Se for MemoryDB
-            if hasattr(self.db, 'collections'):
-                if doc_id in self.db.collections[collection_name]:
-                    return self.db.collections[collection_name][doc_id]
-                return None
-            
-            # Se for Firestore
-            doc_ref = self.db.collection(collection_name).document(doc_id)
-            doc = doc_ref.get()
-            return doc.to_dict() if doc.exists else None
-        except Exception as e:
-            print(f"Erro ao obter documento: {e}")
-            raise e
-    
-    def update_document(self, collection_name, doc_id, data):
-        """Atualiza um documento."""
-        try:
-            # Adicionar timestamp de atualização
-            data['updated_at'] = datetime.now()
-            
-            # Se for MemoryDB
-            if hasattr(self.db, 'collections'):
-                if doc_id in self.db.collections[collection_name]:
-                    self.db.collections[collection_name][doc_id].update(data)
-                    return True
-                return False
-            
-            # Se for Firestore
-            doc_ref = self.db.collection(collection_name).document(doc_id)
-            doc_ref.update(data)
-            return True
-        except Exception as e:
-            print(f"Erro ao atualizar documento: {e}")
-            raise e
-    
-    def delete_document(self, collection_name, doc_id):
-        """Deleta um documento."""
-        try:
-            # Se for MemoryDB
-            if hasattr(self.db, 'collections'):
-                if doc_id in self.db.collections[collection_name]:
-                    del self.db.collections[collection_name][doc_id]
-                    return True
-                return False
-            
-            # Se for Firestore
-            doc_ref = self.db.collection(collection_name).document(doc_id)
-            doc_ref.delete()
-            return True
-        except Exception as e:
-            print(f"Erro ao deletar documento: {e}")
-            raise e
-    
-    def get_all_documents(self, collection_name):
-        """Obtém todos os documentos de uma coleção."""
-        try:
-            # Se for MemoryDB
-            if hasattr(self.db, 'collections'):
-                documents = []
-                for doc_id, doc_data in self.db.collections[collection_name].items():
-                    doc_data['id'] = doc_id
-                    documents.append(doc_data)
-                return documents
-            
-            # Se for Firestore
-            docs = self.db.collection(collection_name).stream()
-            documents = []
-            for doc in docs:
-                doc_data = doc.to_dict()
-                doc_data['id'] = doc.id
-                documents.append(doc_data)
-            return documents
-        except Exception as e:
-            print(f"Erro ao obter documentos: {e}")
-            raise e
-    
-    def query_documents(self, collection_name, field, operator, value):
-        """Faz uma consulta em uma coleção."""
-        try:
-            # Se for MemoryDB
-            if hasattr(self.db, 'collections'):
-                documents = []
-                for doc_id, doc_data in self.db.collections[collection_name].items():
-                    if field in doc_data:
-                        if operator == '==' and doc_data[field] == value:
-                            doc_data['id'] = doc_id
-                            documents.append(doc_data)
-                return documents
-            
-            # Se for Firestore
-            docs = self.db.collection(collection_name).where(field, operator, value).stream()
-            documents = []
-            for doc in docs:
-                doc_data = doc.to_dict()
-                doc_data['id'] = doc.id
-                documents.append(doc_data)
-            return documents
-        except Exception as e:
-            print(f"Erro ao consultar documentos: {e}")
-            raise e
+def _load_cred():
+    b64 = os.getenv("FIREBASE_CREDENTIALS_B64")
+    raw = os.getenv("FIREBASE_CREDENTIALS_JSON")
+    path = os.getenv("FIREBASE_CREDENTIALS_PATH")
 
-# Instância global do serviço
-firestore_service = FirestoreService()
+    if b64:
+        data = json.loads(base64.b64decode(b64).decode("utf-8"))
+        return credentials.Certificate(data)
+    if raw:
+        data = json.loads(raw)
+        return credentials.Certificate(data)
+    if path:
+        return credentials.Certificate(path)
 
+    raise RuntimeError(
+        "Credenciais do Firebase ausentes. "
+        "Defina FIREBASE_CREDENTIALS_B64 ou FIREBASE_CREDENTIALS_JSON ou FIREBASE_CREDENTIALS_PATH."
+    )
+
+def init_firebase():
+    if firebase_admin._apps:
+        return firebase_admin.get_app()
+    cred = _load_cred()
+    opts = {}
+    if os.getenv("FIREBASE_PROJECT_ID"):
+        opts["projectId"] = os.getenv("FIREBASE_PROJECT_ID")
+    if os.getenv("FIREBASE_STORAGE_BUCKET"):
+        opts["storageBucket"] = os.getenv("FIREBASE_STORAGE_BUCKET")
+    return firebase_admin.initialize_app(cred, opts or None)
+
+def _use_firestore() -> bool:
+    return os.getenv("USE_FIRESTORE", "false").lower() == "true"
+
+def get_db():
+    # Firestore quando habilitado; senão, cai para memória
+    if not _use_firestore():
+        return memory_db
+    try:
+        init_firebase()
+        return firestore.client()
+    except Exception as e:
+        print("[firestore_service] Falha ao iniciar Firestore, usando memória:", repr(e))
+        return memory_db
+
+def get_firestore_client():
+    # Útil quando você quer EXIGIR Firestore real
+    if not _use_firestore():
+        raise RuntimeError(
+            "Firestore desabilitado. Defina USE_FIRESTORE=true; "
+            "ou use get_db() para cair no memory_db."
+        )
+    init_firebase()
+    return firestore.client()
+
+def get_storage_bucket():
+    if not firebase_admin._apps:
+        init_firebase()
+    return storage.bucket(app=firebase_admin.get_app())
