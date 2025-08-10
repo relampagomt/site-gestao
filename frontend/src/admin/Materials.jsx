@@ -9,18 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  Package, 
-  Calendar,
-  User,
-  AlertCircle,
-  Upload,
-  Image
-} from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Package, Calendar, User, AlertCircle, Upload, Image } from 'lucide-react';
+import api from '../api'; // ✅ usar base dinâmica (/api em prod)
 
 const Materials = () => {
   const { isAdmin } = useAuth();
@@ -33,7 +23,7 @@ const Materials = () => {
   const [formData, setFormData] = useState({
     date: '',
     quantity: '',
-    client_id: '',
+    client_id: '',        // string no Select
     client_name: '',
     material_sample_url: '',
     protocol_sample_url: '',
@@ -48,18 +38,8 @@ const Materials = () => {
   const fetchMaterials = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/materials', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setMaterials(data);
-      } else {
-        console.error('Erro ao buscar materiais');
-      }
+      const { data } = await api.get('/materials');
+      setMaterials(data || []);
     } catch (error) {
       console.error('Erro ao buscar materiais:', error);
     } finally {
@@ -69,16 +49,8 @@ const Materials = () => {
 
   const fetchClients = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/clients', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setClients(data);
-      }
+      const { data } = await api.get('/clients');
+      setClients(data || []);
     } catch (error) {
       console.error('Erro ao buscar clientes:', error);
     }
@@ -86,32 +58,23 @@ const Materials = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     try {
-      const url = editingMaterial 
-        ? `http://localhost:5000/api/materials/${editingMaterial.id}`
-        : 'http://localhost:5000/api/materials';
-      
-      const method = editingMaterial ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(formData)
-      });
+      const payload = {
+        ...formData,
+        client_id: formData.client_id ? Number(formData.client_id) : null, // ✅ converter para número
+      };
 
-      if (response.ok) {
-        await fetchMaterials();
-        setIsDialogOpen(false);
-        resetForm();
+      if (editingMaterial) {
+        await api.put(`/materials/${editingMaterial.id}`, payload);
       } else {
-        console.error('Erro ao salvar material');
+        await api.post('/materials', payload);
       }
+      await fetchMaterials();
+      setIsDialogOpen(false);
+      resetForm();
     } catch (error) {
       console.error('Erro ao salvar material:', error);
+      alert(error?.response?.data?.message || 'Erro ao salvar material');
     }
   };
 
@@ -120,7 +83,7 @@ const Materials = () => {
     setFormData({
       date: material.date || '',
       quantity: material.quantity || '',
-      client_id: material.client_id || '',
+      client_id: material.client_id != null ? String(material.client_id) : '',
       client_name: material.client_name || '',
       material_sample_url: material.material_sample_url || '',
       protocol_sample_url: material.protocol_sample_url || '',
@@ -134,34 +97,24 @@ const Materials = () => {
       alert('Apenas administradores podem excluir materiais');
       return;
     }
-
     if (window.confirm('Tem certeza que deseja excluir este material?')) {
       try {
-        const response = await fetch(`http://localhost:5000/api/materials/${materialId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-
-        if (response.ok) {
-          await fetchMaterials();
-        } else {
-          console.error('Erro ao excluir material');
-        }
+        await api.delete(`/materials/${materialId}`);
+        await fetchMaterials();
       } catch (error) {
         console.error('Erro ao excluir material:', error);
+        alert(error?.response?.data?.message || 'Erro ao excluir material');
       }
     }
   };
 
-  const handleClientChange = (clientId) => {
-    const selectedClient = clients.find(client => client.id === clientId);
-    setFormData({
-      ...formData,
-      client_id: clientId,
+  const handleClientChange = (value) => {
+    const selectedClient = clients.find(c => String(c.id) === String(value)); // ✅ comparar como string
+    setFormData((prev) => ({
+      ...prev,
+      client_id: value,
       client_name: selectedClient ? selectedClient.name : ''
-    });
+    }));
   };
 
   const resetForm = () => {
@@ -190,7 +143,7 @@ const Materials = () => {
   return (
     <div className="space-y-4 sm:space-y-6">
       <h2 className="text-2xl font-bold tracking-tight mb-4">Materiais</h2>
-      {/* Header */}
+
       <div className="flex justify-end">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -200,125 +153,86 @@ const Materials = () => {
               <span className="sm:hidden">Novo</span>
             </Button>
           </DialogTrigger>
-          
+
           <DialogContent className="max-w-2xl mx-4">
             <DialogHeader>
-              <DialogTitle>
-                {editingMaterial ? 'Editar Material' : 'Novo Material'}
-              </DialogTitle>
+              <DialogTitle>{editingMaterial ? 'Editar Material' : 'Novo Material'}</DialogTitle>
               <DialogDescription>
                 {editingMaterial ? 'Edite as informações do material' : 'Registre um novo recebimento ou coleta de material'}
               </DialogDescription>
             </DialogHeader>
-            
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="date">Data *</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({...formData, date: e.target.value})}
-                    required
-                  />
+                  <Input id="date" type="date" value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })} required />
                 </div>
-                
                 <div>
                   <Label htmlFor="quantity">Quantidade *</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({...formData, quantity: e.target.value})}
-                    required
-                  />
+                  <Input id="quantity" type="number" value={formData.quantity}
+                    onChange={(e) => setFormData({ ...formData, quantity: e.target.value })} required />
                 </div>
               </div>
-              
+
               <div>
                 <Label htmlFor="client">Cliente *</Label>
                 <Select value={formData.client_id} onValueChange={handleClientChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o cliente" />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                   <SelectContent>
                     {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
+                      <SelectItem key={client.id} value={String(client.id)}>
                         {client.name} - {client.company}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div>
                 <Label htmlFor="responsible">Responsável pela coleta/recebimento *</Label>
-                <Input
-                  id="responsible"
-                  value={formData.responsible}
-                  onChange={(e) => setFormData({...formData, responsible: e.target.value})}
-                  required
-                />
+                <Input id="responsible" value={formData.responsible}
+                  onChange={(e) => setFormData({ ...formData, responsible: e.target.value })} required />
               </div>
-              
+
               <div>
                 <Label htmlFor="material_sample_url">URL da Amostra do Material</Label>
-                <Input
-                  id="material_sample_url"
-                  type="url"
-                  value={formData.material_sample_url}
-                  onChange={(e) => setFormData({...formData, material_sample_url: e.target.value})}
-                  placeholder="https://exemplo.com/imagem-material.jpg"
-                />
+                <Input id="material_sample_url" type="url" value={formData.material_sample_url}
+                  onChange={(e) => setFormData({ ...formData, material_sample_url: e.target.value })}
+                  placeholder="https://exemplo.com/imagem-material.jpg" />
               </div>
-              
+
               <div>
                 <Label htmlFor="protocol_sample_url">URL da Amostra do Protocolo</Label>
-                <Input
-                  id="protocol_sample_url"
-                  type="url"
-                  value={formData.protocol_sample_url}
-                  onChange={(e) => setFormData({...formData, protocol_sample_url: e.target.value})}
-                  placeholder="https://exemplo.com/imagem-protocolo.jpg"
-                />
+                <Input id="protocol_sample_url" type="url" value={formData.protocol_sample_url}
+                  onChange={(e) => setFormData({ ...formData, protocol_sample_url: e.target.value })}
+                  placeholder="https://exemplo.com/imagem-protocolo.jpg" />
               </div>
-              
+
               <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit">
-                  {editingMaterial ? 'Atualizar' : 'Criar'}
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+                <Button type="submit">{editingMaterial ? 'Atualizar' : 'Criar'}</Button>
               </div>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Search */}
       <Card>
         <CardContent className="pt-6">
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Buscar materiais por cliente ou responsável..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+            <Input placeholder="Buscar materiais por cliente ou responsável..."
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
           </div>
         </CardContent>
       </Card>
 
-      {/* Materials Table */}
       <Card>
         <CardHeader>
           <CardTitle>Lista de Materiais</CardTitle>
-          <CardDescription>
-            {filteredMaterials.length} material(is) encontrado(s)
-          </CardDescription>
+          <CardDescription>{filteredMaterials.length} material(is) encontrado(s)</CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -376,14 +290,12 @@ const Materials = () => {
                           <div className="flex items-center space-x-2">
                             {material.material_sample_url && (
                               <Badge variant="outline" className="text-xs whitespace-nowrap">
-                                <Image className="w-3 h-3 mr-1" />
-                                Material
+                                <Image className="w-3 h-3 mr-1" /> Material
                               </Badge>
                             )}
                             {material.protocol_sample_url && (
                               <Badge variant="outline" className="text-xs whitespace-nowrap">
-                                <Image className="w-3 h-3 mr-1" />
-                                Protocolo
+                                <Image className="w-3 h-3 mr-1" /> Protocolo
                               </Badge>
                             )}
                             {!material.material_sample_url && !material.protocol_sample_url && (
@@ -393,21 +305,11 @@ const Materials = () => {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center space-x-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEdit(material)}
-                              className="whitespace-nowrap"
-                            >
+                            <Button variant="outline" size="sm" onClick={() => handleEdit(material)} className="whitespace-nowrap">
                               <Edit className="w-4 h-4" />
                             </Button>
                             {isAdmin() && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDelete(material.id)}
-                                className="text-red-600 hover:text-red-700 whitespace-nowrap"
-                              >
+                              <Button variant="outline" size="sm" onClick={() => handleDelete(material.id)} className="text-red-600 hover:text-red-700 whitespace-nowrap">
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             )}
@@ -427,4 +329,3 @@ const Materials = () => {
 };
 
 export default Materials;
-

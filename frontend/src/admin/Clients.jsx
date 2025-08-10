@@ -9,17 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  Phone, 
-  Mail, 
-  Building,
-  User,
-  AlertCircle
-} from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Phone, Mail, Building, User, AlertCircle } from 'lucide-react';
+import api from '../api'; // ✅ usar base dinâmica (/api em produção)
 
 const Clients = () => {
   const { isAdmin } = useAuth();
@@ -38,25 +29,13 @@ const Clients = () => {
     others: ''
   });
 
-  useEffect(() => {
-    fetchClients();
-  }, []);
+  useEffect(() => { fetchClients(); }, []);
 
   const fetchClients = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/clients', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setClients(data);
-      } else {
-        console.error('Erro ao buscar clientes');
-      }
+      const { data } = await api.get('/clients');
+      setClients(data || []);
     } catch (error) {
       console.error('Erro ao buscar clientes:', error);
     } finally {
@@ -66,32 +45,18 @@ const Clients = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     try {
-      const url = editingClient 
-        ? `http://localhost:5000/api/clients/${editingClient.id}`
-        : 'http://localhost:5000/api/clients';
-      
-      const method = editingClient ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(formData)
-      });
-
-      if (response.ok) {
-        await fetchClients();
-        setIsDialogOpen(false);
-        resetForm();
+      if (editingClient) {
+        await api.put(`/clients/${editingClient.id}`, formData);
       } else {
-        console.error('Erro ao salvar cliente');
+        await api.post('/clients', formData);
       }
+      await fetchClients();
+      setIsDialogOpen(false);
+      resetForm();
     } catch (error) {
       console.error('Erro ao salvar cliente:', error);
+      alert(error?.response?.data?.message || 'Erro ao salvar cliente');
     }
   };
 
@@ -114,23 +79,13 @@ const Clients = () => {
       alert('Apenas administradores podem excluir clientes');
       return;
     }
-
     if (window.confirm('Tem certeza que deseja excluir este cliente?')) {
       try {
-        const response = await fetch(`http://localhost:5000/api/clients/${clientId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-
-        if (response.ok) {
-          await fetchClients();
-        } else {
-          console.error('Erro ao excluir cliente');
-        }
+        await api.delete(`/clients/${clientId}`);
+        await fetchClients();
       } catch (error) {
         console.error('Erro ao excluir cliente:', error);
+        alert(error?.response?.data?.message || 'Erro ao excluir cliente');
       }
     }
   };
@@ -156,19 +111,18 @@ const Clients = () => {
 
   const getStatusBadge = (status) => {
     const statusMap = {
-      'ativo': { variant: 'default', label: 'Ativo' },
-      'inativo': { variant: 'secondary', label: 'Inativo' },
-      'pendente': { variant: 'outline', label: 'Pendente' }
+      ativo: { variant: 'default', label: 'Ativo' },
+      inativo: { variant: 'secondary', label: 'Inativo' },
+      pendente: { variant: 'outline', label: 'Pendente' }
     };
-    
-    const statusInfo = statusMap[status] || statusMap['ativo'];
-    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
+    const s = statusMap[status] || statusMap.ativo;
+    return <Badge variant={s.variant}>{s.label}</Badge>;
   };
 
   return (
     <div className="space-y-4 sm:space-y-6">
       <h2 className="text-2xl font-bold tracking-tight mb-4">Clientes</h2>
-      {/* Header */}
+
       <div className="flex justify-end">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -178,70 +132,48 @@ const Clients = () => {
               <span className="sm:hidden">Novo</span>
             </Button>
           </DialogTrigger>
-          
+
           <DialogContent className="max-w-2xl mx-4">
             <DialogHeader>
-              <DialogTitle>
-                {editingClient ? 'Editar Cliente' : 'Novo Cliente'}
-              </DialogTitle>
+              <DialogTitle>{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
               <DialogDescription>
                 {editingClient ? 'Edite as informações do cliente' : 'Adicione um novo cliente ao sistema'}
               </DialogDescription>
             </DialogHeader>
-            
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="name">Nome *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    required
-                  />
+                  <Input id="name" value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
                 </div>
-                
                 <div>
                   <Label htmlFor="company">Empresa *</Label>
-                  <Input
-                    id="company"
-                    value={formData.company}
-                    onChange={(e) => setFormData({...formData, company: e.target.value})}
-                    required
-                  />
+                  <Input id="company" value={formData.company}
+                    onChange={(e) => setFormData({ ...formData, company: e.target.value })} required />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="phone">Telefone *</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    required
-                  />
+                  <Input id="phone" value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required />
                 </div>
-                
                 <div>
                   <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    required
-                  />
+                  <Input id="email" type="email" value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="segment">Segmento</Label>
-                  <Select value={formData.segment} onValueChange={(value) => setFormData({...formData, segment: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o segmento" />
-                    </SelectTrigger>
+                  <Select value={formData.segment}
+                    onValueChange={(v) => setFormData({ ...formData, segment: v })}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o segmento" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="varejo">Varejo</SelectItem>
                       <SelectItem value="servicos">Serviços</SelectItem>
@@ -253,13 +185,11 @@ const Clients = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                
                 <div>
                   <Label htmlFor="status">Status</Label>
-                  <Select value={formData.status} onValueChange={(value) => setFormData({...formData, status: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                  <Select value={formData.status}
+                    onValueChange={(v) => setFormData({ ...formData, status: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ativo">Ativo</SelectItem>
                       <SelectItem value="inativo">Inativo</SelectItem>
@@ -268,52 +198,37 @@ const Clients = () => {
                   </Select>
                 </div>
               </div>
-              
+
               <div>
                 <Label htmlFor="others">Observações</Label>
-                <Textarea
-                  id="others"
-                  value={formData.others}
-                  onChange={(e) => setFormData({...formData, others: e.target.value})}
-                  placeholder="Informações adicionais sobre o cliente..."
-                />
+                <Textarea id="others" value={formData.others}
+                  onChange={(e) => setFormData({ ...formData, others: e.target.value })}
+                  placeholder="Informações adicionais sobre o cliente..." />
               </div>
-              
+
               <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit">
-                  {editingClient ? 'Atualizar' : 'Criar'}
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+                <Button type="submit">{editingClient ? 'Atualizar' : 'Criar'}</Button>
               </div>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Search */}
       <Card>
         <CardContent className="pt-6">
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Buscar clientes por nome, empresa ou email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+            <Input placeholder="Buscar clientes por nome, empresa ou email..."
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
           </div>
         </CardContent>
       </Card>
 
-      {/* Clients Table */}
       <Card>
         <CardHeader>
           <CardTitle>Lista de Clientes</CardTitle>
-          <CardDescription>
-            {filteredClients.length} cliente(s) encontrado(s)
-          </CardDescription>
+          <CardDescription>{filteredClients.length} cliente(s) encontrado(s)</CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -325,9 +240,7 @@ const Clients = () => {
             <div className="text-center py-8">
               <AlertCircle className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum cliente encontrado</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                {searchTerm ? 'Tente ajustar sua busca' : 'Comece adicionando um novo cliente'}
-              </p>
+              <p className="mt-1 text-sm text-gray-500">{searchTerm ? 'Tente ajustar sua busca' : 'Comece adicionando um novo cliente'}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -376,26 +289,14 @@ const Clients = () => {
                         <TableCell className="hidden lg:table-cell">
                           <span className="capitalize whitespace-nowrap">{client.segment || 'Não informado'}</span>
                         </TableCell>
-                        <TableCell>
-                          {getStatusBadge(client.status)}
-                        </TableCell>
+                        <TableCell>{getStatusBadge(client.status)}</TableCell>
                         <TableCell>
                           <div className="flex items-center space-x-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEdit(client)}
-                              className="whitespace-nowrap"
-                            >
+                            <Button variant="outline" size="sm" onClick={() => handleEdit(client)} className="whitespace-nowrap">
                               <Edit className="w-4 h-4" />
                             </Button>
                             {isAdmin() && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDelete(client.id)}
-                                className="text-red-600 hover:text-red-700 whitespace-nowrap"
-                              >
+                              <Button variant="outline" size="sm" onClick={() => handleDelete(client.id)} className="text-red-600 hover:text-red-700 whitespace-nowrap">
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             )}
@@ -415,4 +316,3 @@ const Clients = () => {
 };
 
 export default Clients;
-
