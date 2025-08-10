@@ -11,7 +11,7 @@ import modeloImg from '../../assets/modelo.webp'
 
 function Hero() {
   return (
-    <section id="inicio" className="relative min-h-screen flex items-center">
+    <section id="inicio" className="relative min-h-screen flex items-center main-content-mobile mobile-safe">
       {/* Background Image */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -21,7 +21,7 @@ function Hero() {
       {/* Enhanced Overlay for better contrast */}
       <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-[var(--vinho-escuro)]/80 to-[var(--vinho-medio)]/70" />
 
-      <div className="relative z-10 max-w-7xl mx-auto container-spacing w-full">
+      <div className="relative z-10 max-w-7xl mx-auto container-responsive w-full">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="text-white space-y-8 fade-in">
             <div className="space-y-6 max-w-2xl">
@@ -44,8 +44,8 @@ function Hero() {
             <div className="flex flex-col sm:flex-row gap-4 max-w-2xl">
               <Button 
                 size="lg" 
-                variant="brand"
-                className="text-lg px-8 py-4 bg-[var(--laranja-destaque)] text-[var(--vinho-escuro)] hover:bg-[var(--laranja-destaque)]/90 hover:shadow-lg"
+                variant="yellow"
+                className="text-lg px-8 py-4"
                 aria-label="Falar no WhatsApp"
               >
                 <MessageCircle className="w-5 h-5 mr-2" />
@@ -54,7 +54,7 @@ function Hero() {
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="border-white text-white hover:bg-white hover:text-[var(--vinho-escuro)] text-lg px-8 py-4 focus-visible:ring-white"
+                className="text-lg px-8 py-4"
                 aria-label="Solicitar orçamento"
               >
                 <Phone className="w-5 h-5 mr-2" />

@@ -30,8 +30,8 @@ function Stats() {
   ]
 
   return (
-    <section id="estatisticas" className="section-padding bg-[var(--vinho-escuro)]">
-      <div className="max-w-7xl mx-auto container-spacing">
+    <section id="estatisticas" className="section-padding bg-[var(--vinho-escuro)] mobile-safe">
+      <div className="max-w-7xl mx-auto container-responsive">
         <div className="text-center space-y-6 mb-16">
           <h2 className="heading-secondary text-white">
             Números que comprovam nossa

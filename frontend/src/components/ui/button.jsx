@@ -14,14 +14,16 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+          "border border-[var(--vinho-escuro)] bg-white text-[var(--vinho-escuro)] shadow-xs hover:bg-white hover:text-[var(--vinho-escuro)] focus-visible:ring-[var(--vinho-escuro)]",
         secondary:
           "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
         brand:
-          "brand-gradient text-white shadow-xs hover:brand-shadow-hover focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--vinho-escuro)] transition-all duration-300 hover:-translate-y-0.5",
+          "bg-[var(--vinho-escuro)] text-white shadow-xs hover:bg-[var(--vinho-medio)] hover:text-white focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--vinho-escuro)] transition-all duration-300 hover:-translate-y-0.5",
+        yellow:
+          "bg-[var(--laranja-destaque)] text-[var(--vinho-escuro)] shadow-xs hover:bg-[var(--laranja-destaque)]/90 hover:text-[var(--vinho-escuro)] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--laranja-destaque)] transition-all duration-300",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

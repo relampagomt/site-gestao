@@ -31,8 +31,8 @@ function Header() {
   }
 
   return (
-    <header className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-sm border-b border-gray-200">
-      <div className="max-w-7xl mx-auto container-spacing">
+    <header className="header-mobile-fix bg-white/90 backdrop-blur-sm border-b border-gray-200">
+      <div className="max-w-7xl mx-auto container-responsive">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex items-center space-x-3">
@@ -63,7 +63,7 @@ function Header() {
           <div className="hidden md:flex items-center space-x-4">
             <Button 
               variant="outline" 
-              className="border-[var(--vinho-escuro)] text-[var(--vinho-escuro)] hover:bg-red-50"
+              className=""
               aria-label="Ligar para a empresa"
             >
               <Phone className="w-4 h-4 mr-2" />
@@ -79,7 +79,7 @@ function Header() {
             <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
               <Button 
                 variant="outline" 
-                className="border-[var(--vinho-escuro)] text-[var(--vinho-escuro)] hover:bg-red-50"
+                className=""
                 aria-label="Acessar painel de gestão"
               >
                 Painel de Gestão
@@ -122,7 +122,7 @@ function Header() {
                 <div className="flex flex-col space-y-3 pt-4 border-t border-gray-200">
                   <Button 
                     variant="outline" 
-                    className="border-[var(--vinho-escuro)] text-[var(--vinho-escuro)] hover:bg-red-50 w-full"
+                    className="w-full"
                     aria-label="Ligar para a empresa"
                   >
                     <Phone className="w-4 h-4 mr-2" />
@@ -139,7 +139,7 @@ function Header() {
                   <a href={dashboardUrl} target="_blank" rel="noopener noreferrer" className="w-full">
                     <Button 
                       variant="outline" 
-                      className="border-[var(--vinho-escuro)] text-[var(--vinho-escuro)] hover:bg-red-50 w-full"
+                      className="w-full"
                       aria-label="Acessar painel de gestão"
                     >
                       Painel de Gestão

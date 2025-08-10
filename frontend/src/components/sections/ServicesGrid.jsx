@@ -57,8 +57,8 @@ function ServicesGrid() {
   ]
 
   return (
-    <section id="servicos" className="section-padding bg-gray-50">
-      <div className="max-w-7xl mx-auto container-spacing">
+    <section id="servicos" className="section-padding bg-gray-50 mobile-safe">
+      <div className="max-w-7xl mx-auto container-responsive">
         <div className="text-center space-y-6 mb-16">
           <Badge className="bg-[var(--vinho-escuro)] text-white text-sm font-semibold px-4 py-2">
             NOSSOS SERVIÇOS

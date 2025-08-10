@@ -38,8 +38,8 @@ function Contact() {
   ]
 
   return (
-    <section id="contato" className="section-padding bg-gray-50">
-      <div className="max-w-7xl mx-auto container-spacing">
+    <section id="contato" className="section-padding bg-gray-50 mobile-safe">
+      <div className="max-w-7xl mx-auto container-responsive">
         <div className="text-center space-y-6 mb-16">
           <h2 className="heading-secondary text-gray-900">
             Entre em contato conosco
@@ -123,7 +123,8 @@ function Contact() {
                 <div className="space-y-4">
                   <Button 
                     size="lg" 
-                    className="w-full bg-[var(--laranja-destaque)] text-[var(--vinho-escuro)] hover:bg-[var(--laranja-destaque)]/90 text-lg py-4"
+                    variant="yellow"
+                    className="w-full text-lg py-4"
                     aria-label="Falar no WhatsApp"
                   >
                     <MessageCircle className="w-5 h-5 mr-2" />

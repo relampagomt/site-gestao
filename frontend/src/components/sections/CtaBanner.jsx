@@ -53,8 +53,8 @@ function CtaBanner() {
   ]
 
   return (
-    <section id="vantagens" className="section-padding bg-white">
-      <div className="max-w-7xl mx-auto container-spacing">
+    <section id="vantagens" className="section-padding bg-white mobile-safe">
+      <div className="max-w-7xl mx-auto container-responsive">
         <div className="text-center space-y-6 mb-16">
           <Badge className="bg-[var(--vinho-escuro)] text-white text-sm font-semibold px-4 py-2">
             NOSSAS VANTAGENS

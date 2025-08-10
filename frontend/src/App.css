@@ -133,6 +133,18 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow-x: hidden; /* Prevent horizontal scroll */
+  }
+  
+  html {
+    overflow-x: hidden; /* Prevent horizontal scroll */
+  }
+  
+  /* Fix for mobile viewport */
+  #root {
+    width: 100%;
+    min-height: 100vh;
+    overflow-x: hidden;
   }
 }
 
@@ -287,7 +299,93 @@
   }
 }
 
-/* Tipografia melhorada */
+/* Responsividade mobile melhorada */
+.mobile-safe {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* Container responsivo */
+.container-responsive {
+  width: 100%;
+  max-width: 100vw;
+  margin: 0 auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .container-responsive {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .container-responsive {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-responsive {
+    padding-left: 3rem;
+    padding-right: 3rem;
+  }
+}
+
+/* Header mobile fixes */
+.header-mobile-fix {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  width: 100%;
+  max-width: 100vw;
+}
+
+/* Main content mobile spacing */
+.main-content-mobile {
+  padding-top: 4rem; /* Space for fixed header */
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+  .main-content-mobile {
+    padding-top: 4.5rem; /* Slightly more space on mobile */
+  }
+  
+  /* Ensure all sections don't overflow */
+  section {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+  
+  /* Fix for grid layouts on mobile */
+  .grid {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  /* Button responsive fixes */
+  .button-mobile {
+    width: 100%;
+    max-width: 100%;
+    word-wrap: break-word;
+  }
+  
+  /* Image responsive fixes */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+}
 .heading-primary {
   font-size: 3.5rem;
   font-weight: 700;

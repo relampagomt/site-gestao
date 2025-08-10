@@ -33,8 +33,8 @@ function Highlights() {
   }, [])
 
   return (
-    <section id="sobre" className="section-padding bg-[var(--vinho-escuro)] text-white">
-      <div className="max-w-7xl mx-auto container-spacing">
+    <section id="sobre" className="section-padding bg-[var(--vinho-escuro)] text-white mobile-safe">
+      <div className="max-w-7xl mx-auto container-responsive">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           <div
             id="about-content"
