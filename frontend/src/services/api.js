@@ -1,38 +1,42 @@
 import axios from 'axios';
 
-// Configuração base do axios
+// Em produção use "/api" (Vercel faz rewrite -> Render).
+// Em dev, o Vite já proxia "/api" para http://localhost:5000.
+// Se quiser, você pode definir VITE_PUBLIC_API_URL (ex.: http://localhost:5000/api),
+// mas não é obrigatório.
+const baseURL =
+  (typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    import.meta.env.VITE_PUBLIC_API_URL) ||
+  '/api';
+
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api', // URL do backend durante desenvolvimento
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Interceptor para adicionar token JWT automaticamente
+// Interceptor para anexar token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Interceptor para tratar respostas e erros
+// Interceptor para tratar 401
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token inválido ou expirado
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      if (location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -41,20 +45,17 @@ api.interceptors.response.use(
 // Serviços de autenticação
 export const authService = {
   login: async (username, password) => {
-    const response = await api.post('/auth/login', { username, password });
-    return response.data;
+    const { data } = await api.post('/auth/login', { username, password });
+    return data;
   },
-  
   getCurrentUser: async () => {
-    const response = await api.get('/auth/me');
-    return response.data;
+    const { data } = await api.get('/auth/me');
+    return data;
   },
-  
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-  }
+  },
 };
 
 export default api;
-
