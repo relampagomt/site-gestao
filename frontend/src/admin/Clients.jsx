@@ -17,6 +17,8 @@ const Clients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('todos');
+  const [segmentFilter, setSegmentFilter] = useState('todos');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
   const [formData, setFormData] = useState({
@@ -103,11 +105,16 @@ const Clients = () => {
     setEditingClient(null);
   };
 
-  const filteredClients = clients.filter(client =>
-    client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredClients = clients.filter(client => {
+    const matchesSearch = client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'todos' || client.status === statusFilter;
+    const matchesSegment = segmentFilter === 'todos' || client.segment === segmentFilter;
+    
+    return matchesSearch && matchesStatus && matchesSegment;
+  });
 
   const getStatusBadge = (status) => {
     const statusMap = {
@@ -217,10 +224,45 @@ const Clients = () => {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input placeholder="Buscar clientes por nome, empresa ou email..."
-              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input placeholder="Buscar clientes por nome, empresa ou email..."
+                value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="ativo">Ativo</SelectItem>
+                  <SelectItem value="inativo">Inativo</SelectItem>
+                  <SelectItem value="pendente">Pendente</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Select value={segmentFilter} onValueChange={setSegmentFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por segmento" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os segmentos</SelectItem>
+                  <SelectItem value="Tecnologia">Tecnologia</SelectItem>
+                  <SelectItem value="Saúde">Saúde</SelectItem>
+                  <SelectItem value="Educação">Educação</SelectItem>
+                  <SelectItem value="Varejo">Varejo</SelectItem>
+                  <SelectItem value="Serviços">Serviços</SelectItem>
+                  <SelectItem value="Outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Button variant="outline" onClick={() => { setSearchTerm(''); setStatusFilter('todos'); setSegmentFilter('todos'); }}>
+                Limpar Filtros
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

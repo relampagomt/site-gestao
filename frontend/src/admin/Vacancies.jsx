@@ -43,6 +43,11 @@ export default function Vacancies() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [search, setSearch] = useState("");
+  
+  // filtros
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [departmentFilter, setDepartmentFilter] = useState("todos");
+  const [jobTypeFilter, setJobTypeFilter] = useState("todos");
 
   // ---- effects
   useEffect(() => {
@@ -64,23 +69,44 @@ export default function Vacancies() {
 
   // ---- derived
   const filtered = useMemo(() => {
-    if (!search) return items;
-    const q = search.toLowerCase();
-    return items.filter((v) =>
-      [
-        v?.name,
-        v?.phone,
-        v?.address,
-        v?.department,
-        v?.job_type,
-        v?.status,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [items, search]);
+    let result = items;
+    
+    // Filtro de busca
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter((v) =>
+        [
+          v?.name,
+          v?.phone,
+          v?.address,
+          v?.department,
+          v?.job_type,
+          v?.status,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(q)
+      );
+    }
+    
+    // Filtro de status
+    if (statusFilter !== "todos") {
+      result = result.filter((v) => v.status === statusFilter);
+    }
+    
+    // Filtro de departamento
+    if (departmentFilter !== "todos") {
+      result = result.filter((v) => v.department === departmentFilter);
+    }
+    
+    // Filtro de tipo de trabalho
+    if (jobTypeFilter !== "todos") {
+      result = result.filter((v) => v.job_type === jobTypeFilter);
+    }
+    
+    return result;
+  }, [items, search, statusFilter, departmentFilter, jobTypeFilter]);
 
   const total = items.length;
   const openCount = items.filter((v) => (v?.status || "").toLowerCase() === "aberta").length;
@@ -201,14 +227,64 @@ export default function Vacancies() {
         </Card>
       </div>
 
-      {/* Busca */}
-      <div className="w-full">
-        <Input
-          placeholder="Buscar por nome, telefone, endereço, etc…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      {/* Busca e Filtros */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            <div className="w-full">
+              <Input
+                placeholder="Buscar por nome, telefone, endereço, etc…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="Aberta">Aberta</SelectItem>
+                  <SelectItem value="Em Processo">Em Processo</SelectItem>
+                  <SelectItem value="Fechada">Fechada</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por departamento" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os departamentos</SelectItem>
+                  <SelectItem value="Comercial">Comercial</SelectItem>
+                  <SelectItem value="Operacional">Operacional</SelectItem>
+                  <SelectItem value="Administrativo">Administrativo</SelectItem>
+                  <SelectItem value="Técnico">Técnico</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os tipos</SelectItem>
+                  <SelectItem value="CLT">CLT</SelectItem>
+                  <SelectItem value="PJ">PJ</SelectItem>
+                  <SelectItem value="Freelancer">Freelancer</SelectItem>
+                  <SelectItem value="Estágio">Estágio</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Button variant="outline" onClick={() => { setSearch(''); setStatusFilter('todos'); setDepartmentFilter('todos'); setJobTypeFilter('todos'); }}>
+                Limpar Filtros
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Tabela */}
       <Card>

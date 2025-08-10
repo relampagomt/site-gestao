@@ -92,7 +92,7 @@ const AdminDashboard = () => {
                 >
                   <Menu className="w-6 h-6" />
                 </button>
-                <h2 className="text-xl sm:text-2xl font-bold tracking-tight hidden sm:block truncate">{menuItems.find(item => item.id === activeTab)?.label}</h2>
+                {/* <h2 className="text-xl sm:text-2xl font-bold tracking-tight hidden sm:block truncate">{menuItems.find(item => item.id === activeTab)?.label}</h2> */}
               </div>
 
               <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
@@ -129,7 +129,7 @@ const AdminDashboard = () => {
       {/* Overlay for mobile */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className="fixed inset-0 bg-transparent z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}

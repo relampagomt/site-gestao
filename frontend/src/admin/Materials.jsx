@@ -18,6 +18,8 @@ const Materials = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [clientFilter, setClientFilter] = useState('todos');
+  const [dateFilter, setDateFilter] = useState('todos');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState(null);
   const [formData, setFormData] = useState({
@@ -130,10 +132,40 @@ const Materials = () => {
     setEditingMaterial(null);
   };
 
-  const filteredMaterials = materials.filter(material =>
-    material.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    material.responsible?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMaterials = materials.filter(material => {
+    const matchesSearch = material.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      material.responsible?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesClient = clientFilter === 'todos' || material.client_name === clientFilter;
+    
+    let matchesDate = true;
+    if (dateFilter !== 'todos' && material.date) {
+      const materialDate = new Date(material.date);
+      const today = new Date();
+      
+      switch (dateFilter) {
+        case 'hoje':
+          matchesDate = materialDate.toDateString() === today.toDateString();
+          break;
+        case 'semana':
+          const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+          matchesDate = materialDate >= weekAgo;
+          break;
+        case 'mes':
+          matchesDate = materialDate.getMonth() === today.getMonth() && 
+                       materialDate.getFullYear() === today.getFullYear();
+          break;
+        case 'trimestre':
+          const currentQuarter = Math.floor(today.getMonth() / 3);
+          const materialQuarter = Math.floor(materialDate.getMonth() / 3);
+          matchesDate = materialQuarter === currentQuarter && 
+                       materialDate.getFullYear() === today.getFullYear();
+          break;
+      }
+    }
+    
+    return matchesSearch && matchesClient && matchesDate;
+  });
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Não informado';
@@ -221,10 +253,45 @@ const Materials = () => {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input placeholder="Buscar materiais por cliente ou responsável..."
-              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input placeholder="Buscar materiais por cliente ou responsável..."
+                value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Select value={clientFilter} onValueChange={setClientFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os clientes</SelectItem>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.name}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Select value={dateFilter} onValueChange={setDateFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por período" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os períodos</SelectItem>
+                  <SelectItem value="hoje">Hoje</SelectItem>
+                  <SelectItem value="semana">Esta semana</SelectItem>
+                  <SelectItem value="mes">Este mês</SelectItem>
+                  <SelectItem value="trimestre">Este trimestre</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Button variant="outline" onClick={() => { setSearchTerm(''); setClientFilter('todos'); setDateFilter('todos'); }}>
+                Limpar Filtros
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

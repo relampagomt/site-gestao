@@ -115,7 +115,7 @@ const Settings = () => {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold tracking-tight mb-4">Configurações do Sistema</h2>
+      <h2 className="text-2xl font-bold tracking-tight mb-4">Configurações</h2>
 
       <Tabs defaultValue="company" className="space-y-6">
         <TabsList className="grid w-full grid-cols-5">

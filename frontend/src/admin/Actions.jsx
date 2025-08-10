@@ -34,6 +34,9 @@ const Actions = () => {
   const [loading, setLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [actionTypeFilter, setActionTypeFilter] = useState('todos');
+  const [statusFilter, setStatusFilter] = useState('todos');
+  const [dateFilter, setDateFilter] = useState('todos');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAction, setEditingAction] = useState(null);
   const [formData, setFormData] = useState({
@@ -72,11 +75,42 @@ const Actions = () => {
     }
   };
 
-  const filteredActions = actions.filter(action =>
-    action.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    action.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    action.action_type?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredActions = actions.filter(action => {
+    const matchesSearch = action.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      action.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      action.action_type?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesActionType = actionTypeFilter === 'todos' || action.action_type === actionTypeFilter;
+    const matchesStatus = statusFilter === 'todos' || action.status === statusFilter;
+    
+    let matchesDate = true;
+    if (dateFilter !== 'todos' && action.start_date) {
+      const actionDate = new Date(action.start_date);
+      const today = new Date();
+      
+      switch (dateFilter) {
+        case 'hoje':
+          matchesDate = actionDate.toDateString() === today.toDateString();
+          break;
+        case 'semana':
+          const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+          matchesDate = actionDate >= weekAgo;
+          break;
+        case 'mes':
+          matchesDate = actionDate.getMonth() === today.getMonth() && 
+                       actionDate.getFullYear() === today.getFullYear();
+          break;
+        case 'trimestre':
+          const currentQuarter = Math.floor(today.getMonth() / 3);
+          const actionQuarter = Math.floor(actionDate.getMonth() / 3);
+          matchesDate = actionQuarter === currentQuarter && 
+                       actionDate.getFullYear() === today.getFullYear();
+          break;
+      }
+    }
+    
+    return matchesSearch && matchesActionType && matchesStatus && matchesDate;
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -173,7 +207,7 @@ const Actions = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <h2 className="text-2xl font-bold tracking-tight mb-4">Gestão de Ações Promocionais</h2>
+      <h2 className="text-2xl font-bold tracking-tight mb-4">Ações</h2>
       <div className="flex justify-end">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -371,17 +405,66 @@ const Actions = () => {
         </Card>
       </div>
 
-      {/* Busca */}
+      {/* Busca e Filtros */}
       <Card>
         <CardContent className="p-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Buscar ações por cliente, empresa ou tipo..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Buscar ações por cliente, empresa ou tipo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <Select value={actionTypeFilter} onValueChange={setActionTypeFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os tipos</SelectItem>
+                  <SelectItem value="Panfletagem">Panfletagem</SelectItem>
+                  <SelectItem value="Degustação">Degustação</SelectItem>
+                  <SelectItem value="Promoção">Promoção</SelectItem>
+                  <SelectItem value="Evento">Evento</SelectItem>
+                  <SelectItem value="Outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="Planejada">Planejada</SelectItem>
+                  <SelectItem value="Em Andamento">Em Andamento</SelectItem>
+                  <SelectItem value="Pausada">Pausada</SelectItem>
+                  <SelectItem value="Concluída">Concluída</SelectItem>
+                  <SelectItem value="Cancelada">Cancelada</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Select value={dateFilter} onValueChange={setDateFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por período" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os períodos</SelectItem>
+                  <SelectItem value="hoje">Hoje</SelectItem>
+                  <SelectItem value="semana">Esta semana</SelectItem>
+                  <SelectItem value="mes">Este mês</SelectItem>
+                  <SelectItem value="trimestre">Este trimestre</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Button variant="outline" onClick={() => { setSearchTerm(''); setActionTypeFilter('todos'); setStatusFilter('todos'); setDateFilter('todos'); }}>
+                Limpar Filtros
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
