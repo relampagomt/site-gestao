@@ -1,77 +1,133 @@
-# Relâmpago - Projeto Refatorado
+# Relâmpago - Sistema Refatorado
 
-Este projeto foi refatorado para separar o frontend e backend, permitindo deploy independente no Vercel (frontend) e Render (backend).
+Sistema institucional com painel de gestão separado em frontend (React) e backend (Flask API).
+
+## Arquitetura
+
+- **Frontend**: React + Vite (deploy na Vercel)
+- **Backend**: Flask API REST (deploy no Render)
+- **Banco de dados**: Firebase Firestore
+- **Autenticação**: JWT com roles (admin/supervisor)
 
 ## Estrutura do Projeto
 
 ```
-relampago_refactored/
-├── frontend/          # Aplicação React para deploy no Vercel
+projeto_refatorado/
+├── frontend/                 # React + Vite
 │   ├── src/
-│   ├── public/
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── vercel.json    # Configuração para Vercel
-│   ├── .env.example
-│   └── README.md
-├── backend/           # API Flask para deploy no Render
-│   ├── src/
-│   ├── instance/
-│   ├── app.py
-│   ├── requirements.txt
-│   ├── render.yaml    # Configuração para Render
-│   ├── .env.example
-│   └── README.md
-└── README.md
+│   │   ├── admin/           # Painel administrativo
+│   │   ├── components/      # Componentes reutilizáveis
+│   │   ├── contexts/        # Context API (AuthContext)
+│   │   ├── pages/           # Páginas (Home, Login)
+│   │   └── services/        # Serviços de API
+│   └── vercel.json          # Configuração Vercel
+└── backend/                 # Flask API
+    ├── src/
+    │   ├── middleware/      # Middleware de autenticação
+    │   ├── routes/          # Rotas da API
+    │   └── services/        # Serviços (Firebase, usuários)
+    └── requirements.txt     # Dependências Python
 ```
+
+## Rotas do Frontend
+
+- `/` - Página institucional
+- `/login` - Página de login
+- `/admin` - Painel de gestão (protegido)
+
+## API Endpoints
+
+- `GET /healthcheck` - Status da API
+- `POST /api/auth/login` - Login (gera JWT)
+- `GET /api/auth/me` - Dados do usuário atual
 
 ## Deploy
 
 ### Frontend (Vercel)
 
-1. Acesse o diretório `frontend/`
-2. Siga as instruções no `frontend/README.md`
-3. Configure a variável `VITE_API_URL` com a URL do backend
+1. Conecte o repositório na Vercel
+2. Configure o build command: `npm run build`
+3. Configure o output directory: `dist`
+4. Atualize a URL do backend no `vercel.json`
 
 ### Backend (Render)
 
-1. Acesse o diretório `backend/`
-2. Siga as instruções no `backend/README.md`
-3. Configure todas as variáveis de ambiente necessárias
-4. Configure a variável `FRONTEND_URL` com a URL do frontend
-
-## Configuração de CORS
-
-O backend está configurado para aceitar requisições do frontend através da variável de ambiente `FRONTEND_URL`. Certifique-se de configurar corretamente as URLs em produção.
+1. Conecte o repositório no Render
+2. Configure as variáveis de ambiente (ver `.env.example`)
+3. Configure o build command: `pip install -r requirements.txt`
+4. Configure o start command: `gunicorn src.main:app`
 
 ## Variáveis de Ambiente
 
-### Frontend (.env.local)
-```
-VITE_API_URL=https://your-backend-app.onrender.com
+### Backend (Render)
+
+```env
+JWT_SECRET_KEY=sua-chave-jwt-secreta
+FIREBASE_CREDENTIALS_JSON={"type":"service_account",...}
+ADMIN_NAME=Administrador
+ADMIN_USERNAME=admin
+ADMIN_EMAIL=admin@relampago.com
+ADMIN_PASSWORD=senha-segura
 ```
 
-### Backend (.env)
-```
-DATABASE_URL=postgresql://username:password@hostname:port/database
-SECRET_KEY=your-secret-key-here
-JWT_SECRET_KEY=your-jwt-secret-key-here
-MAIL_USERNAME=your-email@gmail.com
-MAIL_PASSWORD=your-app-password
-MAIL_DEFAULT_SENDER=noreply@relampago.com
-FRONTEND_URL=https://your-frontend-domain.vercel.app
-PORT=5000
-```
+### Frontend (Vercel)
+
+Não são necessárias variáveis de ambiente. A API é acessada via proxy configurado no `vercel.json`.
 
 ## Desenvolvimento Local
 
-1. **Backend**: Execute `python app.py` no diretório `backend/`
-2. **Frontend**: Execute `npm run dev` no diretório `frontend/`
-3. Configure as variáveis de ambiente locais conforme os arquivos `.env.example`
+### Backend
 
-## Tecnologias
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# ou venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+python src/main.py
+```
 
-- **Frontend**: React, Vite, Tailwind CSS, Radix UI
-- **Backend**: Flask, SQLAlchemy, PostgreSQL
-- **Deploy**: Vercel (frontend), Render (backend)
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Autenticação e Permissões
+
+### Roles
+
+- **admin**: Acesso total ao sistema
+- **supervisor**: Acesso limitado aos próprios dados
+
+### Usuário Admin Padrão
+
+O sistema cria automaticamente um usuário admin na inicialização usando as variáveis de ambiente `ADMIN_*`.
+
+## Firebase Setup
+
+1. Crie um projeto no Firebase Console
+2. Ative o Firestore Database
+3. Gere uma chave de conta de serviço
+4. Configure a variável `FIREBASE_CREDENTIALS_JSON` com o JSON da chave
+
+## Tecnologias Utilizadas
+
+### Frontend
+- React 18
+- React Router DOM
+- Tailwind CSS
+- shadcn/ui
+- Axios
+- Lucide React
+
+### Backend
+- Flask
+- Flask-JWT-Extended
+- Flask-CORS
+- Firebase Admin SDK
+- bcrypt
+- Gunicorn
 

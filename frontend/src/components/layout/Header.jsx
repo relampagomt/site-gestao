@@ -76,15 +76,14 @@ function Header() {
               <MessageCircle className="w-4 h-4 mr-2" />
               WhatsApp
             </Button>
-            <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
-              <Button 
-                variant="outline" 
-                className=""
-                aria-label="Acessar painel de gestão"
-              >
-                Painel de Gestão
-              </Button>
-            </a>
+            <Button 
+              variant="outline" 
+              className=""
+              aria-label="Acessar painel de gestão"
+              onClick={() => window.location.href = '/login'}
+            >
+              Acessar Painel
+            </Button>
           </div>
 
           {/* Mobile Menu */}
@@ -136,15 +135,14 @@ function Header() {
                     <MessageCircle className="w-4 h-4 mr-2" />
                     Falar no WhatsApp
                   </Button>
-                  <a href={dashboardUrl} target="_blank" rel="noopener noreferrer" className="w-full">
-                    <Button 
-                      variant="outline" 
-                      className="w-full"
-                      aria-label="Acessar painel de gestão"
-                    >
-                      Painel de Gestão
-                    </Button>
-                  </a>
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    aria-label="Acessar painel de gestão"
+                    onClick={() => window.location.href = '/login'}
+                  >
+                    Acessar Painel
+                  </Button>
                 </div>
               </div>
             </SheetContent>
