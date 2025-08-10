@@ -120,14 +120,14 @@ function Highlights() {
                 height="400"
                 sizes="(max-width: 1024px) 100vw, 50vw"
               />
-              <div className="absolute -bottom-6 -right-6 bg-[var(--laranja-destaque)] text-[var(--vinho-escuro)] p-6 rounded-xl shadow-xl max-w-sm">
-                <p className="text-lg font-bold">
+              <div className="absolute -bottom-6 -right-6 md:absolute md:-bottom-6 md:-right-6 lg:absolute lg:-bottom-6 lg:-right-6 bg-[var(--laranja-destaque)] text-[var(--vinho-escuro)] p-4 md:p-6 rounded-xl shadow-xl max-w-xs md:max-w-sm lg:max-w-sm mobile-overlay">
+                <p className="text-sm md:text-lg font-bold">
                   Você já sentiu a frustração de<br />
-                  <span className="text-xl">ter um produto ou serviço incrível</span>, mas não conseguir<br />
+                  <span className="text-base md:text-xl">ter um produto ou serviço incrível</span>, mas não conseguir<br />
                   alcançar seu público alvo?
                 </p>
-                <Button 
-                  className="mt-4" 
+                <Button
+                  className="mt-3 md:mt-4 text-xs md:text-sm px-3 md:px-4 py-2"
                   variant="brand"
                 >
                   NÓS PODEMOS TE AJUDAR!

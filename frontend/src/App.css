@@ -385,6 +385,17 @@
     max-width: 100%;
     height: auto;
   }
+
+  /* Overlay element mobile adjustments */
+  .mobile-overlay {
+    position: static !important;
+    margin-top: 1rem;
+    margin-left: 0;
+    margin-right: 0;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
 }
 .heading-primary {
   font-size: 3.5rem;
