@@ -13,7 +13,7 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -23,13 +23,13 @@ const Login = () => {
     setError('');
 
     const result = await login(username, password);
-    
+
     if (result.success) {
       navigate('/admin');
     } else {
       setError(result.message);
     }
-    
+
     setLoading(false);
   };
 
@@ -37,8 +37,8 @@ const Login = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-4"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -62,7 +62,7 @@ const Login = () => {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              
+
               <div className="space-y-2">
                 <Label htmlFor="username">Usuário</Label>
                 <Input
@@ -75,7 +75,7 @@ const Login = () => {
                   placeholder="Digite seu usuário"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="password">Senha</Label>
                 <Input
@@ -88,9 +88,9 @@ const Login = () => {
                   placeholder="Digite sua senha"
                 />
               </div>
-              
-              <Button 
-                type="submit" 
+
+              <Button
+                type="submit"
                 className="w-full brand-gradient text-white"
                 disabled={loading}
               >
@@ -112,4 +112,3 @@ const Login = () => {
 };
 
 export default Login;
-
