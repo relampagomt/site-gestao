@@ -21,7 +21,7 @@ import Clients from './Clients';
 import Materials from './Materials';
 import Actions from './Actions';
 import Vacancies from './Vacancies';
-import Settings as SettingsPage from './Settings';
+import SettingsPage from './Settings'; // ✅ corrigido
 
 const AdminDashboard = () => {
   const { user, logout, isAdmin } = useAuth();
@@ -56,7 +56,7 @@ const AdminDashboard = () => {
             <X className="w-6 h-6" />
           </button>
         </div>
-        
+
         <nav className="mt-6">
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -96,7 +96,7 @@ const AdminDashboard = () => {
                   {menuItems.find(item => item.id === activeTab)?.label || 'Dashboard'}
                 </h2>
               </div>
-              
+
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
                   <User className="w-4 h-4 text-gray-500" />
@@ -105,10 +105,10 @@ const AdminDashboard = () => {
                     {user?.role === 'admin' ? 'Admin' : 'Supervisor'}
                   </Badge>
                 </div>
-                
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleLogout}
                   className="flex items-center space-x-2"
                 >
@@ -128,7 +128,7 @@ const AdminDashboard = () => {
 
       {/* Overlay for mobile */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
@@ -138,4 +138,3 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
-
