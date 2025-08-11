@@ -1,250 +1,263 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Badge } from '../components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Textarea } from '../components/ui/textarea';
-import { useAuth } from '../contexts/AuthContext';
-import { Plus, Search, Edit, Trash2, Package, Calendar, User, AlertCircle, Upload, Image } from 'lucide-react';
-import api from '@/services/api';
+// frontend/src/admin/Materials.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
+import { Button } from "@/components/ui/button.jsx";
+import { Input } from "@/components/ui/input.jsx";
+import { Label } from "@/components/ui/label.jsx";
+import { Badge } from "@/components/ui/badge.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog.jsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
+import { Textarea } from "@/components/ui/textarea.jsx";
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Calendar,
+  UploadCloud,
+  X,
+} from "lucide-react";
+import api from "@/services/api"; // axios configurado com baseURL '/api'
 
 const Materials = () => {
-  const { isAdmin } = useAuth();
+  // listagem / busca
   const [materials, setMaterials] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [clientFilter, setClientFilter] = useState('todos');
-  const [dateFilter, setDateFilter] = useState('todos');
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingMaterial, setEditingMaterial] = useState(null);
-  const [formData, setFormData] = useState({
-    date: '',
-    quantity: '',
-    client_id: '',        // string no Select
-    client_name: '',
-    material_sample_url: '',
-    protocol_sample_url: '',
-    responsible: ''
+  const [loading, setLoading] = useState(false);
+  const [q, setQ] = useState("");
+
+  // modal
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // formulário
+  const [form, setForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    quantity: "",
+    clientName: "",
+    responsible: "",
+    notes: "",
+    sampleUrl: null,
+    protocolUrl: null,
   });
 
-  useEffect(() => {
-    fetchMaterials();
-    fetchClients();
-  }, []);
+  // estados de upload
+  const [uploadingSample, setUploadingSample] = useState(false);
+  const [uploadingProtocol, setUploadingProtocol] = useState(false);
 
-  const fetchMaterials = async () => {
+  // buscar materiais
+  async function fetchMaterials() {
+    setLoading(true);
     try {
-      setLoading(true);
-      const { data } = await api.get('/materials');
-      setMaterials(data || []);
-    } catch (error) {
-      console.error('Erro ao buscar materiais:', error);
+      const { data } = await api.get("/materials");
+      setMaterials(Array.isArray(data) ? data : data?.items ?? []);
+    } catch (e) {
+      console.error("Erro ao carregar materials:", e);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const fetchClients = async () => {
+  useEffect(() => {
+    fetchMaterials();
+  }, []);
+
+  // upload genérico
+  async function uploadFile(file) {
+    const fd = new FormData();
+    fd.append("file", file); // o backend espera 'file'
+    // importante: não force JSON nesse request; sobrescreva se seu axios padrão seta application/json
+    const { data } = await api.post("/upload", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data?.url;
+  }
+
+  async function onSampleChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingSample(true);
     try {
-      const { data } = await api.get('/clients');
-      setClients(data || []);
-    } catch (error) {
-      console.error('Erro ao buscar clientes:', error);
+      const url = await uploadFile(file);
+      setForm((f) => ({ ...f, sampleUrl: url }));
+    } catch (err) {
+      console.error("Erro no upload da amostra:", err);
+      alert("Falha ao enviar a amostra. Tente novamente.");
+    } finally {
+      setUploadingSample(false);
     }
-  };
+  }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  async function onProtocolChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingProtocol(true);
     try {
+      const url = await uploadFile(file);
+      setForm((f) => ({ ...f, protocolUrl: url }));
+    } catch (err) {
+      console.error("Erro no upload do protocolo:", err);
+      alert("Falha ao enviar o protocolo. Tente novamente.");
+    } finally {
+      setUploadingProtocol(false);
+    }
+  }
+
+  function onChange(e) {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      // monte o payload conforme o backend espera
       const payload = {
-        ...formData,
-        client_id: formData.client_id ? Number(formData.client_id) : null, // ✅ converter para número
+        date: form.date,
+        quantity: Number(form.quantity || 0),
+        client_name: form.clientName,
+        responsible: form.responsible,
+        notes: form.notes || "",
+        material_sample_url: form.sampleUrl || null,
+        protocol_url: form.protocolUrl || null,
       };
 
-      if (editingMaterial) {
-        await api.put(`/materials/${editingMaterial.id}`, payload);
-      } else {
-        await api.post('/materials', payload);
-      }
-      await fetchMaterials();
-      setIsDialogOpen(false);
-      resetForm();
-    } catch (error) {
-      console.error('Erro ao salvar material:', error);
-      alert(error?.response?.data?.message || 'Erro ao salvar material');
+      await api.post("/materials", payload);
+      setOpen(false);
+      // limpa form
+      setForm({
+        date: new Date().toISOString().slice(0, 10),
+        quantity: "",
+        clientName: "",
+        responsible: "",
+        notes: "",
+        sampleUrl: null,
+        protocolUrl: null,
+      });
+      fetchMaterials();
+    } catch (err) {
+      console.error("Erro ao salvar material:", err);
+      alert("Erro ao salvar material.");
+    } finally {
+      setSaving(false);
     }
-  };
+  }
 
-  const handleEdit = (material) => {
-    setEditingMaterial(material);
-    setFormData({
-      date: material.date || '',
-      quantity: material.quantity || '',
-      client_id: material.client_id != null ? String(material.client_id) : '',
-      client_name: material.client_name || '',
-      material_sample_url: material.material_sample_url || '',
-      protocol_sample_url: material.protocol_sample_url || '',
-      responsible: material.responsible || ''
-    });
-    setIsDialogOpen(true);
-  };
-
-  const handleDelete = async (materialId) => {
-    if (!isAdmin()) {
-      alert('Apenas administradores podem excluir materiais');
-      return;
-    }
-    if (window.confirm('Tem certeza que deseja excluir este material?')) {
-      try {
-        await api.delete(`/materials/${materialId}`);
-        await fetchMaterials();
-      } catch (error) {
-        console.error('Erro ao excluir material:', error);
-        alert(error?.response?.data?.message || 'Erro ao excluir material');
-      }
-    }
-  };
-
-  const handleClientChange = (value) => {
-    const selectedClient = clients.find(c => String(c.id) === String(value)); // ✅ comparar como string
-    setFormData((prev) => ({
-      ...prev,
-      client_id: value,
-      client_name: selectedClient ? selectedClient.name : ''
-    }));
-  };
-
-  const resetForm = () => {
-    setFormData({
-      date: '',
-      quantity: '',
-      client_id: '',
-      client_name: '',
-      material_sample_url: '',
-      protocol_sample_url: '',
-      responsible: ''
-    });
-    setEditingMaterial(null);
-  };
-
-  const filteredMaterials = materials.filter(material => {
-    const matchesSearch = material.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      material.responsible?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesClient = clientFilter === 'todos' || material.client_name === clientFilter;
-    
-    let matchesDate = true;
-    if (dateFilter !== 'todos' && material.date) {
-      const materialDate = new Date(material.date);
-      const today = new Date();
-      
-      switch (dateFilter) {
-        case 'hoje':
-          matchesDate = materialDate.toDateString() === today.toDateString();
-          break;
-        case 'semana':
-          const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-          matchesDate = materialDate >= weekAgo;
-          break;
-        case 'mes':
-          matchesDate = materialDate.getMonth() === today.getMonth() && 
-                       materialDate.getFullYear() === today.getFullYear();
-          break;
-        case 'trimestre':
-          const currentQuarter = Math.floor(today.getMonth() / 3);
-          const materialQuarter = Math.floor(materialDate.getMonth() / 3);
-          matchesDate = materialQuarter === currentQuarter && 
-                       materialDate.getFullYear() === today.getFullYear();
-          break;
-      }
-    }
-    
-    return matchesSearch && matchesClient && matchesDate;
-  });
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Não informado';
-    return new Date(dateString).toLocaleDateString('pt-BR');
-  };
+  const filtered = useMemo(() => {
+    const k = q.trim().toLowerCase();
+    if (!k) return materials;
+    return materials.filter((m) =>
+      [m.client_name, m.responsible, String(m.quantity)]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(k))
+    );
+  }, [materials, q]);
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <h2 className="text-2xl font-bold tracking-tight mb-4">Materiais</h2>
-
-      <div className="flex justify-end">
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl md:text-2xl font-semibold">Materiais</h1>
+        <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm} className="flex items-center space-x-2">
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Novo Material</span>
-              <span className="sm:hidden">Novo</span>
+            <Button className="gap-2">
+              <Plus className="size-4" />
+              Novo
             </Button>
           </DialogTrigger>
-
-          <DialogContent className="max-w-2xl mx-4">
+          <DialogContent className="max-w-xl">
             <DialogHeader>
-              <DialogTitle>{editingMaterial ? 'Editar Material' : 'Novo Material'}</DialogTitle>
-              <DialogDescription>
-                {editingMaterial ? 'Edite as informações do material' : 'Registre um novo recebimento ou coleta de material'}
-              </DialogDescription>
+              <DialogTitle>Novo Material</DialogTitle>
+              <DialogDescription>Cadastre um recebimento/coleta.</DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form onSubmit={onSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="date">Data *</Label>
-                  <Input id="date" type="date" value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })} required />
+                  <Label>Data</Label>
+                  <Input type="date" name="date" value={form.date} onChange={onChange} required />
                 </div>
                 <div>
-                  <Label htmlFor="quantity">Quantidade *</Label>
-                  <Input id="quantity" type="number" value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: e.target.value })} required />
+                  <Label>Quantidade</Label>
+                  <Input type="number" name="quantity" placeholder="Ex.: 10000" value={form.quantity} onChange={onChange} required />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Cliente</Label>
+                  <Input name="clientName" placeholder="Nome do cliente" value={form.clientName} onChange={onChange} required />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Responsável pela coleta/recebimento</Label>
+                  <Input name="responsible" placeholder="Responsável" value={form.responsible} onChange={onChange} required />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Observações</Label>
+                  <Textarea name="notes" placeholder="Opcional" value={form.notes} onChange={onChange} />
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="client">Cliente *</Label>
-                <Select value={formData.client_id} onValueChange={handleClientChange}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={String(client.id)}>
-                        {client.name} - {client.company}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Amostra do Material */}
+              <div className="space-y-2">
+                <Label>Amostra do Material</Label>
+                <div className="flex items-center gap-3">
+                  <Input type="file" accept="image/*" onChange={onSampleChange} />
+                  <Button type="button" variant="outline" disabled className="gap-2">
+                    <UploadCloud className="size-4" />
+                    {uploadingSample ? "Enviando..." : "Upload"}
+                  </Button>
+                </div>
+                {form.sampleUrl && (
+                  <div className="relative inline-block mt-2">
+                    <img src={form.sampleUrl} alt="Amostra" className="h-28 w-auto rounded border" />
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, sampleUrl: null }))}
+                      className="absolute -top-2 -right-2 bg-white border rounded-full p-1 shadow"
+                      title="Remover"
+                    >
+                      <X className="size-4 text-red-600" />
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <Label htmlFor="responsible">Responsável pela coleta/recebimento *</Label>
-                <Input id="responsible" value={formData.responsible}
-                  onChange={(e) => setFormData({ ...formData, responsible: e.target.value })} required />
+              {/* Protocolo */}
+              <div className="space-y-2">
+                <Label>Protocolo</Label>
+                <div className="flex items-center gap-3">
+                  <Input type="file" accept="image/*" onChange={onProtocolChange} />
+                  <Button type="button" variant="outline" disabled className="gap-2">
+                    <UploadCloud className="size-4" />
+                    {uploadingProtocol ? "Enviando..." : "Upload"}
+                  </Button>
+                </div>
+                {form.protocolUrl && (
+                  <div className="relative inline-block mt-2">
+                    <img src={form.protocolUrl} alt="Protocolo" className="h-28 w-auto rounded border" />
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, protocolUrl: null }))}
+                      className="absolute -top-2 -right-2 bg-white border rounded-full p-1 shadow"
+                      title="Remover"
+                    >
+                      <X className="size-4 text-red-600" />
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <Label htmlFor="material_sample_url">URL da Amostra do Material</Label>
-                <Input id="material_sample_url" type="url" value={formData.material_sample_url}
-                  onChange={(e) => setFormData({ ...formData, material_sample_url: e.target.value })}
-                  placeholder="https://exemplo.com/imagem-material.jpg" />
-              </div>
-
-              <div>
-                <Label htmlFor="protocol_sample_url">URL da Amostra do Protocolo</Label>
-                <Input id="protocol_sample_url" type="url" value={formData.protocol_sample_url}
-                  onChange={(e) => setFormData({ ...formData, protocol_sample_url: e.target.value })}
-                  placeholder="https://exemplo.com/imagem-protocolo.jpg" />
-              </div>
-
-              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                <Button type="submit">{editingMaterial ? 'Atualizar' : 'Criar'}</Button>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={saving || uploadingSample || uploadingProtocol}>
+                  {saving ? "Salvando..." : "Salvar"}
+                </Button>
               </div>
             </form>
           </DialogContent>
@@ -252,143 +265,75 @@ const Materials = () => {
       </div>
 
       <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input placeholder="Buscar materiais por cliente ou responsável..."
-                value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Select value={clientFilter} onValueChange={setClientFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os clientes</SelectItem>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.name}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              <Select value={dateFilter} onValueChange={setDateFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por período" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os períodos</SelectItem>
-                  <SelectItem value="hoje">Hoje</SelectItem>
-                  <SelectItem value="semana">Esta semana</SelectItem>
-                  <SelectItem value="mes">Este mês</SelectItem>
-                  <SelectItem value="trimestre">Este trimestre</SelectItem>
-                </SelectContent>
-              </Select>
-              
-              <Button variant="outline" onClick={() => { setSearchTerm(''); setClientFilter('todos'); setDateFilter('todos'); }}>
-                Limpar Filtros
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Materiais</CardTitle>
-          <CardDescription>{filteredMaterials.length} material(is) encontrado(s)</CardDescription>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Registros</CardTitle>
+          <CardDescription>Lista de materiais cadastrados</CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Carregando materiais...</p>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Buscar por cliente, responsável ou quantidade..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
             </div>
-          ) : filteredMaterials.length === 0 ? (
-            <div className="text-center py-8">
-              <AlertCircle className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum material encontrado</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                {searchTerm ? 'Tente ajustar sua busca' : 'Comece registrando um novo material'}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <div className="min-w-[700px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="min-w-[100px]">Data</TableHead>
-                      <TableHead className="min-w-[150px]">Cliente</TableHead>
-                      <TableHead className="min-w-[100px]">Quantidade</TableHead>
-                      <TableHead className="min-w-[150px]">Responsável</TableHead>
-                      <TableHead className="min-w-[120px]">Amostras</TableHead>
-                      <TableHead className="min-w-[100px]">Ações</TableHead>
+          </div>
+
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Responsável</TableHead>
+                  <TableHead>Qtd</TableHead>
+                  <TableHead>Amostra</TableHead>
+                  <TableHead>Protocolo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={6}>Carregando…</TableCell>
+                  </TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6}>Nenhum registro</TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((m) => (
+                    <TableRow key={m.id || `${m.client_name}-${m.date}`}>
+                      <TableCell>{m.date?.slice(0, 10) || "-"}</TableCell>
+                      <TableCell>{m.client_name || "-"}</TableCell>
+                      <TableCell>{m.responsible || "-"}</TableCell>
+                      <TableCell>{m.quantity ?? "-"}</TableCell>
+                      <TableCell>
+                        {m.material_sample_url ? (
+                          <a href={m.material_sample_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                            Ver
+                          </a>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {m.protocol_url ? (
+                          <a href={m.protocol_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                            Ver
+                          </a>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredMaterials.map((material) => (
-                      <TableRow key={material.id}>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span className="whitespace-nowrap">{formatDate(material.date)}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span className="font-medium truncate">{material.client_name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Package className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span className="whitespace-nowrap">{material.quantity}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="truncate">{material.responsible}</span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            {material.material_sample_url && (
-                              <Badge variant="outline" className="text-xs whitespace-nowrap">
-                                <Image className="w-3 h-3 mr-1" /> Material
-                              </Badge>
-                            )}
-                            {material.protocol_sample_url && (
-                              <Badge variant="outline" className="text-xs whitespace-nowrap">
-                                <Image className="w-3 h-3 mr-1" /> Protocolo
-                              </Badge>
-                            )}
-                            {!material.material_sample_url && !material.protocol_sample_url && (
-                              <span className="text-gray-400 text-sm whitespace-nowrap">Sem amostras</span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-1">
-                            <Button variant="outline" size="sm" onClick={() => handleEdit(material)} className="whitespace-nowrap">
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            {isAdmin() && (
-                              <Button variant="outline" size="sm" onClick={() => handleDelete(material.id)} className="text-red-600 hover:text-red-700 whitespace-nowrap">
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          )}
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

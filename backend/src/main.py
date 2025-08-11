@@ -4,8 +4,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# garante que "src" (pasta) seja importável quando o Root Directory é "backend"
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+# Garante que a pasta "src" (dentro de backend) seja importável.
+# Adiciona o próprio diretório "backend" ao sys.path.
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
 
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -21,7 +24,8 @@ def create_app():
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False  # token sem expirar
 
     # Extensões
-    CORS(app, origins="*")
+    # Se precisar enviar cookies, troque para supports_credentials=True.
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
     JWTManager(app)
 
     # Imports tardios para evitar ciclos
@@ -30,8 +34,9 @@ def create_app():
     from src.routes.material import material_bp
     from src.routes.action import action_bp
     from src.routes.job_vacancy import job_vacancy_bp
-    from src.routes.metrics import metrics_bp        # <— NOVO (gráfico real)
-    from src.services.user_service import ensure_admin_seed  # <— corrige o import
+    from src.routes.metrics import metrics_bp
+    from src.routes.upload import upload_bp  # rota de upload
+    from src.services.user_service import ensure_admin_seed
 
     # Blueprints
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
@@ -39,7 +44,8 @@ def create_app():
     app.register_blueprint(material_bp, url_prefix="/api")
     app.register_blueprint(action_bp, url_prefix="/api")
     app.register_blueprint(job_vacancy_bp, url_prefix="/api")
-    app.register_blueprint(metrics_bp, url_prefix="/api/metrics")  # <— NOVO
+    app.register_blueprint(metrics_bp, url_prefix="/api/metrics")
+    app.register_blueprint(upload_bp, url_prefix="/api")  # POST /api/upload
 
     @app.get("/healthcheck")
     def healthcheck():
@@ -52,7 +58,7 @@ def create_app():
     return app
 
 
-# expõe um objeto app global (funciona com "src.main:app")
+# expõe um objeto app global (funciona com "backend.main:app")
 app = create_app()
 
 if __name__ == '__main__':
