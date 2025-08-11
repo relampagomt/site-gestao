@@ -4,7 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Label } from "@/components/ui/label.jsx";
-import { Badge } from "@/components/ui/badge.jsx";
 import {
   Dialog,
   DialogContent,
@@ -15,15 +14,9 @@ import {
 } from "@/components/ui/dialog.jsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
 import { Textarea } from "@/components/ui/textarea.jsx";
-import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  UploadCloud,
-  X,
-} from "lucide-react";
-import api from "@/services/api"; // axios configurado via VITE_API_URL
+import { Plus, Search, Edit, Trash2, UploadCloud, X } from "lucide-react";
+import api from "@/services/api";
+import ImagePreview from "@/components/ImagePreview.jsx"; // miniatura + modal
 
 const Materials = () => {
   // listagem / busca
@@ -63,7 +56,6 @@ const Materials = () => {
     setLoading(true);
     try {
       const { data } = await api.get("/materials");
-      // compatibilidade: API pode retornar array direto ou {items:[]}
       setMaterials(Array.isArray(data) ? data : data?.items ?? []);
     } catch (e) {
       console.error("Erro ao carregar materials:", e);
@@ -79,9 +71,11 @@ const Materials = () => {
   // upload genérico
   async function uploadFile(file) {
     const fd = new FormData();
-    fd.append("file", file); // o backend espera 'file'
-    // não force Content-Type; o interceptor já remove se for FormData
-    const { data } = await api.post("/upload", fd);
+    fd.append("file", file);
+    // remove "application/json" para este request e deixa o browser setar boundary
+    const { data } = await api.post("/upload", fd, {
+      headers: { "Content-Type": undefined },
+    });
     return data?.url;
   }
 
@@ -201,7 +195,7 @@ const Materials = () => {
     const k = q.trim().toLowerCase();
     if (!k) return materials;
     return materials.filter((m) =>
-      [m.client_name, m.responsible, String(m.quantity)]
+      [m.client_name ?? m.clientName, m.responsible, String(m.quantity)]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(k))
     );
@@ -224,9 +218,7 @@ const Materials = () => {
             <DialogHeader>
               <DialogTitle>{mode === "create" ? "Novo Material" : "Editar Material"}</DialogTitle>
               <DialogDescription>
-                {mode === "create"
-                  ? "Cadastre um recebimento/coleta."
-                  : "Edite as informações do material."}
+                {mode === "create" ? "Cadastre um recebimento/coleta." : "Edite as informações do material."}
               </DialogDescription>
             </DialogHeader>
 
@@ -269,12 +261,7 @@ const Materials = () => {
                 </div>
                 <div className="md:col-span-2">
                   <Label>Observações</Label>
-                  <Textarea
-                    name="notes"
-                    placeholder="Opcional"
-                    value={form.notes}
-                    onChange={onChange}
-                  />
+                  <Textarea name="notes" placeholder="Opcional" value={form.notes} onChange={onChange} />
                 </div>
               </div>
 
@@ -289,13 +276,13 @@ const Materials = () => {
                   </Button>
                 </div>
                 {form.sampleUrl && (
-                  <div className="relative inline-block mt-2">
-                    <img src={form.sampleUrl} alt="Amostra" className="h-28 w-auto rounded border" />
+                  <div className="relative inline-flex items-center gap-2 mt-2">
+                    <ImagePreview src={form.sampleUrl} alt="Amostra" size={112} />
                     <button
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, sampleUrl: null }))}
-                      className="absolute -top-2 -right-2 bg-white border rounded-full p-1 shadow"
-                      title="Remover"
+                      className="bg-white border rounded-full p-1 shadow"
+                      title="Remover amostra"
                     >
                       <X className="size-4 text-red-600" />
                     </button>
@@ -314,13 +301,13 @@ const Materials = () => {
                   </Button>
                 </div>
                 {form.protocolUrl && (
-                  <div className="relative inline-block mt-2">
-                    <img src={form.protocolUrl} alt="Protocolo" className="h-28 w-auto rounded border" />
+                  <div className="relative inline-flex items-center gap-2 mt-2">
+                    <ImagePreview src={form.protocolUrl} alt="Protocolo" size={112} />
                     <button
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, protocolUrl: null }))}
-                      className="absolute -top-2 -right-2 bg-white border rounded-full p-1 shadow"
-                      title="Remover"
+                      className="bg-white border rounded-full p-1 shadow"
+                      title="Remover protocolo"
                     >
                       <X className="size-4 text-red-600" />
                     </button>
@@ -384,30 +371,39 @@ const Materials = () => {
                 ) : (
                   filtered.map((m) => {
                     const id = m.id ?? m._id ?? m.uuid;
+                    const sample = m.material_sample_url ?? m.sampleUrl;
+                    const protocol = m.protocol_url ?? m.protocolUrl;
+
                     return (
                       <TableRow key={id || `${m.client_name}-${m.date}`}>
-                        <TableCell>{m.date?.slice(0, 10) || "-"}</TableCell>
-                        <TableCell>{m.client_name || "-"}</TableCell>
-                        <TableCell>{m.responsible || "-"}</TableCell>
-                        <TableCell>{m.quantity ?? "-"}</TableCell>
+                        <TableCell>{m.date?.slice(0, 10) || "—"}</TableCell>
+                        <TableCell>{m.client_name ?? m.clientName || "—"}</TableCell>
+                        <TableCell>{m.responsible || "—"}</TableCell>
+                        <TableCell>{m.quantity ?? "—"}</TableCell>
+
                         <TableCell>
-                          {m.material_sample_url ? (
-                            <a href={m.material_sample_url} target="_blank" rel="noreferrer" className="text-primary underline">
-                              Ver
-                            </a>
+                          {sample ? (
+                            <ImagePreview
+                              src={sample}
+                              alt={`Amostra - ${m.client_name ?? m.clientName ?? ""}`}
+                              size={48}
+                            />
                           ) : (
-                            "-"
+                            "—"
                           )}
                         </TableCell>
                         <TableCell>
-                          {m.protocol_url ? (
-                            <a href={m.protocol_url} target="_blank" rel="noreferrer" className="text-primary underline">
-                              Ver
-                            </a>
+                          {protocol ? (
+                            <ImagePreview
+                              src={protocol}
+                              alt={`Protocolo - ${m.client_name ?? m.clientName ?? ""}`}
+                              size={48}
+                            />
                           ) : (
-                            "-"
+                            "—"
                           )}
                         </TableCell>
+
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(m)}>
