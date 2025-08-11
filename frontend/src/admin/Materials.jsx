@@ -20,11 +20,10 @@ import {
   Search,
   Edit,
   Trash2,
-  Calendar,
   UploadCloud,
   X,
 } from "lucide-react";
-import api from "@/services/api"; // axios configurado com baseURL '/api'
+import api from "@/services/api"; // axios configurado via VITE_API_URL
 
 const Materials = () => {
   // listagem / busca
@@ -32,12 +31,19 @@ const Materials = () => {
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
 
-  // modal
+  // modal (create/edit)
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("create"); // 'create' | 'edit'
   const [saving, setSaving] = useState(false);
 
+  // dialog excluir
+  const [openDelete, setOpenDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [rowToDelete, setRowToDelete] = useState(null);
+
   // formulário
-  const [form, setForm] = useState({
+  const emptyForm = {
+    id: null,
     date: new Date().toISOString().slice(0, 10),
     quantity: "",
     clientName: "",
@@ -45,7 +51,8 @@ const Materials = () => {
     notes: "",
     sampleUrl: null,
     protocolUrl: null,
-  });
+  };
+  const [form, setForm] = useState(emptyForm);
 
   // estados de upload
   const [uploadingSample, setUploadingSample] = useState(false);
@@ -56,6 +63,7 @@ const Materials = () => {
     setLoading(true);
     try {
       const { data } = await api.get("/materials");
+      // compatibilidade: API pode retornar array direto ou {items:[]}
       setMaterials(Array.isArray(data) ? data : data?.items ?? []);
     } catch (e) {
       console.error("Erro ao carregar materials:", e);
@@ -72,10 +80,8 @@ const Materials = () => {
   async function uploadFile(file) {
     const fd = new FormData();
     fd.append("file", file); // o backend espera 'file'
-    // importante: não force JSON nesse request; sobrescreva se seu axios padrão seta application/json
-    const { data } = await api.post("/upload", fd, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    // não force Content-Type; o interceptor já remove se for FormData
+    const { data } = await api.post("/upload", fd);
     return data?.url;
   }
 
@@ -114,11 +120,36 @@ const Materials = () => {
     setForm((f) => ({ ...f, [name]: value }));
   }
 
+  function openCreate() {
+    setMode("create");
+    setForm(emptyForm);
+    setOpen(true);
+  }
+
+  function openEdit(row) {
+    setMode("edit");
+    setForm({
+      id: row.id ?? row._id ?? row.uuid ?? null,
+      date: (row.date || "").slice(0, 10),
+      quantity: row.quantity ?? "",
+      clientName: row.client_name ?? row.clientName ?? "",
+      responsible: row.responsible ?? "",
+      notes: row.notes ?? "",
+      sampleUrl: row.material_sample_url ?? row.sampleUrl ?? null,
+      protocolUrl: row.protocol_url ?? row.protocolUrl ?? null,
+    });
+    setOpen(true);
+  }
+
+  function confirmDelete(row) {
+    setRowToDelete(row);
+    setOpenDelete(true);
+  }
+
   async function onSubmit(e) {
     e.preventDefault();
     setSaving(true);
     try {
-      // monte o payload conforme o backend espera
       const payload = {
         date: form.date,
         quantity: Number(form.quantity || 0),
@@ -129,24 +160,40 @@ const Materials = () => {
         protocol_url: form.protocolUrl || null,
       };
 
-      await api.post("/materials", payload);
+      if (mode === "create") {
+        await api.post("/materials", payload);
+      } else {
+        const id = form.id;
+        if (!id) throw new Error("ID do registro não encontrado para edição.");
+        await api.put(`/materials/${id}`, payload);
+      }
+
       setOpen(false);
-      // limpa form
-      setForm({
-        date: new Date().toISOString().slice(0, 10),
-        quantity: "",
-        clientName: "",
-        responsible: "",
-        notes: "",
-        sampleUrl: null,
-        protocolUrl: null,
-      });
+      setForm(emptyForm);
       fetchMaterials();
     } catch (err) {
       console.error("Erro ao salvar material:", err);
       alert("Erro ao salvar material.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onDelete() {
+    if (!rowToDelete) return;
+    setDeleting(true);
+    try {
+      const id = rowToDelete.id ?? rowToDelete._id ?? rowToDelete.uuid;
+      if (!id) throw new Error("ID do registro não encontrado para exclusão.");
+      await api.delete(`/materials/${id}`);
+      setOpenDelete(false);
+      setRowToDelete(null);
+      fetchMaterials();
+    } catch (err) {
+      console.error("Erro ao excluir material:", err);
+      alert("Erro ao excluir material.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -164,17 +211,23 @@ const Materials = () => {
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-semibold">Materiais</h1>
+
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={openCreate}>
               <Plus className="size-4" />
               Novo
             </Button>
           </DialogTrigger>
+
           <DialogContent className="max-w-xl">
             <DialogHeader>
-              <DialogTitle>Novo Material</DialogTitle>
-              <DialogDescription>Cadastre um recebimento/coleta.</DialogDescription>
+              <DialogTitle>{mode === "create" ? "Novo Material" : "Editar Material"}</DialogTitle>
+              <DialogDescription>
+                {mode === "create"
+                  ? "Cadastre um recebimento/coleta."
+                  : "Edite as informações do material."}
+              </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={onSubmit} className="space-y-4">
@@ -185,19 +238,43 @@ const Materials = () => {
                 </div>
                 <div>
                   <Label>Quantidade</Label>
-                  <Input type="number" name="quantity" placeholder="Ex.: 10000" value={form.quantity} onChange={onChange} required />
+                  <Input
+                    type="number"
+                    name="quantity"
+                    placeholder="Ex.: 10000"
+                    value={form.quantity}
+                    onChange={onChange}
+                    required
+                  />
                 </div>
                 <div className="md:col-span-2">
                   <Label>Cliente</Label>
-                  <Input name="clientName" placeholder="Nome do cliente" value={form.clientName} onChange={onChange} required />
+                  <Input
+                    name="clientName"
+                    placeholder="Nome do cliente"
+                    value={form.clientName}
+                    onChange={onChange}
+                    required
+                  />
                 </div>
                 <div className="md:col-span-2">
                   <Label>Responsável pela coleta/recebimento</Label>
-                  <Input name="responsible" placeholder="Responsável" value={form.responsible} onChange={onChange} required />
+                  <Input
+                    name="responsible"
+                    placeholder="Responsável"
+                    value={form.responsible}
+                    onChange={onChange}
+                    required
+                  />
                 </div>
                 <div className="md:col-span-2">
                   <Label>Observações</Label>
-                  <Textarea name="notes" placeholder="Opcional" value={form.notes} onChange={onChange} />
+                  <Textarea
+                    name="notes"
+                    placeholder="Opcional"
+                    value={form.notes}
+                    onChange={onChange}
+                  />
                 </div>
               </div>
 
@@ -256,7 +333,7 @@ const Materials = () => {
                   Cancelar
                 </Button>
                 <Button type="submit" disabled={saving || uploadingSample || uploadingProtocol}>
-                  {saving ? "Salvando..." : "Salvar"}
+                  {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
                 </Button>
               </div>
             </form>
@@ -292,50 +369,82 @@ const Materials = () => {
                   <TableHead>Qtd</TableHead>
                   <TableHead>Amostra</TableHead>
                   <TableHead>Protocolo</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6}>Carregando…</TableCell>
+                    <TableCell colSpan={7}>Carregando…</TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6}>Nenhum registro</TableCell>
+                    <TableCell colSpan={7}>Nenhum registro</TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((m) => (
-                    <TableRow key={m.id || `${m.client_name}-${m.date}`}>
-                      <TableCell>{m.date?.slice(0, 10) || "-"}</TableCell>
-                      <TableCell>{m.client_name || "-"}</TableCell>
-                      <TableCell>{m.responsible || "-"}</TableCell>
-                      <TableCell>{m.quantity ?? "-"}</TableCell>
-                      <TableCell>
-                        {m.material_sample_url ? (
-                          <a href={m.material_sample_url} target="_blank" rel="noreferrer" className="text-primary underline">
-                            Ver
-                          </a>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {m.protocol_url ? (
-                          <a href={m.protocol_url} target="_blank" rel="noreferrer" className="text-primary underline">
-                            Ver
-                          </a>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  filtered.map((m) => {
+                    const id = m.id ?? m._id ?? m.uuid;
+                    return (
+                      <TableRow key={id || `${m.client_name}-${m.date}`}>
+                        <TableCell>{m.date?.slice(0, 10) || "-"}</TableCell>
+                        <TableCell>{m.client_name || "-"}</TableCell>
+                        <TableCell>{m.responsible || "-"}</TableCell>
+                        <TableCell>{m.quantity ?? "-"}</TableCell>
+                        <TableCell>
+                          {m.material_sample_url ? (
+                            <a href={m.material_sample_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                              Ver
+                            </a>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {m.protocol_url ? (
+                            <a href={m.protocol_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                              Ver
+                            </a>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(m)}>
+                              <Edit className="size-4" />
+                              Editar
+                            </Button>
+                            <Button size="sm" variant="destructive" className="gap-2" onClick={() => confirmDelete(m)}>
+                              <Trash2 className="size-4" />
+                              Excluir
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
+
+      {/* Dialog simples de exclusão */}
+      <Dialog open={openDelete} onOpenChange={setOpenDelete}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Excluir material?</DialogTitle>
+            <DialogDescription>Esta ação não pode ser desfeita.</DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpenDelete(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={onDelete} disabled={deleting}>
+              {deleting ? "Excluindo..." : "Excluir"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

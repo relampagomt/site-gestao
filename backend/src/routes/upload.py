@@ -1,59 +1,85 @@
+# backend/src/routes/upload.py
 import os
+import logging
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 
-# pip install cloudinary
 import cloudinary
 import cloudinary.uploader as cu
+from cloudinary.exceptions import Error as CloudinaryError
 
-# Lê do ambiente (Render → Settings → Environment)
-# CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
-cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-    api_key=os.getenv("CLOUDINARY_API_KEY"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
-    secure=True,
-)
-
+log = logging.getLogger(__name__)
 upload_bp = Blueprint("upload", __name__)
 
-ALLOWED_MIME_PREFIXES = ("image/",)  # limite a imagens
+# ---- helpers ---------------------------------------------------------------
+
+def _configure_cloudinary():
+    """
+    Configura o Cloudinary a partir das variáveis de ambiente.
+    Suporta tanto CLOUDINARY_URL quanto as chaves separadas.
+    Lança RuntimeError se faltar algo.
+    """
+    url = os.getenv("CLOUDINARY_URL")
+    if url:
+        cloudinary.config(cloudinary_url=url, secure=True)
+    else:
+        cloudinary.config(
+            cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+            api_key=os.getenv("CLOUDINARY_API_KEY"),
+            api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+            secure=True,
+        )
+
+    cfg = cloudinary.config()
+    if not cfg.cloud_name or not cfg.api_key or not cfg.api_secret:
+        raise RuntimeError("cloudinary_config_missing")
+
+# ---- route -----------------------------------------------------------------
+
+ALLOWED_PREFIX = "image/"  # só imagens
 
 @upload_bp.post("/upload")
 @jwt_required(optional=True)  # troque para jwt_required() se quiser exigir login
 def upload():
-    """
-    Recebe multipart/form-data com o campo 'file' e sobe a imagem no Cloudinary.
-    Retorna JSON com a URL segura e metadados básicos.
-    """
+    # 1) Config do Cloudinary
+    try:
+        _configure_cloudinary()
+    except Exception:
+        log.exception("Cloudinary config error")
+        return jsonify(error="cloudinary_config_error"), 500
+
+    # 2) Arquivo
     f = request.files.get("file")
-    if not f:
-        return jsonify(error="missing file"), 400
+    if not f or not getattr(f, "filename", ""):
+        return jsonify(error="missing_file"), 400
 
-    # Validação simples de tipo
-    content_type = f.mimetype or ""
-    if not content_type.startswith(ALLOWED_MIME_PREFIXES):
-        return jsonify(error=f"unsupported content-type: {content_type}"), 415
+    ctype = (f.mimetype or "").lower()
+    if not ctype.startswith(ALLOWED_PREFIX):
+        return jsonify(error="unsupported_type", mimetype=ctype), 415
 
+    # 3) Upload
     try:
         folder = os.getenv("CLOUDINARY_FOLDER", "relampago")
-        result = cu.upload(
+        up = cu.upload(
             f,
             folder=folder,
             resource_type="image",
             unique_filename=True,
             overwrite=False,
         )
-
         return jsonify(
-            url=result.get("secure_url"),
-            public_id=result.get("public_id"),
-            format=result.get("format"),
-            bytes=result.get("bytes"),
-            width=result.get("width"),
-            height=result.get("height"),
+            url=up.get("secure_url"),
+            public_id=up.get("public_id"),
+            format=up.get("format"),
+            bytes=int(up.get("bytes") or 0),
+            width=up.get("width"),
+            height=up.get("height"),
         ), 201
 
-    except Exception as e:
-        # Evita vazar detalhes sensíveis
-        return jsonify(error="upload_failed", detail=str(e)), 500
+    except CloudinaryError as ce:
+        # erro vindo da API do Cloudinary (credencial, quota, etc.)
+        log.exception("cloudinary_upload_error")
+        return jsonify(error="cloudinary_upload_error", detail=str(ce)[:160]), 500
+    except Exception:
+        log.exception("upload_failed")
+        return jsonify(error="upload_failed"), 500
