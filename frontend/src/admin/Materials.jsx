@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea.jsx";
 import { Plus, Search, Edit, Trash2, UploadCloud, X } from "lucide-react";
 import api from "@/services/api";
-import ImagePreview from "@/components/ImagePreview.jsx"; // miniatura + modal
+import ImagePreview from "@/components/ImagePreview.jsx";
 
 const Materials = () => {
   // listagem / busca
@@ -72,7 +72,6 @@ const Materials = () => {
   async function uploadFile(file) {
     const fd = new FormData();
     fd.append("file", file);
-    // Override o default "application/json" do axios para este request
     const { data } = await api.post("/upload", fd, {
       headers: { "Content-Type": "multipart/form-data" },
     });
@@ -214,123 +213,119 @@ const Materials = () => {
             </Button>
           </DialogTrigger>
 
-          <DialogContent className="max-w-xl">
-            <DialogHeader>
-              <DialogTitle>{mode === "create" ? "Novo Material" : "Editar Material"}</DialogTitle>
-              <DialogDescription>
-                {mode === "create"
-                  ? "Cadastre um recebimento/coleta."
-                  : "Edite as informações do material."}
-              </DialogDescription>
-            </DialogHeader>
+          {/* p-0 para controlar padding e container rolável interno */}
+          <DialogContent className="max-w-2xl p-0">
+            <div className="max-h-[80vh] overflow-y-auto p-6">
+              <DialogHeader className="pb-2">
+                <DialogTitle>{mode === "create" ? "Novo Material" : "Editar Material"}</DialogTitle>
+                <DialogDescription>
+                  {mode === "create" ? "Cadastre um recebimento/coleta." : "Edite as informações do material."}
+                </DialogDescription>
+              </DialogHeader>
 
-            <form onSubmit={onSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <Label>Data</Label>
-                  <Input type="date" name="date" value={form.date} onChange={onChange} required />
+              <form onSubmit={onSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Data</Label>
+                    <Input type="date" name="date" value={form.date} onChange={onChange} required />
+                  </div>
+                  <div>
+                    <Label>Quantidade</Label>
+                    <Input
+                      type="number"
+                      name="quantity"
+                      placeholder="Ex.: 10000"
+                      value={form.quantity}
+                      onChange={onChange}
+                      required
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Cliente</Label>
+                    <Input
+                      name="clientName"
+                      placeholder="Nome do cliente"
+                      value={form.clientName}
+                      onChange={onChange}
+                      required
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Responsável pela coleta/recebimento</Label>
+                    <Input
+                      name="responsible"
+                      placeholder="Responsável"
+                      value={form.responsible}
+                      onChange={onChange}
+                      required
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Observações</Label>
+                    <Textarea name="notes" placeholder="Opcional" value={form.notes} onChange={onChange} />
+                  </div>
                 </div>
-                <div>
-                  <Label>Quantidade</Label>
-                  <Input
-                    type="number"
-                    name="quantity"
-                    placeholder="Ex.: 10000"
-                    value={form.quantity}
-                    onChange={onChange}
-                    required
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Cliente</Label>
-                  <Input
-                    name="clientName"
-                    placeholder="Nome do cliente"
-                    value={form.clientName}
-                    onChange={onChange}
-                    required
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Responsável pela coleta/recebimento</Label>
-                  <Input
-                    name="responsible"
-                    placeholder="Responsável"
-                    value={form.responsible}
-                    onChange={onChange}
-                    required
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Observações</Label>
-                  <Textarea
-                    name="notes"
-                    placeholder="Opcional"
-                    value={form.notes}
-                    onChange={onChange}
-                  />
-                </div>
-              </div>
 
-              {/* Amostra do Material */}
-              <div className="space-y-2">
-                <Label>Amostra do Material</Label>
-                <div className="flex items-center gap-3">
-                  <Input type="file" accept="image/*" onChange={onSampleChange} />
-                  <Button type="button" variant="outline" disabled className="gap-2">
-                    <UploadCloud className="size-4" />
-                    {uploadingSample ? "Enviando..." : "Upload"}
+                {/* Amostra do Material */}
+                <div className="space-y-2">
+                  <Label>Amostra do Material</Label>
+                  <div className="flex items-center gap-3">
+                    <Input type="file" accept="image/*" onChange={onSampleChange} />
+                    <Button type="button" variant="outline" disabled className="gap-2">
+                      <UploadCloud className="size-4" />
+                      {uploadingSample ? "Enviando..." : "Upload"}
+                    </Button>
+                  </div>
+                  {form.sampleUrl && (
+                    <div className="relative inline-flex items-center gap-2 mt-2">
+                      <ImagePreview src={form.sampleUrl} alt="Amostra" size={96} />
+                      <button
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, sampleUrl: null }))}
+                        className="bg-white border rounded-full p-1 shadow"
+                        title="Remover"
+                      >
+                        <X className="size-4 text-red-600" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Protocolo */}
+                <div className="space-y-2">
+                  <Label>Protocolo</Label>
+                  <div className="flex items-center gap-3">
+                    <Input type="file" accept="image/*" onChange={onProtocolChange} />
+                    <Button type="button" variant="outline" disabled className="gap-2">
+                      <UploadCloud className="size-4" />
+                      {uploadingProtocol ? "Enviando..." : "Upload"}
+                    </Button>
+                  </div>
+                  {form.protocolUrl && (
+                    <div className="relative inline-flex items-center gap-2 mt-2">
+                      <ImagePreview src={form.protocolUrl} alt="Protocolo" size={96} />
+                      <button
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, protocolUrl: null }))}
+                        className="bg-white border rounded-full p-1 shadow"
+                        title="Remover"
+                      >
+                        <X className="size-4 text-red-600" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={saving || uploadingSample || uploadingProtocol}>
+                    {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
                   </Button>
                 </div>
-                {form.sampleUrl && (
-                  <div className="relative inline-flex items-center gap-2 mt-2">
-                    <ImagePreview src={form.sampleUrl} alt="Amostra" size={112} />
-                    <button
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, sampleUrl: null }))}
-                      className="bg-white border rounded-full p-1 shadow"
-                      title="Remover amostra"
-                    >
-                      <X className="size-4 text-red-600" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Protocolo */}
-              <div className="space-y-2">
-                <Label>Protocolo</Label>
-                <div className="flex items-center gap-3">
-                  <Input type="file" accept="image/*" onChange={onProtocolChange} />
-                  <Button type="button" variant="outline" disabled className="gap-2">
-                    <UploadCloud className="size-4" />
-                    {uploadingProtocol ? "Enviando..." : "Upload"}
-                  </Button>
-                </div>
-                {form.protocolUrl && (
-                  <div className="relative inline-flex items-center gap-2 mt-2">
-                    <ImagePreview src={form.protocolUrl} alt="Protocolo" size={112} />
-                    <button
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, protocolUrl: null }))}
-                      className="bg-white border rounded-full p-1 shadow"
-                      title="Remover protocolo"
-                    >
-                      <X className="size-4 text-red-600" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={saving || uploadingSample || uploadingProtocol}>
-                  {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
-                </Button>
-              </div>
-            </form>
+              </form>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
@@ -378,21 +373,17 @@ const Materials = () => {
                 ) : (
                   filtered.map((m) => {
                     const id = m.id ?? m._id ?? m.uuid;
-                    const sample = m.material_sample_url ?? m.sampleUrl;
-                    const protocol = m.protocol_url ?? m.protocolUrl;
-
                     return (
                       <TableRow key={id || `${m.client_name}-${m.date}`}>
                         <TableCell>{m.date?.slice(0, 10) || "—"}</TableCell>
                         <TableCell>{(m.client_name ?? m.clientName) || "—"}</TableCell>
                         <TableCell>{m.responsible || "—"}</TableCell>
                         <TableCell>{m.quantity ?? "—"}</TableCell>
-
                         <TableCell>
-                          {sample ? (
+                          {m.material_sample_url ? (
                             <ImagePreview
-                              src={sample}
-                              alt={`Amostra - ${(m.client_name ?? m.clientName) || ""}`}
+                              src={m.material_sample_url}
+                              alt={`Amostra - ${m.client_name || ""}`}
                               size={48}
                             />
                           ) : (
@@ -400,17 +391,16 @@ const Materials = () => {
                           )}
                         </TableCell>
                         <TableCell>
-                          {protocol ? (
+                          {m.protocol_url ? (
                             <ImagePreview
-                              src={protocol}
-                              alt={`Protocolo - ${(m.client_name ?? m.clientName) || ""}`}
+                              src={m.protocol_url}
+                              alt={`Protocolo - ${m.client_name || ""}`}
                               size={48}
                             />
                           ) : (
                             "—"
                           )}
                         </TableCell>
-
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(m)}>
