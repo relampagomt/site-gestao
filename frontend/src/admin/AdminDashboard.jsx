@@ -7,7 +7,7 @@ import {
   LogOut, 
   User, 
   Shield, 
-  UserCog, 
+  Settings, 
   Users, 
   Package, 
   Activity, 
@@ -21,7 +21,7 @@ import Clients from './Clients';
 import Materials from './Materials';
 import Actions from './Actions';
 import Vacancies from './Vacancies';
-import UserAdministration from './UserAdministration';
+import SettingsPage from './Settings'; // ✅ corrigido
 
 const AdminDashboard = () => {
   const { user, logout, isAdmin } = useAuth();
@@ -38,7 +38,7 @@ const AdminDashboard = () => {
     { id: 'materials', label: 'Materiais', icon: Package, component: Materials },
     { id: 'actions', label: 'Ações', icon: Activity, component: Actions },
     { id: 'vacancies', label: 'Vagas', icon: Briefcase, component: Vacancies },
-    { id: 'users', label: 'Usuários', icon: UserCog, component: UserAdministration },
+    { id: 'settings', label: 'Configurações', icon: Settings, component: SettingsPage },
   ];
 
   const ActiveComponent = menuItems.find(item => item.id === activeTab)?.component || Dashboard;
