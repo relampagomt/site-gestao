@@ -6,27 +6,41 @@ from flask_jwt_extended import jwt_required
 
 import cloudinary
 import cloudinary.uploader as cu
+from cloudinary import api as cld_api
 from cloudinary.exceptions import Error as CloudinaryError
 
 log = logging.getLogger(__name__)
 upload_bp = Blueprint("upload", __name__)
 
-# ---- helpers ---------------------------------------------------------------
+# ---------------- helpers ----------------
+
+def _env(name: str) -> str | None:
+    """Lê env e remove espaços/aspas acidentais."""
+    v = os.getenv(name)
+    if v is None:
+        return None
+    v = v.strip()
+    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+        v = v[1:-1]
+    return v.strip()
 
 def _configure_cloudinary():
     """
-    Configura o Cloudinary a partir das variáveis de ambiente.
-    Suporta tanto CLOUDINARY_URL quanto as chaves separadas.
+    Configura Cloudinary a partir das envs.
+    Suporta CLOUDINARY_URL ou chaves separadas.
     Lança RuntimeError se faltar algo.
     """
-    url = os.getenv("CLOUDINARY_URL")
+    url = _env("CLOUDINARY_URL")
     if url:
         cloudinary.config(cloudinary_url=url, secure=True)
     else:
+        cloud_name = _env("CLOUDINARY_CLOUD_NAME")
+        api_key    = _env("CLOUDINARY_API_KEY")
+        api_secret = _env("CLOUDINARY_API_SECRET")
         cloudinary.config(
-            cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-            api_key=os.getenv("CLOUDINARY_API_KEY"),
-            api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+            cloud_name=cloud_name,
+            api_key=api_key,
+            api_secret=api_secret,
             secure=True,
         )
 
@@ -34,14 +48,31 @@ def _configure_cloudinary():
     if not cfg.cloud_name or not cfg.api_key or not cfg.api_secret:
         raise RuntimeError("cloudinary_config_missing")
 
-# ---- route -----------------------------------------------------------------
+# --------------- routes ------------------
 
 ALLOWED_PREFIX = "image/"  # só imagens
+
+@upload_bp.get("/upload/status")
+def upload_status():
+    """Diagnóstico rápido sem vazar segredos."""
+    try:
+        _configure_cloudinary()
+        cld_api.ping()  # testa acesso
+        cfg = cloudinary.config()
+        return jsonify(
+            ok=True,
+            cloud=str(cfg.cloud_name),
+            key_tail=str(cfg.api_key)[-4:] if cfg.api_key else None,
+            secret_len=len(cfg.api_secret or ""),
+        ), 200
+    except Exception as e:
+        log.exception("upload_status_error")
+        return jsonify(ok=False, error=str(e)[:200]), 500
 
 @upload_bp.post("/upload")
 @jwt_required(optional=True)  # troque para jwt_required() se quiser exigir login
 def upload():
-    # 1) Config do Cloudinary
+    # 1) Config
     try:
         _configure_cloudinary()
     except Exception:
@@ -59,7 +90,7 @@ def upload():
 
     # 3) Upload
     try:
-        folder = os.getenv("CLOUDINARY_FOLDER", "relampago")
+        folder = _env("CLOUDINARY_FOLDER") or "relampago"
         up = cu.upload(
             f,
             folder=folder,
@@ -77,7 +108,7 @@ def upload():
         ), 201
 
     except CloudinaryError as ce:
-        # erro vindo da API do Cloudinary (credencial, quota, etc.)
+        # Ex.: Invalid Signature (secret incorreto/rotacionado)
         log.exception("cloudinary_upload_error")
         return jsonify(error="cloudinary_upload_error", detail=str(ce)[:160]), 500
     except Exception:
