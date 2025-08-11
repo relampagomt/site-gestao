@@ -1,16 +1,16 @@
 // frontend/src/services/api.js
 import axios from 'axios';
 
+// Base URL:
+// - Produção (Vercel): defina VITE_API_URL = "https://site-gestao.onrender.com/api"
+// - Dev local: cai no fallback http://localhost:5000/api
 const baseURL =
-  import.meta.env.VITE_API_BASE_URL?.trim() ||
-  // Em produção, seu backend está por trás de /api (proxy/render)
-  '/api';
+  (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim() ||
+  'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  // NÃO defina Content-Type global aqui — quebra multipart/form-data de uploads!
 });
 
 // Interceptor para JWT
@@ -18,6 +18,13 @@ api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) config.headers.Authorization = `Bearer ${token}`;
+
+    // Se for FormData, deixe o browser definir o boundary (remove qualquer content-type manual)
+    if (config.data instanceof FormData) {
+      if (config.headers && ('Content-Type' in config.headers)) delete config.headers['Content-Type'];
+      if (config.headers && ('content-type' in config.headers)) delete config.headers['content-type'];
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -30,7 +37,6 @@ api.interceptors.response.use(
     if (error?.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      // redireciona para login somente se não estiver já lá
       if (!location.pathname.includes('/login')) {
         location.href = '/login';
       }
@@ -56,13 +62,26 @@ export const authService = {
   },
 };
 
-// NOVO: métricas
 export const metricsService = {
-  // GET /api/metrics/services/distribution
+  // GET /api/metrics/service-distribution
   getServiceDistribution: async () => {
-    const { data } = await api.get('/metrics/services/distribution');
-    // data = { "Panfletagem Residencial": 10, "Sinaleiros/Pedestres": 3, ... }
+    const { data } = await api.get('/metrics/service-distribution');
     return data;
+  },
+  // (opcional) GET /api/metrics/monthly-campaigns
+  getMonthlyCampaigns: async () => {
+    const { data } = await api.get('/metrics/monthly-campaigns');
+    return data;
+  },
+};
+
+// Upload de arquivo (imagem) para /api/upload
+export const uploadService = {
+  uploadFile: async (file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const { data } = await api.post('/upload', fd /* sem headers aqui */);
+    return data; // { url, public_id, ... }
   },
 };
 
