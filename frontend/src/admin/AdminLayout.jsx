@@ -1,7 +1,7 @@
 // src/admin/AdminLayout.jsx
 import React, { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Menu, X, Home, Users, Package, Activity, Briefcase, Settings } from "lucide-react";
+import { Menu, X, Home, Users, Package, Activity, Briefcase, UserCog } from "lucide-react";
 
 const navItems = [
   { to: "/admin", label: "Dashboard", icon: Home, end: true },
@@ -9,7 +9,7 @@ const navItems = [
   { to: "/admin/materials", label: "Materiais", icon: Package },
   { to: "/admin/actions", label: "Ações", icon: Activity },
   { to: "/admin/vacancies", label: "Vagas", icon: Briefcase },
-  { to: "/admin/settings", label: "Configurações", icon: Settings },
+  { to: "/admin/users", label: "Usuários", icon: UserCog },
 ];
 
 const Sidebar = ({ onNavigate }) => (
