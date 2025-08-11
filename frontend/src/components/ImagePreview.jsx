@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 
 /**
- * Miniatura clicável que abre a imagem em modal (lightbox).
+ * Miniatura clicável que abre a imagem em um modal (lightbox).
  * Props:
  *  - src: string (URL da imagem)
  *  - alt: string (texto alternativo)
@@ -21,13 +21,11 @@ export default function ImagePreview({ src, alt = "Imagem", size = 56 }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onKey]);
 
-  if (!src) {
-    return <span className="text-gray-400 text-sm">—</span>;
-  }
+  if (!src) return <span className="text-gray-400 text-sm">—</span>;
 
   return (
     <>
-      {/* thumbnail */}
+      {/* Miniatura */}
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -46,7 +44,7 @@ export default function ImagePreview({ src, alt = "Imagem", size = 56 }) {
         />
       </button>
 
-      {/* modal */}
+      {/* Modal */}
       {open && (
         <div
           className="fixed inset-0 z-[1000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"

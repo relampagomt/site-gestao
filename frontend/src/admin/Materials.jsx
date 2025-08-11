@@ -72,9 +72,9 @@ const Materials = () => {
   async function uploadFile(file) {
     const fd = new FormData();
     fd.append("file", file);
-    // remove "application/json" para este request e deixa o browser setar boundary
+    // Override o default "application/json" do axios para este request
     const { data } = await api.post("/upload", fd, {
-      headers: { "Content-Type": undefined },
+      headers: { "Content-Type": "multipart/form-data" },
     });
     return data?.url;
   }
@@ -195,7 +195,7 @@ const Materials = () => {
     const k = q.trim().toLowerCase();
     if (!k) return materials;
     return materials.filter((m) =>
-      [m.client_name ?? m.clientName, m.responsible, String(m.quantity)]
+      [m.client_name, m.responsible, String(m.quantity)]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(k))
     );
@@ -218,7 +218,9 @@ const Materials = () => {
             <DialogHeader>
               <DialogTitle>{mode === "create" ? "Novo Material" : "Editar Material"}</DialogTitle>
               <DialogDescription>
-                {mode === "create" ? "Cadastre um recebimento/coleta." : "Edite as informações do material."}
+                {mode === "create"
+                  ? "Cadastre um recebimento/coleta."
+                  : "Edite as informações do material."}
               </DialogDescription>
             </DialogHeader>
 
@@ -261,7 +263,12 @@ const Materials = () => {
                 </div>
                 <div className="md:col-span-2">
                   <Label>Observações</Label>
-                  <Textarea name="notes" placeholder="Opcional" value={form.notes} onChange={onChange} />
+                  <Textarea
+                    name="notes"
+                    placeholder="Opcional"
+                    value={form.notes}
+                    onChange={onChange}
+                  />
                 </div>
               </div>
 
@@ -377,7 +384,7 @@ const Materials = () => {
                     return (
                       <TableRow key={id || `${m.client_name}-${m.date}`}>
                         <TableCell>{m.date?.slice(0, 10) || "—"}</TableCell>
-                        <TableCell>{m.client_name ?? m.clientName || "—"}</TableCell>
+                        <TableCell>{(m.client_name ?? m.clientName) || "—"}</TableCell>
                         <TableCell>{m.responsible || "—"}</TableCell>
                         <TableCell>{m.quantity ?? "—"}</TableCell>
 
@@ -385,7 +392,7 @@ const Materials = () => {
                           {sample ? (
                             <ImagePreview
                               src={sample}
-                              alt={`Amostra - ${m.client_name ?? m.clientName ?? ""}`}
+                              alt={`Amostra - ${(m.client_name ?? m.clientName) || ""}`}
                               size={48}
                             />
                           ) : (
@@ -396,7 +403,7 @@ const Materials = () => {
                           {protocol ? (
                             <ImagePreview
                               src={protocol}
-                              alt={`Protocolo - ${m.client_name ?? m.clientName ?? ""}`}
+                              alt={`Protocolo - ${(m.client_name ?? m.clientName) || ""}`}
                               size={48}
                             />
                           ) : (
