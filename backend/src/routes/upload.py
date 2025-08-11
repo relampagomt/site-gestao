@@ -1,6 +1,7 @@
 # backend/src/routes/upload.py
 import os
 import logging
+from typing import Optional
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 
@@ -14,22 +15,36 @@ upload_bp = Blueprint("upload", __name__)
 
 # ---------------- helpers ----------------
 
-def _env(name: str) -> str | None:
+def _env(name: str) -> Optional[str]:
     """Lê env e remove espaços/aspas acidentais."""
     v = os.getenv(name)
-    if v is None:
+    if not v:
         return None
     v = v.strip()
     if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
         v = v[1:-1]
-    return v.strip()
+    return v.strip() or None
+
+def _extract_url_from_misplaced_secret(secret: str) -> Optional[str]:
+    """
+    Alguns setups colocam por engano a URL completa dentro de CLOUDINARY_API_SECRET,
+    às vezes até com o prefixo 'CLOUDINARY_URL='.
+    Tenta extrair 'cloudinary://...'.
+    """
+    s = secret.strip()
+    if "cloudinary://" in s:
+        # corta antes de 'cloudinary://'
+        idx = s.index("cloudinary://")
+        return s[idx:].strip()
+    return None
 
 def _configure_cloudinary():
     """
     Configura Cloudinary a partir das envs.
     Suporta CLOUDINARY_URL ou chaves separadas.
-    Lança RuntimeError se faltar algo.
+    Se detectar URL colada por engano em API_SECRET, corrige automaticamente.
     """
+    # 1) primeiro tenta CLOUDINARY_URL
     url = _env("CLOUDINARY_URL")
     if url:
         cloudinary.config(cloudinary_url=url, secure=True)
@@ -37,12 +52,16 @@ def _configure_cloudinary():
         cloud_name = _env("CLOUDINARY_CLOUD_NAME")
         api_key    = _env("CLOUDINARY_API_KEY")
         api_secret = _env("CLOUDINARY_API_SECRET")
-        cloudinary.config(
-            cloud_name=cloud_name,
-            api_key=api_key,
-            api_secret=api_secret,
-            secure=True,
-        )
+
+        # 2) correção automática se API_SECRET contém a URL inteira
+        if api_secret and "cloudinary://" in api_secret and not (cloud_name and api_key):
+            maybe_url = _extract_url_from_misplaced_secret(api_secret)
+            if maybe_url:
+                cloudinary.config(cloudinary_url=maybe_url, secure=True)
+            else:
+                cloudinary.config(cloud_name=cloud_name, api_key=api_key, api_secret=api_secret, secure=True)
+        else:
+            cloudinary.config(cloud_name=cloud_name, api_key=api_key, api_secret=api_secret, secure=True)
 
     cfg = cloudinary.config()
     if not cfg.cloud_name or not cfg.api_key or not cfg.api_secret:
@@ -51,6 +70,7 @@ def _configure_cloudinary():
 # --------------- routes ------------------
 
 ALLOWED_PREFIX = "image/"  # só imagens
+MAX_BYTES = int(os.getenv("UPLOAD_MAX_BYTES", "10485760"))  # 10 MB padrão
 
 @upload_bp.get("/upload/status")
 def upload_status():
@@ -64,6 +84,7 @@ def upload_status():
             cloud=str(cfg.cloud_name),
             key_tail=str(cfg.api_key)[-4:] if cfg.api_key else None,
             secret_len=len(cfg.api_secret or ""),
+            using_url=bool(_env("CLOUDINARY_URL")),
         ), 200
     except Exception as e:
         log.exception("upload_status_error")
@@ -76,13 +97,18 @@ def upload():
     try:
         _configure_cloudinary()
     except Exception:
-        log.exception("Cloudinary config error")
+        log.exception("cloudinary_config_error")
         return jsonify(error="cloudinary_config_error"), 500
 
     # 2) Arquivo
     f = request.files.get("file")
     if not f or not getattr(f, "filename", ""):
         return jsonify(error="missing_file"), 400
+
+    # limite simples de tamanho (se Content-Length vier)
+    clen = request.content_length or 0
+    if MAX_BYTES and clen > MAX_BYTES:
+        return jsonify(error="file_too_large", max_bytes=MAX_BYTES), 413
 
     ctype = (f.mimetype or "").lower()
     if not ctype.startswith(ALLOWED_PREFIX):
@@ -92,11 +118,12 @@ def upload():
     try:
         folder = _env("CLOUDINARY_FOLDER") or "relampago"
         up = cu.upload(
-            f,
+            f,                       # FileStorage funciona direto aqui
             folder=folder,
             resource_type="image",
             unique_filename=True,
             overwrite=False,
+            timeout=60,
         )
         return jsonify(
             url=up.get("secure_url"),
@@ -108,9 +135,19 @@ def upload():
         ), 201
 
     except CloudinaryError as ce:
-        # Ex.: Invalid Signature (secret incorreto/rotacionado)
+        # Mensagem amigável para a causa mais comum
+        msg = str(ce)
+        hint = None
+        if "Invalid Signature" in msg:
+            hint = (
+                "Assinatura inválida. Verifique as variáveis no Render: "
+                "prefira definir apenas CLOUDINARY_URL (ex.: cloudinary://<api_key>:<api_secret>@<cloud_name>) "
+                "ou garanta que CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET estejam corretas. "
+                "Evite colar a URL inteira dentro de CLOUDINARY_API_SECRET."
+            )
         log.exception("cloudinary_upload_error")
-        return jsonify(error="cloudinary_upload_error", detail=str(ce)[:160]), 500
-    except Exception:
+        return jsonify(error="cloudinary_upload_error", detail=msg[:160], hint=hint), 500
+
+    except Exception as e:
         log.exception("upload_failed")
-        return jsonify(error="upload_failed"), 500
+        return jsonify(error="upload_failed", detail=str(e)[:160]), 500
