@@ -239,7 +239,7 @@ const Clients = () => {
               <Input placeholder="Buscar clientes por nome, empresa, e‑mail ou telefone..."
                 value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
             </div>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
@@ -252,7 +252,7 @@ const Clients = () => {
                   <SelectItem value="pendente">Pendente</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <Select value={segmentFilter} onValueChange={setSegmentFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="Filtrar por segmento" />
@@ -267,7 +267,7 @@ const Clients = () => {
                   <SelectItem value="Outro">Outro</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <Button variant="outline" onClick={() => { setSearchTerm(''); setStatusFilter('todos'); setSegmentFilter('todos'); }}>
                 Limpar Filtros
               </Button>
