@@ -439,12 +439,12 @@ const Actions = () => {
 
   /* ===================== RENDER ===================== */
   return (
-    <div className="p-4 md:p-6 space-y-6 w-full">
-      <Card>
-        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="admin-page-container admin-space-y-6">
+      <Card className="admin-card">
+        <CardHeader className="admin-card-header admin-page-header">
           <div>
-            <CardTitle>Ações</CardTitle>
-            <CardDescription>Cadastre e gerencie ações promocionais e de distribuição.</CardDescription>
+            <CardTitle className="admin-page-title">Ações</CardTitle>
+            <CardDescription className="admin-card-description">Cadastre e gerencie ações promocionais e de distribuição.</CardDescription>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
@@ -461,12 +461,7 @@ const Actions = () => {
             {/* Modal CRIAR */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
-                <Button
-                  className="min-h-[44px] px-4 text-base font-medium gap-2
-                             sm:h-10 sm:px-4 sm:text-sm
-                             md:h-10 md:px-4 md:text-base
-                             touch-manipulation"
-                >
+                <Button className="admin-btn-primary">
                   <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
                   <span className="whitespace-nowrap">Nova Ação</span>
                 </Button>

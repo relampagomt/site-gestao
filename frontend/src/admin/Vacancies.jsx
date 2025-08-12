@@ -153,49 +153,49 @@ export default function Vacancies() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6 w-full">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-tight">Vagas</h2>
-        <Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" /> Nova Indicação</Button>
+    <div className="admin-page-container admin-space-y-6">
+      <div className="admin-page-header">
+        <h2 className="admin-page-title">Vagas</h2>
+        <Button onClick={openCreate} className="admin-btn-primary"><Plus className="mr-2 h-4 w-4" /> Nova Indicação</Button>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total de Vagas</CardTitle>
-            <CardDescription>Registros cadastrados</CardDescription>
+      <div className="admin-filters">
+        <Card className="admin-card">
+          <CardHeader className="admin-card-header pb-2">
+            <CardTitle className="admin-card-title text-sm font-medium">Total de Vagas</CardTitle>
+            <CardDescription className="admin-card-description">Registros cadastrados</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="admin-card-content">
             <div className="text-2xl font-bold">{loading ? "—" : total}</div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Vagas Abertas</CardTitle>
-            <CardDescription>Disponíveis</CardDescription>
+        <Card className="admin-card">
+          <CardHeader className="admin-card-header pb-2">
+            <CardTitle className="admin-card-title text-sm font-medium">Vagas Abertas</CardTitle>
+            <CardDescription className="admin-card-description">Disponíveis</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="admin-card-content">
             <div className="text-2xl font-bold">{loading ? "—" : openCount}</div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Em Processo</CardTitle>
-            <CardDescription>Triagem/Contato</CardDescription>
+        <Card className="admin-card">
+          <CardHeader className="admin-card-header pb-2">
+            <CardTitle className="admin-card-title text-sm font-medium">Em Processo</CardTitle>
+            <CardDescription className="admin-card-description">Triagem/Contato</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="admin-card-content">
             <div className="text-2xl font-bold">
               {loading ? "—" : items.filter((v) => (v.status || "").toLowerCase() === "em processo").length}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Fechadas</CardTitle>
-            <CardDescription>Encerradas</CardDescription>
+        <Card className="admin-card">
+          <CardHeader className="admin-card-header pb-2">
+            <CardTitle className="admin-card-title text-sm font-medium">Fechadas</CardTitle>
+            <CardDescription className="admin-card-description">Encerradas</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="admin-card-content">
             <div className="text-2xl font-bold">
               {loading ? "—" : items.filter((v) => (v.status || "").toLowerCase() === "fechada").length}
             </div>

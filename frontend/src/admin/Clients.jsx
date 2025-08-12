@@ -132,24 +132,20 @@ const Clients = () => {
   };
 
   return (
-    <div className="min-h-screen w-full">
-      <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-full">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <h2 className="text-2xl font-bold tracking-tight">Clientes</h2>
+    <div className="admin-page-container admin-space-y-6">
+      <div className="admin-page-header">
+        <h2 className="admin-page-title">Clientes</h2>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                onClick={resetForm}
-                className="min-h-[44px] px-4 text-base font-medium gap-2
-                           sm:h-10 sm:px-4 sm:text-sm
-                           md:h-10 md:px-4 md:text-base
-                           touch-manipulation w-full sm:w-auto"
-              >
-                <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
-                <span className="whitespace-nowrap">Novo Cliente</span>
-              </Button>
-            </DialogTrigger>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button
+              onClick={resetForm}
+              className="admin-btn-primary"
+            >
+              <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+              <span className="whitespace-nowrap">Novo Cliente</span>
+            </Button>
+          </DialogTrigger>
 
             {/* Modal com container rolável — mantém padrão do projeto */}
             <DialogContent className="w-full max-w-2xl max-h-[85vh] overflow-y-auto p-0 mx-4">
@@ -237,16 +233,16 @@ const Clients = () => {
           </Dialog>
         </div>
 
-        <Card className="w-full">
-          <CardContent className="pt-6">
-            <div className="space-y-4">
+        <Card className="admin-card">
+          <CardContent className="admin-card-content">
+            <div className="admin-space-y-4">
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input placeholder="Buscar clientes por nome, empresa, e‑mail ou telefone..."
                   value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="admin-filters">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger>
                     <SelectValue placeholder="Filtrar por status" />
@@ -274,7 +270,7 @@ const Clients = () => {
                   </SelectContent>
                 </Select>
 
-                <Button variant="outline" onClick={() => { setSearchTerm(''); setStatusFilter('todos'); setSegmentFilter('todos'); }}>
+                <Button variant="outline" className="admin-btn-secondary" onClick={() => { setSearchTerm(''); setStatusFilter('todos'); setSegmentFilter('todos'); }}>
                   Limpar Filtros
                 </Button>
               </div>
@@ -282,22 +278,22 @@ const Clients = () => {
           </CardContent>
         </Card>
 
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle>Lista de Clientes</CardTitle>
-            <CardDescription>{filteredClients.length} cliente(s) encontrado(s)</CardDescription>
+        <Card className="admin-card">
+          <CardHeader className="admin-card-header">
+            <CardTitle className="admin-card-title">Lista de Clientes</CardTitle>
+            <CardDescription className="admin-card-description">{filteredClients.length} cliente(s) encontrado(s)</CardDescription>
           </CardHeader>
-          <CardContent className="p-0 sm:p-6">
+          <CardContent className="admin-card-content">
             {loading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+              <div className="admin-loading">
+                <div className="admin-loading-spinner"></div>
                 <p className="mt-2 text-gray-600">Carregando clientes...</p>
               </div>
             ) : filteredClients.length === 0 ? (
-              <div className="text-center py-8">
-                <AlertCircle className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum cliente encontrado</h3>
-                <p className="mt-1 text-sm text-gray-500">{searchTerm ? 'Tente ajustar sua busca' : 'Comece adicionando um novo cliente'}</p>
+              <div className="admin-empty-state">
+                <AlertCircle className="admin-empty-icon" />
+                <h3 className="admin-empty-title">Nenhum cliente encontrado</h3>
+                <p className="admin-empty-description">{searchTerm ? 'Tente ajustar sua busca' : 'Comece adicionando um novo cliente'}</p>
               </div>
             ) : (
               <div className="w-full">
@@ -351,7 +347,7 @@ const Clients = () => {
                               variant="outline"
                               size="sm"
                               onClick={() => handleEdit(client)}
-                              className="flex-1 gap-1 min-h-[36px] touch-manipulation"
+                              className="admin-btn-secondary flex-1 gap-1 min-h-[36px] touch-manipulation"
                             >
                               <Edit className="w-4 h-4" /> Editar
                             </Button>
@@ -360,7 +356,7 @@ const Clients = () => {
                                 variant="destructive"
                                 size="sm"
                                 onClick={() => handleDelete(client.id)}
-                                className="flex-1 gap-1 min-h-[36px] touch-manipulation"
+                                className="admin-btn-secondary flex-1 gap-1 min-h-[36px] touch-manipulation text-red-600 hover:text-red-700"
                               >
                                 <Trash2 className="w-4 h-4" /> Excluir
                               </Button>
@@ -463,7 +459,6 @@ const Clients = () => {
             )}
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 };

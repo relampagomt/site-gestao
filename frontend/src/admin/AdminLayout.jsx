@@ -54,69 +54,69 @@ export default function AdminLayout() {
   };
 
   return (
-    <div className="min-h-dvh bg-slate-50">
-      {/* Topbar (sem título de página!) */}
+    <div className="min-h-dvh bg-slate-50 admin-no-overflow">
+      {/* Topbar */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b">
-        <div className="mx-auto max-w-[1400px] px-4 h-14 flex items-center justify-between">
-          <button
-            className="md:hidden inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5"
-            onClick={() => setMobileOpen(true)}
-            aria-label="Abrir menu"
-          >
-            <Menu size={18} />
-            <span className="text-sm">Menu</span>
-          </button>
+        <div className="admin-container">
+          <div className="h-14 flex items-center justify-between">
+            <button
+              className="md:hidden admin-btn-secondary"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Abrir menu"
+            >
+              <Menu size={18} />
+              <span className="text-sm">Menu</span>
+            </button>
 
-          <div className="hidden md:flex items-center gap-3 text-sm text-slate-600">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-white font-semibold">
-              {user?.name?.charAt(0)?.toUpperCase() || "A"}
-            </span>
-            <span>{user?.name || "Administrador"}</span>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">
-              {user?.role === "admin" ? "Admin" : "Supervisor"}
-            </span>
+            <div className="hidden md:flex items-center gap-3 text-sm text-slate-600">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-white font-semibold">
+                {user?.name?.charAt(0)?.toUpperCase() || "A"}
+              </span>
+              <span>{user?.name || "Administrador"}</span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">
+                {user?.role === "admin" ? "Admin" : "Supervisor"}
+              </span>
+            </div>
+
+            <button
+              className="admin-btn-secondary"
+              onClick={logout}
+              aria-label="Sair"
+            >
+              <span>Sair</span>
+            </button>
           </div>
-
-          <button
-            className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm"
-            onClick={logout}
-            aria-label="Sair"
-          >
-            <span>Sair</span>
-          </button>
         </div>
       </header>
 
       {/* Layout */}
-      <div className="mx-auto max-w-[1400px] px-4">
-        <div className="grid grid-cols-1 md:grid-cols-[18rem_1fr] gap-6 py-6">
+      <div className="admin-container">
+        <div className="admin-main-layout">
           {/* Sidebar desktop */}
           <div className="hidden md:block">
             <Sidebar user={user} />
           </div>
 
           {/* Conteúdo */}
-          <main className="min-h-[70dvh]">
-            {/* >>> Os títulos ficam DENTRO de cada página (Dashboard, Clientes, etc.) <<< */}
+          <main className="admin-content">
             <Outlet />
           </main>
         </div>
       </div>
 
-      {/* Drawer mobile (sem fundo preto) */}
+      {/* Drawer mobile */}
       {mobileOpen && (
         <>
-          {/* overlay TRANSPARENTE – troque para bg-black/10 se quiser um leve véu */}
           <div
-            className="fixed inset-0 bg-transparent md:hidden"
+            className="fixed inset-0 bg-black/20 md:hidden z-40"
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />
-          <div className="fixed inset-y-0 left-0 w-72 bg-white shadow-lg md:hidden animate-in slide-in-from-left">
+          <div className="fixed inset-y-0 left-0 w-72 bg-white shadow-lg md:hidden animate-in slide-in-from-left z-50">
             <div className="flex items-center justify-between border-b px-4 h-14">
               <div className="text-lg font-bold text-red-600">Relâmpago</div>
               <button
-                className="rounded-md border p-1.5"
+                className="admin-btn-secondary p-1.5"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Fechar menu"
               >

@@ -1,0 +1,449 @@
+/* Estilos padronizados para o sistema de gestão admin */
+
+/* Container principal padronizado */
+.admin-container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+@media (min-width: 768px) {
+  .admin-container {
+    padding: 0 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .admin-container {
+    padding: 0 2rem;
+  }
+}
+
+/* Layout principal centralizado */
+.admin-main-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  padding: 1.5rem 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+@media (min-width: 768px) {
+  .admin-main-layout {
+    grid-template-columns: 18rem 1fr;
+    gap: 2rem;
+    padding: 2rem 0;
+  }
+}
+
+/* Conteúdo principal centralizado */
+.admin-content {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Container de página padronizado */
+.admin-page-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
+  space-y: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .admin-page-container {
+    padding: 1.5rem;
+    space-y: 2rem;
+  }
+}
+
+/* Header de página padronizado */
+.admin-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .admin-page-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+/* Título de página padronizado */
+.admin-page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .admin-page-title {
+    font-size: 1.875rem;
+  }
+}
+
+/* Botões padronizados */
+.admin-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.5rem;
+  border: none;
+  background-color: #dc2626;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  min-height: 44px;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+
+.admin-btn-primary:hover {
+  background-color: #b91c1c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+.admin-btn-primary:active {
+  transform: translateY(0);
+}
+
+@media (min-width: 640px) {
+  .admin-btn-primary {
+    width: auto;
+    min-height: 40px;
+  }
+}
+
+.admin-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.5rem;
+  border: 1px solid #d1d5db;
+  background-color: white;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  min-height: 44px;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+
+.admin-btn-secondary:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+@media (min-width: 640px) {
+  .admin-btn-secondary {
+    width: auto;
+    min-height: 40px;
+  }
+}
+
+/* Cards padronizados */
+.admin-card {
+  background: white;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.admin-card-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-card-content {
+  padding: 1.5rem;
+}
+
+.admin-card-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+}
+
+.admin-card-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Filtros padronizados */
+.admin-filters {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .admin-filters {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .admin-filters {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Tabela responsiva padronizada */
+.admin-table-container {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.admin-table {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
+}
+
+.admin-table th {
+  background-color: #f9fafb;
+  padding: 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.875rem;
+  color: #1f2937;
+}
+
+.admin-table tr:hover {
+  background-color: #f9fafb;
+}
+
+/* Cards mobile para tabelas */
+.admin-mobile-card {
+  display: block;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+@media (min-width: 1024px) {
+  .admin-mobile-card {
+    display: none;
+  }
+}
+
+/* Formulários padronizados */
+.admin-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .admin-form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.admin-form-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.admin-form-input {
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  transition: border-color 0.2s ease-in-out;
+}
+
+.admin-form-input:focus {
+  outline: none;
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+/* Estados de loading */
+.admin-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.admin-loading-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid #e5e7eb;
+  border-top: 2px solid #dc2626;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Estados vazios */
+.admin-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.admin-empty-icon {
+  width: 3rem;
+  height: 3rem;
+  color: #9ca3af;
+  margin-bottom: 1rem;
+}
+
+.admin-empty-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.admin-empty-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+/* Badges padronizados */
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.admin-badge-success {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.admin-badge-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.admin-badge-error {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.admin-badge-info {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+/* Responsividade geral */
+@media (max-width: 767px) {
+  .admin-hide-mobile {
+    display: none !important;
+  }
+  
+  .admin-full-width-mobile {
+    width: 100% !important;
+  }
+  
+  .admin-stack-mobile {
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .admin-hide-desktop {
+    display: none !important;
+  }
+}
+
+/* Utilitários de espaçamento */
+.admin-space-y-4 > * + * {
+  margin-top: 1rem;
+}
+
+.admin-space-y-6 > * + * {
+  margin-top: 1.5rem;
+}
+
+/* Correções específicas para overflow */
+.admin-no-overflow {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+/* Container para modais */
+.admin-modal-content {
+  width: 100%;
+  max-width: 2xl;
+  max-height: 85vh;
+  overflow-y: auto;
+  margin: 0 1rem;
+}
+
+@media (min-width: 768px) {
+  .admin-modal-content {
+    margin: 0;
+  }
+}
+
