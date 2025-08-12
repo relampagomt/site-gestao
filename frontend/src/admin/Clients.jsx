@@ -14,7 +14,9 @@ import { Plus, Search, Edit, Trash2, Phone, Mail, Building, User, AlertCircle } 
 import api from '@/services/api';
 
 const Clients = () => {
-  const { isAdmin } = useAuth();
+  const { user } = useAuth();
+  const isAdmin = String(user?.role || user?.claims?.role || '').toLowerCase() === 'admin';
+
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -78,7 +80,7 @@ const Clients = () => {
   };
 
   const handleDelete = async (clientId) => {
-    if (!isAdmin()) {
+    if (!isAdmin) {
       alert('Apenas administradores podem excluir clientes');
       return;
     }
@@ -353,7 +355,7 @@ const Clients = () => {
                             >
                               <Edit className="w-4 h-4" /> Editar
                             </Button>
-                            {isAdmin() && (
+                            {isAdmin && (
                               <Button
                                 variant="destructive"
                                 size="sm"
@@ -439,7 +441,7 @@ const Clients = () => {
                                 >
                                   <Edit className="w-4 h-4" /> Editar
                                 </Button>
-                                {isAdmin() && (
+                                {isAdmin && (
                                   <Button
                                     variant="destructive"
                                     size="sm"
