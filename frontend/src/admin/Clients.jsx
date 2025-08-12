@@ -1,3 +1,4 @@
+// frontend/src/admin/Clients.jsx
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -109,10 +110,10 @@ const Clients = () => {
     const matchesSearch = client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesStatus = statusFilter === 'todos' || client.status === statusFilter;
     const matchesSegment = segmentFilter === 'todos' || client.segment === segmentFilter;
-    
+
     return matchesSearch && matchesStatus && matchesSegment;
   });
 
@@ -140,84 +141,87 @@ const Clients = () => {
             </Button>
           </DialogTrigger>
 
-          <DialogContent className="max-w-2xl mx-4">
-            <DialogHeader>
-              <DialogTitle>{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
-              <DialogDescription>
-                {editingClient ? 'Edite as informações do cliente' : 'Adicione um novo cliente ao sistema'}
-              </DialogDescription>
-            </DialogHeader>
+          {/* Modal com container rolável */}
+          <DialogContent className="max-w-2xl p-0">
+            <div className="max-h-[80vh] overflow-y-auto p-6">
+              <DialogHeader>
+                <DialogTitle>{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
+                <DialogDescription>
+                  {editingClient ? 'Edite as informações do cliente' : 'Adicione um novo cliente ao sistema'}
+                </DialogDescription>
+              </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="name">Nome *</Label>
-                  <Input id="name" value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="name">Nome *</Label>
+                    <Input id="name" value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+                  </div>
+                  <div>
+                    <Label htmlFor="company">Empresa *</Label>
+                    <Input id="company" value={formData.company}
+                      onChange={(e) => setFormData({ ...formData, company: e.target.value })} required />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="company">Empresa *</Label>
-                  <Input id="company" value={formData.company}
-                    onChange={(e) => setFormData({ ...formData, company: e.target.value })} required />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="phone">Telefone *</Label>
-                  <Input id="phone" value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="phone">Telefone *</Label>
+                    <Input id="phone" value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required />
+                  </div>
+                  <div>
+                    <Label htmlFor="email">Email *</Label>
+                    <Input id="email" type="email" value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="email">Email *</Label>
-                  <Input id="email" type="email" value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="segment">Segmento</Label>
-                  <Select value={formData.segment}
-                    onValueChange={(v) => setFormData({ ...formData, segment: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecione o segmento" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="varejo">Varejo</SelectItem>
-                      <SelectItem value="servicos">Serviços</SelectItem>
-                      <SelectItem value="alimentacao">Alimentação</SelectItem>
-                      <SelectItem value="saude">Saúde</SelectItem>
-                      <SelectItem value="educacao">Educação</SelectItem>
-                      <SelectItem value="tecnologia">Tecnologia</SelectItem>
-                      <SelectItem value="outros">Outros</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="segment">Segmento</Label>
+                    <Select value={formData.segment}
+                      onValueChange={(v) => setFormData({ ...formData, segment: v })}>
+                      <SelectTrigger><SelectValue placeholder="Selecione o segmento" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="varejo">Varejo</SelectItem>
+                        <SelectItem value="servicos">Serviços</SelectItem>
+                        <SelectItem value="alimentacao">Alimentação</SelectItem>
+                        <SelectItem value="saude">Saúde</SelectItem>
+                        <SelectItem value="educacao">Educação</SelectItem>
+                        <SelectItem value="tecnologia">Tecnologia</SelectItem>
+                        <SelectItem value="outros">Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="status">Status</Label>
+                    <Select value={formData.status}
+                      onValueChange={(v) => setFormData({ ...formData, status: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ativo">Ativo</SelectItem>
+                        <SelectItem value="inativo">Inativo</SelectItem>
+                        <SelectItem value="pendente">Pendente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
+
                 <div>
-                  <Label htmlFor="status">Status</Label>
-                  <Select value={formData.status}
-                    onValueChange={(v) => setFormData({ ...formData, status: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ativo">Ativo</SelectItem>
-                      <SelectItem value="inativo">Inativo</SelectItem>
-                      <SelectItem value="pendente">Pendente</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="others">Observações</Label>
+                  <Textarea id="others" value={formData.others}
+                    onChange={(e) => setFormData({ ...formData, others: e.target.value })}
+                    placeholder="Informações adicionais sobre o cliente..." />
                 </div>
-              </div>
 
-              <div>
-                <Label htmlFor="others">Observações</Label>
-                <Textarea id="others" value={formData.others}
-                  onChange={(e) => setFormData({ ...formData, others: e.target.value })}
-                  placeholder="Informações adicionais sobre o cliente..." />
-              </div>
-
-              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                <Button type="submit">{editingClient ? 'Atualizar' : 'Criar'}</Button>
-              </div>
-            </form>
+                <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+                  <Button type="submit">{editingClient ? 'Atualizar' : 'Criar'}</Button>
+                </div>
+              </form>
+            </div>
           </DialogContent>
         </Dialog>
       </div>

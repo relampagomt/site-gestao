@@ -213,7 +213,7 @@ const Materials = () => {
             </Button>
           </DialogTrigger>
 
-          {/* p-0 para controlar padding e container rolável interno */}
+          {/* Modal com container rolável */}
           <DialogContent className="max-w-2xl p-0">
             <div className="max-h-[80vh] overflow-y-auto p-6">
               <DialogHeader className="pb-2">
