@@ -1,341 +1,631 @@
 // frontend/src/admin/Actions.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
-import { Button } from "@/components/ui/button.jsx";
-import { Input } from "@/components/ui/input.jsx";
-import { Label } from "@/components/ui/label.jsx";
+import React, { useEffect, useMemo, useState } from 'react';
+import api from '@/services/api';
+import { useAuth } from '../contexts/AuthContext';
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
+import { Button } from '@/components/ui/button.jsx';
+import { Input } from '@/components/ui/input.jsx';
+import { Label } from '@/components/ui/label.jsx';
+import { Badge } from '@/components/ui/badge.jsx';
+import { Checkbox } from '@/components/ui/checkbox.jsx';
+import { Textarea } from '@/components/ui/textarea.jsx';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog.jsx';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
+import { Separator } from '@/components/ui/separator.jsx';
+
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog.jsx";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
-import { Textarea } from "@/components/ui/textarea.jsx";
-import { Plus, Search, Edit, Trash2, UploadCloud, X } from "lucide-react";
-import api from "@/services/api";
-import ImagePreview from "@/components/ImagePreview.jsx";
+  Plus,
+  Edit,
+  Trash2,
+  Search,
+  Calendar as CalendarIcon,
+  Layers,
+  X,
+  CheckCircle,
+  XCircle,
+} from 'lucide-react';
 
-const ActionsPage = () => {
-  const [items, setItems] = useState([]);
+// -------------------- OPÇÕES (como solicitado) --------------------
+const ACTION_OPTIONS = [
+  {
+    group: 'Serviços de Panfletagem e Distribuição',
+    items: [
+      'PAP (Porta a Porta)',
+      'Arrastão',
+      'Semáforos',
+      'Ponto fixo',
+      'Distribuição em eventos',
+      'Carro de Som',
+      'Entrega personalizada',
+    ],
+  },
+  {
+    group: 'Serviços de Ações Promocionais e Interação',
+    items: [
+      'Distribuição de Amostras (Sampling)',
+      'Degustação',
+      'Demonstração',
+      'Blitz promocional',
+      'Captação de cadastros',
+      'Distribuição de Brindes',
+    ],
+  },
+  {
+    group: 'Serviços Complementares',
+    items: [
+      'Criação e design',
+      'Confecção e produção',
+      'Impressão',
+      'Logística (Coleta e Entrega)',
+      'Planejamento estratégico',
+      'Relatório e monitoramento',
+    ],
+  },
+];
+
+const ALL_ACTION_TYPES = ACTION_OPTIONS.flatMap((g) => g.items);
+
+// -------------------- Mock DEV --------------------
+const mockActions = [
+  {
+    id: 'a1',
+    client_name: 'Cliente Exemplo',
+    company_name: 'Empresa XYZ',
+    // MULTI!
+    types: ['PAP (Porta a Porta)', 'Semáforos'],
+    // compat legada
+    type: 'PAP (Porta a Porta), Semáforos',
+    start_date: '2025-08-01',
+    end_date: '2025-08-10',
+    day_periods: ['manhã', 'tarde'],
+    material_qty: 1200,
+    material_photo_url: '',
+    notes: 'Campanha bairro central.',
+    active: true,
+  },
+];
+
+// -------------------- Helpers --------------------
+const initialForm = {
+  client_name: '',
+  company_name: '',
+  // MULTI
+  types: [],
+  // validade
+  start_date: '',
+  end_date: '',
+  // campos já existentes
+  day_periods: [],
+  material_qty: '',
+  material_photo_url: '',
+  notes: '',
+  active: true,
+};
+
+const periodOptions = ['manhã', 'tarde', 'noite'];
+
+const ensureArrayTypes = (item) => {
+  if (Array.isArray(item?.types)) return item.types;
+  if (typeof item?.type === 'string' && item.type.trim()) {
+    return item.type.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+};
+
+// -------------------- Componente --------------------
+const Actions = () => {
+  const { user } = useAuth();
+  const isAdmin = String(user?.role || user?.claims?.role || '').toLowerCase() === 'admin';
+
   const [loading, setLoading] = useState(false);
-  const [q, setQ] = useState("");
+  const [actions, setActions] = useState([]);
 
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState("create");
-  const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState('');
 
-  const [openDelete, setOpenDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [rowToDelete, setRowToDelete] = useState(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
 
-  const emptyForm = {
-    id: null,
-    date: new Date().toISOString().slice(0, 10),
-    clientName: "",
-    description: "",
-    notes: "",
-    photoUrl: null,
-  };
-  const [form, setForm] = useState(emptyForm);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [form, setForm] = useState({ ...initialForm });
+  const [typesPopoverOpen, setTypesPopoverOpen] = useState(false);
 
-  async function fetchActions() {
-    setLoading(true);
+  // -------------------- Load --------------------
+  const loadActions = async () => {
     try {
-      const { data } = await api.get("/actions");
-      setItems(Array.isArray(data) ? data : data?.items ?? []);
-    } catch (e) {
-      console.error("Erro ao carregar ações:", e);
+      setLoading(true);
+
+      if (import.meta.env.DEV) {
+        await new Promise((r) => setTimeout(r, 350));
+        setActions(mockActions);
+        return;
+      }
+
+      const { data } = await api.get('/actions');
+      const list = Array.isArray(data) ? data : (data?.actions || []);
+      setActions(list);
+    } catch (err) {
+      console.error('Erro ao carregar ações:', err);
+      if (import.meta.env.DEV) setActions(mockActions);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchActions();
+    loadActions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function uploadFile(file) {
-    const fd = new FormData();
-    fd.append("file", file);
-    const { data } = await api.post("/upload", fd, {
-      headers: { "Content-Type": "multipart/form-data" },
+  // -------------------- Filter --------------------
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return actions;
+    return actions.filter((a) => {
+      const typesBlob = ensureArrayTypes(a).join(' ').toLowerCase();
+      const blob = `${a.client_name} ${a.company_name} ${a.notes} ${typesBlob}`.toLowerCase();
+      return blob.includes(q);
     });
-    return data?.url;
-  }
+  }, [actions, query]);
 
-  async function onPhotoChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingPhoto(true);
-    try {
-      const url = await uploadFile(file);
-      setForm((f) => ({ ...f, photoUrl: url }));
-    } catch (err) {
-      console.error("Erro no upload da imagem:", err);
-      alert("Falha ao enviar a imagem. Tente novamente.");
-    } finally {
-      setUploadingPhoto(false);
-    }
-  }
+  // -------------------- Form helpers --------------------
+  const resetForm = () => setForm({ ...initialForm });
+  const onChange = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
 
-  function onChange(e) {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
-  }
-
-  function openCreate() {
-    setMode("create");
-    setForm(emptyForm);
-    setOpen(true);
-  }
-
-  function openEdit(row) {
-    setMode("edit");
-    setForm({
-      id: row.id ?? row._id ?? row.uuid ?? null,
-      date: (row.date || "").slice(0, 10),
-      clientName: row.client_name ?? row.clientName ?? "",
-      description: row.description ?? "",
-      notes: row.notes ?? "",
-      photoUrl: row.image_url ?? row.photo_url ?? row.photoUrl ?? null,
+  const toggleType = (type) => {
+    setForm((prev) => {
+      const exists = prev.types.includes(type);
+      const next = exists ? prev.types.filter((t) => t !== type) : [...prev.types, type];
+      return { ...prev, types: next };
     });
-    setOpen(true);
-  }
+  };
 
-  function confirmDelete(row) {
-    setRowToDelete(row);
-    setOpenDelete(true);
-  }
+  const togglePeriod = (period) => {
+    setForm((prev) => {
+      const exists = prev.day_periods.includes(period);
+      const next = exists
+        ? prev.day_periods.filter((p) => p !== period)
+        : [...prev.day_periods, period];
+      return { ...prev, day_periods: next };
+    });
+  };
 
-  async function onSubmit(e) {
+  // -------------------- Create --------------------
+  const handleCreate = async (e) => {
     e.preventDefault();
-    setSaving(true);
-    try {
-      const payload = {
-        date: form.date,
-        client_name: form.clientName,
-        description: form.description,
-        notes: form.notes || "",
-        image_url: form.photoUrl || null,
-      };
 
-      if (mode === "create") {
-        await api.post("/actions", payload);
-      } else {
-        const id = form.id;
-        if (!id) throw new Error("ID do registro não encontrado para edição.");
-        await api.put(`/actions/${id}`, payload);
+    if (form.types.length === 0) {
+      alert('Selecione ao menos um tipo de ação.');
+      return;
+    }
+    if (form.start_date && form.end_date && form.start_date > form.end_date) {
+      alert('Data de término não pode ser anterior à data de início.');
+      return;
+    }
+
+    try {
+      if (import.meta.env.DEV) {
+        const newItem = {
+          id: `dev-${Date.now()}`,
+          ...form,
+          // compat legada para componentes antigos
+          type: form.types.join(', '),
+          material_qty: Number(form.material_qty || 0),
+        };
+        setActions((prev) => [...prev, newItem]);
+        setIsCreateOpen(false);
+        resetForm();
+        alert('Ação criada (simulação DEV).');
+        return;
       }
 
-      setOpen(false);
-      setForm(emptyForm);
-      fetchActions();
-    } catch (err) {
-      console.error("Erro ao salvar ação:", err);
-      alert("Erro ao salvar ação.");
-    } finally {
-      setSaving(false);
-    }
-  }
+      const payload = {
+        client_name: form.client_name,
+        company_name: form.company_name,
+        // >>> MULTI <<<
+        types: form.types,
+        // compat legada (se algo no backend ainda usa 'type' como string)
+        type: form.types.join(', '),
+        // validade
+        start_date: form.start_date || null,
+        end_date: form.end_date || null,
+        // demais campos
+        day_periods: form.day_periods,
+        material_qty: Number(form.material_qty || 0),
+        material_photo_url: form.material_photo_url || '',
+        notes: form.notes || '',
+        active: !!form.active,
+      };
 
-  async function onDelete() {
-    if (!rowToDelete) return;
-    setDeleting(true);
+      await api.post('/actions', payload);
+      await loadActions();
+      setIsCreateOpen(false);
+      resetForm();
+      alert('Ação criada com sucesso.');
+    } catch (err) {
+      console.error('Erro ao criar ação:', err);
+      alert('Erro ao criar ação: ' + (err?.response?.data?.message || err.message));
+    }
+  };
+
+  // -------------------- Edit --------------------
+  const openEdit = (item) => {
+    setEditing(item);
+    setForm({
+      client_name: item.client_name || '',
+      company_name: item.company_name || '',
+      types: ensureArrayTypes(item),
+      start_date: item.start_date || '',
+      end_date: item.end_date || '',
+      day_periods: Array.isArray(item.day_periods) ? item.day_periods : [],
+      material_qty: item.material_qty ?? '',
+      material_photo_url: item.material_photo_url || '',
+      notes: item.notes || '',
+      active: typeof item.active === 'boolean' ? item.active : true,
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEdit = async (e) => {
+    e.preventDefault();
+    if (!editing) return;
+
+    if (form.types.length === 0) {
+      alert('Selecione ao menos um tipo de ação.');
+      return;
+    }
+    if (form.start_date && form.end_date && form.start_date > form.end_date) {
+      alert('Data de término não pode ser anterior à data de início.');
+      return;
+    }
+
     try {
-      const id = rowToDelete.id ?? rowToDelete._id ?? rowToDelete.uuid;
-      if (!id) throw new Error("ID do registro não encontrado para exclusão.");
-      await api.delete(`/actions/${id}`);
-      setOpenDelete(false);
-      setRowToDelete(null);
-      fetchActions();
-    } catch (err) {
-      console.error("Erro ao excluir ação:", err);
-      alert("Erro ao excluir ação.");
-    } finally {
-      setDeleting(false);
-    }
-  }
+      if (import.meta.env.DEV) {
+        setActions((prev) =>
+          prev.map((a) =>
+            a.id === editing.id
+              ? {
+                  ...a,
+                  ...form,
+                  type: form.types.join(', '), // compat
+                  material_qty: Number(form.material_qty || 0),
+                }
+              : a
+          )
+        );
+        setIsEditOpen(false);
+        setEditing(null);
+        resetForm();
+        alert('Ação atualizada (simulação DEV).');
+        return;
+      }
 
-  const filtered = useMemo(() => {
-    const k = q.trim().toLowerCase();
-    if (!k) return items;
-    return items.filter((m) =>
-      [(m.client_name ?? m.clientName), m.description, m.notes]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(k))
-    );
-  }, [items, q]);
+      const payload = {
+        client_name: form.client_name,
+        company_name: form.company_name,
+        types: form.types,
+        type: form.types.join(', '),
+        start_date: form.start_date || null,
+        end_date: form.end_date || null,
+        day_periods: form.day_periods,
+        material_qty: Number(form.material_qty || 0),
+        material_photo_url: form.material_photo_url || '',
+        notes: form.notes || '',
+        active: !!form.active,
+      };
+
+      await api.put(`/actions/${editing.id}`, payload);
+      await loadActions();
+      setIsEditOpen(false);
+      setEditing(null);
+      resetForm();
+      alert('Ação atualizada com sucesso.');
+    } catch (err) {
+      console.error('Erro ao atualizar ação:', err);
+      alert('Erro ao atualizar ação: ' + (err?.response?.data?.message || err.message));
+    }
+  };
+
+  // -------------------- Delete --------------------
+  const handleDelete = async (id) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta ação?')) return;
+    try {
+      if (import.meta.env.DEV) {
+        setActions((prev) => prev.filter((a) => a.id !== id));
+        alert('Ação excluída (simulação DEV).');
+        return;
+      }
+
+      await api.delete(`/actions/${id}`);
+      await loadActions();
+      alert('Ação excluída com sucesso.');
+    } catch (err) {
+      console.error('Erro ao excluir ação:', err);
+      alert('Erro ao excluir ação: ' + (err?.response?.data?.message || err.message));
+    }
+  };
+
+  // -------------------- UI helpers --------------------
+  const TypeSelector = () => (
+    <Popover open={typesPopoverOpen} onOpenChange={setTypesPopoverOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="w-full justify-between">
+          <span className="inline-flex flex-wrap gap-2">
+            {form.types.length === 0 ? 'Selecionar tipos' : (
+              form.types.slice(0, 2).map((t) => (
+                <Badge key={t} variant="secondary" className="mr-1">{t}</Badge>
+              ))
+            )}
+            {form.types.length > 2 && (
+              <Badge variant="outline">+{form.types.length - 2}</Badge>
+            )}
+          </span>
+          <Layers className="size-4 opacity-70" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[380px] p-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium">Tipos de ação</span>
+          {form.types.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => onChange('types', [])}>
+              Limpar
+            </Button>
+          )}
+        </div>
+        <div className="max-h-[320px] overflow-auto pr-1 space-y-4">
+          {ACTION_OPTIONS.map((group) => (
+            <div key={group.group}>
+              <p className="text-xs font-semibold text-muted-foreground mb-2">{group.group}</p>
+              <div className="space-y-2">
+                {group.items.map((opt) => {
+                  const checked = form.types.includes(opt);
+                  return (
+                    <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => toggleType(opt)}
+                      />
+                      <span>{opt}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <Separator className="my-3" />
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={() => setTypesPopoverOpen(false)}>Fechar</Button>
+          <Button onClick={() => setTypesPopoverOpen(false)}>Aplicar</Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl md:text-2xl font-semibold">Ações</h1>
-
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2" onClick={openCreate}>
-              <Plus className="size-4" />
-              Nova
-            </Button>
-          </DialogTrigger>
-
-          <DialogContent className="max-w-2xl p-0">
-            <div className="max-h-[80vh] overflow-y-auto p-6">
-              <DialogHeader className="pb-2">
-                <DialogTitle>{mode === "create" ? "Nova Ação" : "Editar Ação"}</DialogTitle>
-                <DialogDescription>
-                  {mode === "create" ? "Cadastre uma nova ação executada." : "Edite as informações da ação."}
-                </DialogDescription>
-              </DialogHeader>
-
-              <form onSubmit={onSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <Label>Data</Label>
-                    <Input type="date" name="date" value={form.date} onChange={onChange} required />
-                  </div>
-                  <div>
-                    <Label>Cliente</Label>
-                    <Input
-                      name="clientName"
-                      placeholder="Nome do cliente"
-                      value={form.clientName}
-                      onChange={onChange}
-                      required
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <Label>Descrição</Label>
-                    <Textarea
-                      name="description"
-                      placeholder="O que foi feito"
-                      value={form.description}
-                      onChange={onChange}
-                      required
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <Label>Observações</Label>
-                    <Textarea name="notes" placeholder="Opcional" value={form.notes} onChange={onChange} />
-                  </div>
-                </div>
-
-                {/* Imagem / Comprovante */}
-                <div className="space-y-2">
-                  <Label>Imagem / Comprovante</Label>
-                  <div className="flex items-center gap-3">
-                    <Input type="file" accept="image/*" onChange={onPhotoChange} />
-                    <Button type="button" variant="outline" disabled className="gap-2">
-                      <UploadCloud className="size-4" />
-                      {uploadingPhoto ? "Enviando..." : "Upload"}
-                    </Button>
-                  </div>
-                  {form.photoUrl && (
-                    <div className="relative inline-flex items-center gap-2 mt-2">
-                      <ImagePreview src={form.photoUrl} alt="Comprovante" size={96} />
-                      <button
-                        type="button"
-                        onClick={() => setForm((f) => ({ ...f, photoUrl: null }))}
-                        className="bg-white border rounded-full p-1 shadow"
-                        title="Remover imagem"
-                      >
-                        <X className="size-4 text-red-600" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit" disabled={saving || uploadingPhoto}>
-                    {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
+    <div className="p-4 md:p-6 space-y-6">
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Registros</CardTitle>
-          <CardDescription>Lista de ações executadas</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                placeholder="Buscar por cliente, descrição ou observações..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-            </div>
+        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <CardTitle>Ações</CardTitle>
+            <CardDescription>Cadastre e gerencie ações promocionais e de distribuição.</CardDescription>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="flex gap-2 items-center">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 opacity-60" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar por cliente, empresa, tipo ou observação"
+                className="pl-9 w-[260px]"
+              />
+            </div>
+
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
+                  <Plus className="size-4" />
+                  Nova Ação
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>Cadastrar ação</DialogTitle>
+                  <DialogDescription>Preencha os campos abaixo para registrar a ação.</DialogDescription>
+                </DialogHeader>
+
+                <form className="space-y-5" onSubmit={handleCreate}>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="client_name">Nome do cliente</Label>
+                      <Input
+                        id="client_name"
+                        value={form.client_name}
+                        onChange={(e) => onChange('client_name', e.target.value)}
+                        placeholder="Ex.: João da Silva"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="company_name">Nome da empresa</Label>
+                      <Input
+                        id="company_name"
+                        value={form.company_name}
+                        onChange={(e) => onChange('company_name', e.target.value)}
+                        placeholder="Ex.: Supermercado Rio Branco"
+                        required
+                      />
+                    </div>
+
+                    {/* Multi-select de tipos */}
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label>Tipo(s) de ação</Label>
+                      <TypeSelector />
+                      {form.types.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {form.types.map((t) => (
+                            <Badge key={t} variant="secondary" className="gap-1">
+                              {t}
+                              <button type="button" onClick={() => toggleType(t)} className="ml-1 opacity-70 hover:opacity-100">
+                                <X className="size-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Validade */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="start_date" className="flex items-center gap-2">
+                        <CalendarIcon className="size-4" /> Início
+                      </Label>
+                      <Input
+                        id="start_date"
+                        type="date"
+                        value={form.start_date}
+                        onChange={(e) => onChange('start_date', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="end_date" className="flex items-center gap-2">
+                        <CalendarIcon className="size-4" /> Término
+                      </Label>
+                      <Input
+                        id="end_date"
+                        type="date"
+                        value={form.end_date}
+                        onChange={(e) => onChange('end_date', e.target.value)}
+                      />
+                    </div>
+
+                    {/* Períodos do dia */}
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label>Períodos do dia</Label>
+                      <div className="flex flex-wrap gap-4">
+                        {periodOptions.map((p) => (
+                          <label key={p} className="flex items-center gap-2 cursor-pointer">
+                            <Checkbox
+                              checked={form.day_periods.includes(p)}
+                              onCheckedChange={() => togglePeriod(p)}
+                            />
+                            <span className="text-sm">{p}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="material_qty">Quantidade de material</Label>
+                      <Input
+                        id="material_qty"
+                        type="number"
+                        min={0}
+                        value={form.material_qty}
+                        onChange={(e) => onChange('material_qty', e.target.value)}
+                        placeholder="Ex.: 1000"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="material_photo_url">Foto do material (URL)</Label>
+                      <Input
+                        id="material_photo_url"
+                        value={form.material_photo_url}
+                        onChange={(e) => onChange('material_photo_url', e.target.value)}
+                        placeholder="https://..."
+                      />
+                    </div>
+
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label htmlFor="notes">Observações</Label>
+                      <Textarea
+                        id="notes"
+                        value={form.notes}
+                        onChange={(e) => onChange('notes', e.target.value)}
+                        rows={3}
+                        placeholder="Detalhes relevantes..."
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 md:col-span-2">
+                      <Checkbox
+                        id="active"
+                        checked={!!form.active}
+                        onCheckedChange={(v) => onChange('active', !!v)}
+                      />
+                      <Label htmlFor="active">Ativo</Label>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit">Salvar</Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Data</TableHead>
                   <TableHead>Cliente</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead>Imagem</TableHead>
+                  <TableHead>Empresa</TableHead>
+                  <TableHead>Tipos</TableHead>
+                  <TableHead>Validade</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={5}>Carregando…</TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8">Carregando...</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5}>Nenhum registro</TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">Nenhuma ação encontrada.</TableCell></TableRow>
                 ) : (
-                  filtered.map((m) => {
-                    const id = m.id ?? m._id ?? m.uuid;
-                    const photo = m.image_url ?? m.photo_url ?? m.photoUrl;
-
+                  filtered.map((a) => {
+                    const types = ensureArrayTypes(a);
+                    const range = (a.start_date || a.end_date)
+                      ? `${a.start_date || '—'} → ${a.end_date || '—'}`
+                      : '—';
                     return (
-                      <TableRow key={id || `${(m.client_name ?? m.clientName) || "x"}-${m.date}`}>
-                        <TableCell>{m.date?.slice(0, 10) || "—"}</TableCell>
-                        <TableCell>{(m.client_name ?? m.clientName) || "—"}</TableCell>
-                        <TableCell className="max-w-[420px]">
-                          <span className="line-clamp-2">{m.description || "—"}</span>
-                        </TableCell>
+                      <TableRow key={a.id}>
+                        <TableCell className="font-medium">{a.client_name || '-'}</TableCell>
+                        <TableCell>{a.company_name || '-'}</TableCell>
                         <TableCell>
-                          {photo ? (
-                            <ImagePreview
-                              src={photo}
-                              alt={`Comprovante - ${(m.client_name ?? m.clientName) || ""}`}
-                              size={48}
-                            />
+                          <div className="flex flex-wrap gap-1">
+                            {types.slice(0, 3).map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
+                            {types.length > 3 && <Badge variant="outline">+{types.length - 3}</Badge>}
+                          </div>
+                        </TableCell>
+                        <TableCell>{range}</TableCell>
+                        <TableCell>
+                          {a.active ? (
+                            <span className="inline-flex items-center gap-1 text-green-600">
+                              <CheckCircle className="size-4" /> Ativa
+                            </span>
                           ) : (
-                            "—"
+                            <span className="inline-flex items-center gap-1 text-red-600">
+                              <XCircle className="size-4" /> Inativa
+                            </span>
                           )}
                         </TableCell>
-
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(m)}>
-                              <Edit className="size-4" />
-                              Editar
+                            <Button size="sm" variant="secondary" onClick={() => openEdit(a)}>
+                              <Edit className="size-4 mr-1" /> Editar
                             </Button>
-                            <Button size="sm" variant="destructive" className="gap-2" onClick={() => confirmDelete(m)}>
-                              <Trash2 className="size-4" />
-                              Excluir
+                            <Button size="sm" variant="destructive" onClick={() => handleDelete(a.id)}>
+                              <Trash2 className="size-4 mr-1" /> Excluir
                             </Button>
                           </div>
                         </TableCell>
@@ -346,26 +636,156 @@ const ActionsPage = () => {
               </TableBody>
             </Table>
           </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            Total: <strong>{filtered.length}</strong> ação(ões)
+          </p>
         </CardContent>
       </Card>
 
-      {/* Dialog de exclusão */}
-      <Dialog open={openDelete} onOpenChange={setOpenDelete}>
-        <DialogContent className="max-w-sm">
+      {/* EDIT MODAL */}
+      <Dialog open={isEditOpen} onOpenChange={(v) => {
+        setIsEditOpen(v);
+        if (!v) {
+          setEditing(null);
+          resetForm();
+        }
+      }}>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Excluir ação?</DialogTitle>
-            <DialogDescription>Esta ação não pode ser desfeita.</DialogDescription>
+            <DialogTitle>Editar ação</DialogTitle>
+            <DialogDescription>Atualize as informações e salve.</DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpenDelete(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={onDelete} disabled={deleting}>
-              {deleting ? "Excluindo..." : "Excluir"}
-            </Button>
-          </div>
+
+          <form className="space-y-5" onSubmit={handleEdit}>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="e_client_name">Nome do cliente</Label>
+                <Input
+                  id="e_client_name"
+                  value={form.client_name}
+                  onChange={(e) => onChange('client_name', e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="e_company_name">Nome da empresa</Label>
+                <Input
+                  id="e_company_name"
+                  value={form.company_name}
+                  onChange={(e) => onChange('company_name', e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Tipo(s) de ação</Label>
+                <TypeSelector />
+                {form.types.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {form.types.map((t) => (
+                      <Badge key={t} variant="secondary" className="gap-1">
+                        {t}
+                        <button type="button" onClick={() => toggleType(t)} className="ml-1 opacity-70 hover:opacity-100">
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="e_start_date" className="flex items-center gap-2">
+                  <CalendarIcon className="size-4" /> Início
+                </Label>
+                <Input
+                  id="e_start_date"
+                  type="date"
+                  value={form.start_date}
+                  onChange={(e) => onChange('start_date', e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="e_end_date" className="flex items-center gap-2">
+                  <CalendarIcon className="size-4" /> Término
+                </Label>
+                <Input
+                  id="e_end_date"
+                  type="date"
+                  value={form.end_date}
+                  onChange={(e) => onChange('end_date', e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Períodos do dia</Label>
+                <div className="flex flex-wrap gap-4">
+                  {periodOptions.map((p) => (
+                    <label key={p} className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={form.day_periods.includes(p)}
+                        onCheckedChange={() => togglePeriod(p)}
+                      />
+                      <span className="text-sm">{p}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="e_material_qty">Quantidade de material</Label>
+                <Input
+                  id="e_material_qty"
+                  type="number"
+                  min={0}
+                  value={form.material_qty}
+                  onChange={(e) => onChange('material_qty', e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="e_material_photo_url">Foto do material (URL)</Label>
+                <Input
+                  id="e_material_photo_url"
+                  value={form.material_photo_url}
+                  onChange={(e) => onChange('material_photo_url', e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="e_notes">Observações</Label>
+                <Textarea
+                  id="e_notes"
+                  rows={3}
+                  value={form.notes}
+                  onChange={(e) => onChange('notes', e.target.value)}
+                />
+              </div>
+
+              <div className="flex items-center gap-2 md:col-span-2">
+                <Checkbox
+                  id="e_active"
+                  checked={!!form.active}
+                  onCheckedChange={(v) => onChange('active', !!v)}
+                />
+                <Label htmlFor="e_active">Ativa</Label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => {
+                setIsEditOpen(false);
+                setEditing(null);
+                resetForm();
+              }}>
+                Cancelar
+              </Button>
+              <Button type="submit">Salvar alterações</Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
   );
 };
 
-export default ActionsPage;
+export default Actions;

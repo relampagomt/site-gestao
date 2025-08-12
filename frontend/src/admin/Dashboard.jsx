@@ -1,3 +1,4 @@
+// frontend/src/admin/Dashboard.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Activity, Briefcase, Package, Target, Users } from 'lucide-react';
@@ -9,14 +10,17 @@ import api from '@/services/api';
 
 const COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#2563eb', '#7c3aed'];
 
+// -------- helpers de data --------
 function monthKey(d) {
-  // chave AAAA-MM
   const y = d.getFullYear();
   const m = `${d.getMonth() + 1}`.padStart(2, '0');
   return `${y}-${m}`;
 }
 function monthLabelPT(d) {
-  return d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').replace(/^\w/, c => c.toUpperCase());
+  return d
+    .toLocaleString('pt-BR', { month: 'short' })
+    .replace('.', '')
+    .replace(/^\w/, c => c.toUpperCase());
 }
 function lastNMonths(n = 6) {
   const out = [];
@@ -29,10 +33,47 @@ function lastNMonths(n = 6) {
   }
   return out;
 }
+function ensureDateOnly(isoOrDate) {
+  if (!isoOrDate) return '';
+  try {
+    const d = new Date(isoOrDate);
+    if (isNaN(d)) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  } catch {
+    return '';
+  }
+}
+
+// -------- NORMALIZAÇÃO DE TIPOS (suporta multi) --------
+function ensureArrayTypes(item) {
+  // prioridade: array em `types`
+  if (Array.isArray(item?.types)) {
+    return item.types.filter(Boolean);
+  }
+  // fallback: string em `type` (separada por vírgula)
+  const cand =
+    item?.service_type ||
+    item?.type ||
+    item?.category ||
+    item?.action_type ||
+    '';
+  if (typeof cand === 'string' && cand.trim()) {
+    return cand
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+  }
+  return []; // sem tipo
+}
 
 /** Fallbacks calculando a partir das ações */
 function buildMonthlyFromActions(actions, monthsDates) {
-  const buckets = Object.fromEntries(monthsDates.map(d => [monthKey(d), { month: monthLabelPT(d), campanhas: 0, receita: 0 }]));
+  const buckets = Object.fromEntries(
+    monthsDates.map(d => [monthKey(d), { month: monthLabelPT(d), campanhas: 0, receita: 0 }])
+  );
   actions.forEach(a => {
     const rawDate = a.date || a.start_date || a.created_at || a.updated_at;
     if (!rawDate) return;
@@ -41,18 +82,24 @@ function buildMonthlyFromActions(actions, monthsDates) {
     const key = monthKey(new Date(dt.getFullYear(), dt.getMonth(), 1));
     if (!buckets[key]) return;
     buckets[key].campanhas += 1;
-    // se houver orçamento/valor na ação, some como "receita" (opcional)
     const val = Number(a.budget || a.amount || a.value || 0);
     if (!Number.isNaN(val)) buckets[key].receita += val;
   });
   return Object.values(buckets);
 }
 
+// >>> ATUALIZADO: conta múltiplos tipos por ação <<<
 function buildDistributionFromActions(actions) {
   const map = new Map();
   actions.forEach(a => {
-    const t = (a.service_type || a.type || a.category || a.action_type || 'Outro').toString();
-    map.set(t, (map.get(t) || 0) + 1);
+    const types = ensureArrayTypes(a);
+    if (types.length === 0) {
+      map.set('Outro', (map.get('Outro') || 0) + 1);
+      return;
+    }
+    types.forEach(t => {
+      map.set(t, (map.get(t) || 0) + 1);
+    });
   });
   return Array.from(map.entries()).map(([name, value], idx) => ({
     name,
@@ -95,10 +142,12 @@ const Dashboard = () => {
         api.get('/metrics/monthly-campaigns').catch(() => ({ data: null })),
       ]);
 
-      const clients = clientsRes.data || [];
-      const materials = materialsRes.data || [];
-      const actions = actionsRes.data || [];
-      const vacancies = vacanciesRes.data || [];
+      // aceita array direto ou objeto com chave
+      const arr = d => (Array.isArray(d) ? d : (d?.items || d?.data || d?.actions || d?.results || []));
+      const clients = arr(clientsRes.data);
+      const materials = arr(materialsRes.data);
+      const actions = arr(actionsRes.data);
+      const vacancies = arr(vacanciesRes.data);
 
       // contadores
       setStats({
@@ -119,6 +168,7 @@ const Dashboard = () => {
 
       // distribuição (API -> fallback a partir das ações)
       if (Array.isArray(distRes.data?.distribution) && distRes.data.distribution.length) {
+        // se a API já devolver multi-tipos agregados, só normaliza
         const dist = distRes.data.distribution.map((d, i) => ({
           name: d.name ?? d.type ?? d.service ?? `Tipo ${i + 1}`,
           value: Number(d.count ?? d.value ?? 0),
@@ -230,7 +280,13 @@ const Dashboard = () => {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
-                <Tooltip formatter={(v, k) => k === 'receita' ? [`R$ ${Number(v).toLocaleString()}`, 'Receita'] : [v, 'Campanhas']} />
+                <Tooltip
+                  formatter={(v, k) =>
+                    k === 'receita'
+                      ? [`R$ ${Number(v).toLocaleString()}`, 'Receita']
+                      : [v, 'Campanhas']
+                  }
+                />
                 <Line type="monotone" dataKey="campanhas" stroke="#2563eb" strokeWidth={2} />
                 {hasRevenue && <Line type="monotone" dataKey="receita" stroke="#dc2626" strokeWidth={2} />}
               </LineChart>
@@ -259,7 +315,7 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-        {/* Pizza: distribuição de serviços */}
+        {/* Pizza: distribuição de serviços (agora ciente de múltiplos tipos) */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Distribuição de Serviços</CardTitle>
