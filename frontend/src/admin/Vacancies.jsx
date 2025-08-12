@@ -16,8 +16,18 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog.jsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
+// ▼ Volta o seletor como era antes
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select.jsx";
 
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
+
+const statusOptions = ["Aberta", "Em avaliação", "Fechada"];
 
 const Vacancies = () => {
   const [rows, setRows] = useState([]);
@@ -41,7 +51,7 @@ const Vacancies = () => {
     client: "",
     contact: "",
     notes: "",
-    status: "Aberta", // texto simples para evitar Select
+    status: "Aberta",
   };
   const [form, setForm] = useState(emptyForm);
 
@@ -163,7 +173,7 @@ const Vacancies = () => {
           <CardDescription>Indicações e vagas cadastradas</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* === Container de filtros + Botão "+ Novo Indicação" (aqui dentro) === */}
+          {/* === Container de filtros + Botão "+ Novo Indicação" === */}
           <div className="flex items-center gap-2 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -183,6 +193,7 @@ const Vacancies = () => {
                 </Button>
               </DialogTrigger>
 
+              {/* ==== MODAL: inputs/seletores iguais ao padrão anterior ==== */}
               <DialogContent className="max-w-2xl p-0">
                 <div className="max-h-[80vh] overflow-y-auto p-6">
                   <DialogHeader className="pb-2">
@@ -196,27 +207,73 @@ const Vacancies = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div className="md:col-span-2">
                         <Label>Nome (indicado)</Label>
-                        <Input name="indication_name" value={form.indication_name} onChange={onChange} required />
+                        <Input
+                          name="indication_name"
+                          placeholder="Ex.: João da Silva"
+                          value={form.indication_name}
+                          onChange={onChange}
+                          required
+                        />
                       </div>
+
                       <div>
                         <Label>Cargo / Vaga</Label>
-                        <Input name="role" value={form.role} onChange={onChange} />
+                        <Input
+                          name="role"
+                          placeholder="Ex.: Promotor"
+                          value={form.role}
+                          onChange={onChange}
+                        />
                       </div>
+
                       <div>
                         <Label>Cliente</Label>
-                        <Input name="client" value={form.client} onChange={onChange} />
+                        <Input
+                          name="client"
+                          placeholder="Ex.: Empresa XPTO"
+                          value={form.client}
+                          onChange={onChange}
+                        />
                       </div>
+
                       <div className="md:col-span-2">
                         <Label>Contato (telefone/e-mail)</Label>
-                        <Input name="contact" value={form.contact} onChange={onChange} />
+                        <Input
+                          name="contact"
+                          placeholder="(11) 90000-0000 ou nome@empresa.com"
+                          value={form.contact}
+                          onChange={onChange}
+                        />
                       </div>
-                      <div className="md:col-span-2">
+
+                      <div>
                         <Label>Status</Label>
-                        <Input name="status" value={form.status} onChange={onChange} placeholder="Aberta, Em avaliação, Fechada..." />
+                        <Select
+                          value={form.status}
+                          onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione um status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {statusOptions.map((s) => (
+                              <SelectItem key={s} value={s}>
+                                {s}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
+
                       <div className="md:col-span-2">
                         <Label>Observações</Label>
-                        <Textarea name="notes" value={form.notes} onChange={onChange} />
+                        <Textarea
+                          name="notes"
+                          rows={4}
+                          placeholder="Alguma observação relevante…"
+                          value={form.notes}
+                          onChange={onChange}
+                        />
                       </div>
                     </div>
 
