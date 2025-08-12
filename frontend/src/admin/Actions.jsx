@@ -26,10 +26,11 @@ import {
   CheckCircle,
   XCircle,
   Upload,
-  ImageIcon
+  ImageIcon,
+  Eye
 } from 'lucide-react';
 
-// -------------------- OPÇÕES (como solicitado) --------------------
+/* ===================== OPÇÕES (como solicitado) ===================== */
 const ACTION_OPTIONS = [
   {
     group: 'Serviços de Panfletagem e Distribuição',
@@ -67,7 +68,7 @@ const ACTION_OPTIONS = [
   },
 ];
 
-// -------------------- Mock DEV --------------------
+/* ===================== Mock DEV ===================== */
 const mockActions = [
   {
     id: 'a1',
@@ -79,14 +80,14 @@ const mockActions = [
     end_date: '2025-08-10',
     day_periods: ['manhã', 'tarde'],
     material_qty: 1200,
-    material_photo_url: '',
-    protocol_photo_url: '',
+    material_photo_url: 'https://via.placeholder.com/800x500.png?text=Material',
+    protocol_photo_url: 'https://via.placeholder.com/800x500.png?text=Protocolo',
     notes: 'Campanha bairro central.',
     active: true,
   },
 ];
 
-// -------------------- Helpers --------------------
+/* ===================== Helpers ===================== */
 const initialForm = {
   client_name: '',
   company_name: '',
@@ -97,12 +98,8 @@ const initialForm = {
   material_qty: '',
   notes: '',
   active: true,
-
-  // uploads (arquivos):
   material_photo_file: null,
   protocol_photo_file: null,
-
-  // existentes (urls já salvas no registro):
   material_photo_url: '',
   protocol_photo_url: '',
 };
@@ -113,48 +110,63 @@ const ensureArrayTypes = (item) => {
   if (Array.isArray(item?.types)) return item.types;
   if (typeof item?.type === 'string' && item.type.trim()) {
     return item.type.split(',').map((s) => s.trim()).filter(Boolean);
-  }
+    }
   return [];
 };
 
-// Upload helper (ajuste o endpoint/campo conforme seu backend)
-async function uploadFile(file) {
-  const fd = new FormData();
-  fd.append('file', file);
-  const resp = await api.post('/upload', fd, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  // esperado: { url: 'https://...' }
-  return resp?.data?.url;
+// Upload — mantém padrão do projeto (não setar Content-Type manualmente)
+async function uploadFile(file, kind = 'file') {
+  if (!file) return '';
+  const tryUpload = async (url, fieldName) => {
+    const fd = new FormData();
+    fd.append(fieldName, file);
+    const resp = await api.post(url, fd);
+    return resp?.data?.url || resp?.data?.secure_url || resp?.data?.location || '';
+  };
+  const attempts = [
+    ['/upload/material', 'material'],
+    ['/upload/protocol', 'protocol'],
+    ['/upload', kind],
+    ['/upload', 'file'],
+  ];
+  for (const [u, f] of attempts) {
+    try {
+      const out = await tryUpload(u, f);
+      if (out) return out;
+    } catch (_) {}
+  }
+  throw new Error('Falha no upload.');
 }
 
+/* ===================== Componente ===================== */
 const Actions = () => {
   const { user } = useAuth();
   const isAdmin = String(user?.role || user?.claims?.role || '').toLowerCase() === 'admin';
 
   const [loading, setLoading] = useState(false);
   const [actions, setActions] = useState([]);
-
   const [query, setQuery] = useState('');
 
+  // create/edit dialog (padronizado com modal de material)
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-
   const [form, setForm] = useState({ ...initialForm });
   const [typesPopoverOpen, setTypesPopoverOpen] = useState(false);
 
-  // -------------------- Load --------------------
+  // visualizar material (novo)
+  const [previewItem, setPreviewItem] = useState(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  /* -------- Load -------- */
   const loadActions = async () => {
     try {
       setLoading(true);
-
       if (import.meta.env.DEV) {
-        await new Promise((r) => setTimeout(r, 350));
+        await new Promise((r) => setTimeout(r, 250));
         setActions(mockActions);
         return;
       }
-
       const { data } = await api.get('/actions');
       const list = Array.isArray(data) ? data : (data?.actions || []);
       setActions(list);
@@ -166,12 +178,9 @@ const Actions = () => {
     }
   };
 
-  useEffect(() => {
-    loadActions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { loadActions(); }, []);
 
-  // -------------------- Filter --------------------
+  /* -------- Filter -------- */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return actions;
@@ -182,10 +191,9 @@ const Actions = () => {
     });
   }, [actions, query]);
 
-  // -------------------- Form helpers --------------------
+  /* -------- Form helpers -------- */
   const resetForm = () => setForm({ ...initialForm });
   const onChange = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
-
   const toggleType = (type) => {
     setForm((prev) => {
       const exists = prev.types.includes(type);
@@ -193,28 +201,20 @@ const Actions = () => {
       return { ...prev, types: next };
     });
   };
-
   const togglePeriod = (period) => {
     setForm((prev) => {
       const exists = prev.day_periods.includes(period);
-      const next = exists
-        ? prev.day_periods.filter((p) => p !== period)
-        : [...prev.day_periods, period];
+      const next = exists ? prev.day_periods.filter((p) => p !== period) : [...prev.day_periods, period];
       return { ...prev, day_periods: next };
     });
   };
 
-  // -------------------- Create --------------------
+  /* -------- Create -------- */
   const handleCreate = async (e) => {
     e.preventDefault();
-
-    if (form.types.length === 0) {
-      alert('Selecione ao menos um tipo de ação.');
-      return;
-    }
+    if (form.types.length === 0) return alert('Selecione ao menos um tipo de ação.');
     if (form.start_date && form.end_date && form.start_date > form.end_date) {
-      alert('Data de término não pode ser anterior à data de início.');
-      return;
+      return alert('Data de término não pode ser anterior à data de início.');
     }
 
     try {
@@ -222,42 +222,18 @@ const Actions = () => {
       let protocolUrl = '';
 
       if (import.meta.env.DEV) {
-        // Em DEV, simulamos upload criando objectURL (não persiste)
-        if (form.material_photo_file) {
-          materialUrl = URL.createObjectURL(form.material_photo_file);
-        }
-        if (form.protocol_photo_file) {
-          protocolUrl = URL.createObjectURL(form.protocol_photo_file);
-        }
-
-        const newItem = {
-          id: `dev-${Date.now()}`,
-          ...form,
-          type: form.types.join(', '), // compat
-          material_qty: Number(form.material_qty || 0),
-          material_photo_url: materialUrl,
-          protocol_photo_url: protocolUrl,
-        };
-        setActions((prev) => [...prev, newItem]);
-        setIsCreateOpen(false);
-        resetForm();
-        alert('Ação criada (upload simulado em DEV).');
-        return;
-      }
-
-      // Upload reais (se houver arquivos)
-      if (form.material_photo_file) {
-        materialUrl = await uploadFile(form.material_photo_file);
-      }
-      if (form.protocol_photo_file) {
-        protocolUrl = await uploadFile(form.protocol_photo_file);
+        materialUrl = form.material_photo_file ? URL.createObjectURL(form.material_photo_file) : '';
+        protocolUrl = form.protocol_photo_file ? URL.createObjectURL(form.protocol_photo_file) : '';
+      } else {
+        if (form.material_photo_file) materialUrl = await uploadFile(form.material_photo_file, 'material');
+        if (form.protocol_photo_file) protocolUrl = await uploadFile(form.protocol_photo_file, 'protocol');
       }
 
       const payload = {
         client_name: form.client_name,
         company_name: form.company_name,
         types: form.types,
-        type: form.types.join(', '), // compat
+        type: form.types.join(', '),
         start_date: form.start_date || null,
         end_date: form.end_date || null,
         day_periods: form.day_periods,
@@ -268,18 +244,22 @@ const Actions = () => {
         active: !!form.active,
       };
 
-      await api.post('/actions', payload);
-      await loadActions();
+      if (import.meta.env.DEV) {
+        setActions((prev) => [...prev, { id: `dev-${Date.now()}`, ...payload }]);
+      } else {
+        await api.post('/actions', payload);
+        await loadActions();
+      }
+
       setIsCreateOpen(false);
       resetForm();
-      alert('Ação criada com sucesso.');
     } catch (err) {
       console.error('Erro ao criar ação:', err);
       alert('Erro ao criar ação: ' + (err?.response?.data?.message || err.message));
     }
   };
 
-  // -------------------- Edit --------------------
+  /* -------- Edit -------- */
   const openEdit = (item) => {
     setEditing(item);
     setForm({
@@ -303,14 +283,9 @@ const Actions = () => {
   const handleEdit = async (e) => {
     e.preventDefault();
     if (!editing) return;
-
-    if (form.types.length === 0) {
-      alert('Selecione ao menos um tipo de ação.');
-      return;
-    }
+    if (form.types.length === 0) return alert('Selecione ao menos um tipo de ação.');
     if (form.start_date && form.end_date && form.start_date > form.end_date) {
-      alert('Data de término não pode ser anterior à data de início.');
-      return;
+      return alert('Data de término não pode ser anterior à data de início.');
     }
 
     try {
@@ -318,40 +293,11 @@ const Actions = () => {
       let protocolUrl = form.protocol_photo_url || '';
 
       if (import.meta.env.DEV) {
-        if (form.material_photo_file) {
-          materialUrl = URL.createObjectURL(form.material_photo_file);
-        }
-        if (form.protocol_photo_file) {
-          protocolUrl = URL.createObjectURL(form.protocol_photo_file);
-        }
-
-        setActions((prev) =>
-          prev.map((a) =>
-            a.id === editing.id
-              ? {
-                  ...a,
-                  ...form,
-                  type: form.types.join(', '),
-                  material_qty: Number(form.material_qty || 0),
-                  material_photo_url: materialUrl,
-                  protocol_photo_url: protocolUrl,
-                }
-              : a
-          )
-        );
-        setIsEditOpen(false);
-        setEditing(null);
-        resetForm();
-        alert('Ação atualizada (upload simulado em DEV).');
-        return;
-      }
-
-      // Se usuário escolheu novos arquivos, faz upload e substitui URL
-      if (form.material_photo_file) {
-        materialUrl = await uploadFile(form.material_photo_file);
-      }
-      if (form.protocol_photo_file) {
-        protocolUrl = await uploadFile(form.protocol_photo_file);
+        if (form.material_photo_file) materialUrl = URL.createObjectURL(form.material_photo_file);
+        if (form.protocol_photo_file) protocolUrl = URL.createObjectURL(form.protocol_photo_file);
+      } else {
+        if (form.material_photo_file) materialUrl = await uploadFile(form.material_photo_file, 'material');
+        if (form.protocol_photo_file) protocolUrl = await uploadFile(form.protocol_photo_file, 'protocol');
       }
 
       const payload = {
@@ -369,38 +315,41 @@ const Actions = () => {
         active: !!form.active,
       };
 
-      await api.put(`/actions/${editing.id}`, payload);
-      await loadActions();
+      if (import.meta.env.DEV) {
+        setActions((prev) =>
+          prev.map((a) => (a.id === editing.id ? { ...a, ...payload } : a))
+        );
+      } else {
+        await api.put(`/actions/${editing.id}`, payload);
+        await loadActions();
+      }
+
       setIsEditOpen(false);
       setEditing(null);
       resetForm();
-      alert('Ação atualizada com sucesso.');
     } catch (err) {
       console.error('Erro ao atualizar ação:', err);
       alert('Erro ao atualizar ação: ' + (err?.response?.data?.message || err.message));
     }
   };
 
-  // -------------------- Delete --------------------
+  /* -------- Delete -------- */
   const handleDelete = async (id) => {
     if (!window.confirm('Tem certeza que deseja excluir esta ação?')) return;
     try {
       if (import.meta.env.DEV) {
         setActions((prev) => prev.filter((a) => a.id !== id));
-        alert('Ação excluída (simulação DEV).');
-        return;
+      } else {
+        await api.delete(`/actions/${id}`);
+        await loadActions();
       }
-
-      await api.delete(`/actions/${id}`);
-      await loadActions();
-      alert('Ação excluída com sucesso.');
     } catch (err) {
       console.error('Erro ao excluir ação:', err);
       alert('Erro ao excluir ação: ' + (err?.response?.data?.message || err.message));
     }
   };
 
-  // -------------------- UI helpers --------------------
+  /* -------- UI helpers -------- */
   const TypeSelector = () => (
     <Popover open={typesPopoverOpen} onOpenChange={setTypesPopoverOpen}>
       <PopoverTrigger asChild>
@@ -436,10 +385,7 @@ const Actions = () => {
                   const checked = form.types.includes(opt);
                   return (
                     <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={() => toggleType(opt)}
-                      />
+                      <Checkbox checked={checked} onCheckedChange={() => toggleType(opt)} />
                       <span>{opt}</span>
                     </label>
                   );
@@ -458,6 +404,7 @@ const Actions = () => {
   );
 
   const FileInput = ({ id, label, onFile, hint, existingUrl }) => {
+    const [name, setName] = useState('');
     return (
       <div className="space-y-1.5">
         <Label htmlFor={id} className="flex items-center gap-2">
@@ -469,26 +416,35 @@ const Actions = () => {
           accept="image/*"
           onChange={(e) => {
             const file = e.target.files?.[0] || null;
+            setName(file ? file.name : '');
             onFile(file);
           }}
         />
-        <p className="text-[11px] text-muted-foreground">{hint}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-muted-foreground">{hint}</p>
+          {name && <span className="text-[11px] text-muted-foreground italic truncate max-w-[50%]">{name}</span>}
+        </div>
         {existingUrl ? (
-          <a href={existingUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs underline text-blue-600">
+          <button
+            type="button"
+            onClick={() => { setPreviewItem({ material_photo_url: existingUrl, protocol_photo_url: '' }); setIsPreviewOpen(true); }}
+            className="inline-flex items-center gap-2 text-xs underline text-blue-600"
+          >
             <ImageIcon className="size-4" /> Ver imagem atual
-          </a>
+          </button>
         ) : null}
       </div>
     );
   };
 
+  /* ===================== RENDER ===================== */
   return (
     <div className="p-4 md:p-6 space-y-6">
       <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <CardTitle>Ações</CardTitle>
-            <CardDescription>Cadastre e gerencie ações promocionais e de distribuição (com upload de amostras e protocolo).</CardDescription>
+            <CardDescription>Cadastre e gerencie ações promocionais e de distribuição.</CardDescription>
           </div>
 
           <div className="flex gap-2 items-center">
@@ -502,6 +458,7 @@ const Actions = () => {
               />
             </div>
 
+            {/* Modal CRIAR — padronizado como o modal de material */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
                 <Button className="gap-2">
@@ -509,37 +466,23 @@ const Actions = () => {
                   Nova Ação
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-3xl">
+              <DialogContent className="w-full max-w-xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Cadastrar ação</DialogTitle>
                   <DialogDescription>Preencha os campos abaixo para registrar a ação.</DialogDescription>
                 </DialogHeader>
 
-                <form className="space-y-5" onSubmit={handleCreate}>
-                  <div className="grid md:grid-cols-2 gap-4">
+                <form className="space-y-4" onSubmit={handleCreate}>
+                  <div className="grid md:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="client_name">Nome do cliente</Label>
-                      <Input
-                        id="client_name"
-                        value={form.client_name}
-                        onChange={(e) => onChange('client_name', e.target.value)}
-                        placeholder="Ex.: João da Silva"
-                        required
-                      />
+                      <Input id="client_name" value={form.client_name} onChange={(e) => onChange('client_name', e.target.value)} required />
                     </div>
-
                     <div className="space-y-1.5">
                       <Label htmlFor="company_name">Nome da empresa</Label>
-                      <Input
-                        id="company_name"
-                        value={form.company_name}
-                        onChange={(e) => onChange('company_name', e.target.value)}
-                        placeholder="Ex.: Supermercado Rio Branco"
-                        required
-                      />
+                      <Input id="company_name" value={form.company_name} onChange={(e) => onChange('company_name', e.target.value)} required />
                     </div>
 
-                    {/* Multi-select de tipos */}
                     <div className="space-y-1.5 md:col-span-2">
                       <Label>Tipo(s) de ação</Label>
                       <TypeSelector />
@@ -557,102 +500,60 @@ const Actions = () => {
                       )}
                     </div>
 
-                    {/* Validade */}
                     <div className="space-y-1.5">
-                      <Label htmlFor="start_date" className="flex items-center gap-2">
-                        <CalendarIcon className="size-4" /> Início
-                      </Label>
-                      <Input
-                        id="start_date"
-                        type="date"
-                        value={form.start_date}
-                        onChange={(e) => onChange('start_date', e.target.value)}
-                      />
+                      <Label htmlFor="start_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
+                      <Input id="start_date" type="date" value={form.start_date} onChange={(e) => onChange('start_date', e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="end_date" className="flex items-center gap-2">
-                        <CalendarIcon className="size-4" /> Término
-                      </Label>
-                      <Input
-                        id="end_date"
-                        type="date"
-                        value={form.end_date}
-                        onChange={(e) => onChange('end_date', e.target.value)}
-                      />
+                      <Label htmlFor="end_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
+                      <Input id="end_date" type="date" value={form.end_date} onChange={(e) => onChange('end_date', e.target.value)} />
                     </div>
 
-                    {/* Períodos do dia */}
                     <div className="space-y-1.5 md:col-span-2">
                       <Label>Períodos do dia</Label>
                       <div className="flex flex-wrap gap-4">
                         {periodOptions.map((p) => (
                           <label key={p} className="flex items-center gap-2 cursor-pointer">
-                            <Checkbox
-                              checked={form.day_periods.includes(p)}
-                              onCheckedChange={() => togglePeriod(p)}
-                            />
+                            <Checkbox checked={form.day_periods.includes(p)} onCheckedChange={() => togglePeriod(p)} />
                             <span className="text-sm">{p}</span>
                           </label>
                         ))}
                       </div>
                     </div>
 
-                    {/* Quantidade de material */}
                     <div className="space-y-1.5">
                       <Label htmlFor="material_qty">Quantidade de material</Label>
-                      <Input
-                        id="material_qty"
-                        type="number"
-                        min={0}
-                        value={form.material_qty}
-                        onChange={(e) => onChange('material_qty', e.target.value)}
-                        placeholder="Ex.: 1000"
-                      />
+                      <Input id="material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
                     </div>
 
-                    {/* Uploads */}
                     <FileInput
                       id="material_photo_file"
                       label="Amostra do material (imagem)"
                       onFile={(f) => onChange('material_photo_file', f)}
-                      hint="Envie uma foto do material (jpg, png...)."
+                      hint="Envie uma imagem (jpg, png...)."
                       existingUrl={null}
                     />
-
                     <FileInput
                       id="protocol_photo_file"
                       label="Amostra do protocolo (imagem)"
                       onFile={(f) => onChange('protocol_photo_file', f)}
-                      hint="Envie uma foto do protocolo (jpg, png...)."
+                      hint="Envie uma imagem (jpg, png...)."
                       existingUrl={null}
                     />
 
-                    {/* Observações */}
                     <div className="space-y-1.5 md:col-span-2">
                       <Label htmlFor="notes">Observações</Label>
-                      <Textarea
-                        id="notes"
-                        value={form.notes}
-                        onChange={(e) => onChange('notes', e.target.value)}
-                        rows={3}
-                        placeholder="Detalhes relevantes..."
-                      />
+                      <Textarea id="notes" rows={3} value={form.notes} onChange={(e) => onChange('notes', e.target.value)} />
                     </div>
 
                     <div className="flex items-center gap-2 md:col-span-2">
-                      <Checkbox
-                        id="active"
-                        checked={!!form.active}
-                        onCheckedChange={(v) => onChange('active', !!v)}
-                      />
+                      <Checkbox id="active" checked={!!form.active} onCheckedChange={(v) => onChange('active', !!v)} />
                       <Label htmlFor="active">Ativo</Label>
                     </div>
                   </div>
 
                   <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
-                      Cancelar
-                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
                     <Button type="submit">Salvar</Button>
                   </div>
                 </form>
@@ -661,6 +562,7 @@ const Actions = () => {
           </div>
         </CardHeader>
 
+        {/* Tabela */}
         <CardContent>
           <div className="rounded-md border">
             <Table>
@@ -682,9 +584,8 @@ const Actions = () => {
                 ) : (
                   filtered.map((a) => {
                     const types = ensureArrayTypes(a);
-                    const range = (a.start_date || a.end_date)
-                      ? `${a.start_date || '—'} → ${a.end_date || '—'}`
-                      : '—';
+                    const range = (a.start_date || a.end_date) ? `${a.start_date || '—'} → ${a.end_date || '—'}` : '—';
+                    const hasAnyImage = a.material_photo_url || a.protocol_photo_url;
                     return (
                       <TableRow key={a.id}>
                         <TableCell className="font-medium">{a.client_name || '-'}</TableCell>
@@ -709,6 +610,16 @@ const Actions = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
+                            {hasAnyImage && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => { setPreviewItem(a); setIsPreviewOpen(true); }}
+                                title="Ver material da ação"
+                              >
+                                <Eye className="size-4 mr-1" /> Ver material
+                              </Button>
+                            )}
                             <Button size="sm" variant="secondary" onClick={() => openEdit(a)}>
                               <Edit className="size-4 mr-1" /> Editar
                             </Button>
@@ -730,38 +641,23 @@ const Actions = () => {
         </CardContent>
       </Card>
 
-      {/* EDIT MODAL */}
-      <Dialog open={isEditOpen} onOpenChange={(v) => {
-        setIsEditOpen(v);
-        if (!v) {
-          setEditing(null);
-          resetForm();
-        }
-      }}>
-        <DialogContent className="max-w-3xl">
+      {/* Modal EDITAR — padronizado */}
+      <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) { setEditing(null); resetForm(); } }}>
+        <DialogContent className="w-full max-w-xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar ação</DialogTitle>
             <DialogDescription>Atualize as informações e salve.</DialogDescription>
           </DialogHeader>
 
-          <form className="space-y-5" onSubmit={handleEdit}>
-            <div className="grid md:grid-cols-2 gap-4">
+          <form className="space-y-4" onSubmit={handleEdit}>
+            <div className="grid md:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="e_client_name">Nome do cliente</Label>
-                <Input
-                  id="e_client_name"
-                  value={form.client_name}
-                  onChange={(e) => onChange('client_name', e.target.value)}
-                />
+                <Input id="e_client_name" value={form.client_name} onChange={(e) => onChange('client_name', e.target.value)} />
               </div>
-
               <div className="space-y-1.5">
                 <Label htmlFor="e_company_name">Nome da empresa</Label>
-                <Input
-                  id="e_company_name"
-                  value={form.company_name}
-                  onChange={(e) => onChange('company_name', e.target.value)}
-                />
+                <Input id="e_company_name" value={form.company_name} onChange={(e) => onChange('company_name', e.target.value)} />
               </div>
 
               <div className="space-y-1.5 md:col-span-2">
@@ -781,59 +677,32 @@ const Actions = () => {
                 )}
               </div>
 
-              {/* Validade */}
               <div className="space-y-1.5">
-                <Label htmlFor="e_start_date" className="flex items-center gap-2">
-                  <CalendarIcon className="size-4" /> Início
-                </Label>
-                <Input
-                  id="e_start_date"
-                  type="date"
-                  value={form.start_date}
-                  onChange={(e) => onChange('start_date', e.target.value)}
-                />
+                <Label htmlFor="e_start_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
+                <Input id="e_start_date" type="date" value={form.start_date} onChange={(e) => onChange('start_date', e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="e_end_date" className="flex items-center gap-2">
-                  <CalendarIcon className="size-4" /> Término
-                </Label>
-                <Input
-                  id="e_end_date"
-                  type="date"
-                  value={form.end_date}
-                  onChange={(e) => onChange('end_date', e.target.value)}
-                />
+                <Label htmlFor="e_end_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
+                <Input id="e_end_date" type="date" value={form.end_date} onChange={(e) => onChange('end_date', e.target.value)} />
               </div>
 
-              {/* Períodos do dia */}
               <div className="space-y-1.5 md:col-span-2">
                 <Label>Períodos do dia</Label>
                 <div className="flex flex-wrap gap-4">
                   {periodOptions.map((p) => (
                     <label key={p} className="flex items-center gap-2 cursor-pointer">
-                      <Checkbox
-                        checked={form.day_periods.includes(p)}
-                        onCheckedChange={() => togglePeriod(p)}
-                      />
+                      <Checkbox checked={form.day_periods.includes(p)} onCheckedChange={() => togglePeriod(p)} />
                       <span className="text-sm">{p}</span>
                     </label>
                   ))}
                 </div>
               </div>
 
-              {/* Quantidade de material */}
               <div className="space-y-1.5">
                 <Label htmlFor="e_material_qty">Quantidade de material</Label>
-                <Input
-                  id="e_material_qty"
-                  type="number"
-                  min={0}
-                  value={form.material_qty}
-                  onChange={(e) => onChange('material_qty', e.target.value)}
-                />
+                <Input id="e_material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
               </div>
 
-              {/* Uploads com preview de existente */}
               <FileInput
                 id="e_material_photo_file"
                 label="Amostra do material (imagem)"
@@ -841,7 +710,6 @@ const Actions = () => {
                 hint="Selecione para substituir a imagem atual."
                 existingUrl={form.material_photo_url}
               />
-
               <FileInput
                 id="e_protocol_photo_file"
                 label="Amostra do protocolo (imagem)"
@@ -852,35 +720,74 @@ const Actions = () => {
 
               <div className="space-y-1.5 md:col-span-2">
                 <Label htmlFor="e_notes">Observações</Label>
-                <Textarea
-                  id="e_notes"
-                  rows={3}
-                  value={form.notes}
-                  onChange={(e) => onChange('notes', e.target.value)}
-                />
+                <Textarea id="e_notes" rows={3} value={form.notes} onChange={(e) => onChange('notes', e.target.value)} />
               </div>
 
               <div className="flex items-center gap-2 md:col-span-2">
-                <Checkbox
-                  id="e_active"
-                  checked={!!form.active}
-                  onCheckedChange={(v) => onChange('active', !!v)}
-                />
+                <Checkbox id="e_active" checked={!!form.active} onCheckedChange={(v) => onChange('active', !!v)} />
                 <Label htmlFor="e_active">Ativa</Label>
               </div>
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => {
-                setIsEditOpen(false);
-                setEditing(null);
-                resetForm();
-              }}>
+              <Button type="button" variant="outline" onClick={() => { setIsEditOpen(false); setEditing(null); resetForm(); }}>
                 Cancelar
               </Button>
               <Button type="submit">Salvar alterações</Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal VER MATERIAL — mesmo padrão visual */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Material da ação</DialogTitle>
+            <DialogDescription>Visualize as imagens enviadas para esta ação.</DialogDescription>
+          </DialogHeader>
+
+          {previewItem ? (
+            <div className="space-y-4">
+              {(previewItem.material_photo_url || previewItem.protocol_photo_url) ? (
+                <>
+                  {previewItem.material_photo_url && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Amostra do material</Label>
+                      <div className="rounded-md overflow-hidden border">
+                        <img
+                          src={previewItem.material_photo_url}
+                          alt="Amostra do material"
+                          className="w-full h-auto object-contain bg-black/5"
+                          loading="lazy"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {previewItem.protocol_photo_url && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Amostra do protocolo</Label>
+                      <div className="rounded-md overflow-hidden border">
+                        <img
+                          src={previewItem.protocol_photo_url}
+                          alt="Amostra do protocolo"
+                          className="w-full h-auto object-contain bg-black/5"
+                          loading="lazy"
+                        />
+                      </div>
+                  </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Esta ação não possui imagens anexadas.</p>
+              )}
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>Fechar</Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Selecione uma ação para visualizar.</p>
+          )}
         </DialogContent>
       </Dialog>
     </div>
