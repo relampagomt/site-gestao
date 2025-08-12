@@ -49,12 +49,15 @@ export default function Vacancies() {
   const [departmentFilter, setDepartmentFilter] = useState("todos");
   const [jobTypeFilter, setJobTypeFilter] = useState("todos");
 
-  useEffect(() => { load(); }, []);
+  // ---- effects
+  useEffect(() => {
+    load();
+  }, []);
 
   async function load() {
     try {
       setLoading(true);
-      const { data } = await api.get("/job-vacancies");
+      const { data } = await api.get("/job-vacancies"); // rotas com hífen
       setItems(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error("Erro ao carregar vagas:", e);
@@ -64,8 +67,11 @@ export default function Vacancies() {
     }
   }
 
+  // ---- derived
   const filtered = useMemo(() => {
     let result = items;
+    
+    // Filtro de busca
     if (search) {
       const q = search.toLowerCase();
       result = result.filter((v) =>
@@ -83,15 +89,29 @@ export default function Vacancies() {
           .includes(q)
       );
     }
-    if (statusFilter !== "todos") result = result.filter((v) => v.status === statusFilter);
-    if (departmentFilter !== "todos") result = result.filter((v) => v.department === departmentFilter);
-    if (jobTypeFilter !== "todos") result = result.filter((v) => v.job_type === jobTypeFilter);
+    
+    // Filtro de status
+    if (statusFilter !== "todos") {
+      result = result.filter((v) => v.status === statusFilter);
+    }
+    
+    // Filtro de departamento
+    if (departmentFilter !== "todos") {
+      result = result.filter((v) => v.department === departmentFilter);
+    }
+    
+    // Filtro de tipo de trabalho
+    if (jobTypeFilter !== "todos") {
+      result = result.filter((v) => v.job_type === jobTypeFilter);
+    }
+    
     return result;
   }, [items, search, statusFilter, departmentFilter, jobTypeFilter]);
 
   const total = items.length;
   const openCount = items.filter((v) => (v?.status || "").toLowerCase() === "aberta").length;
 
+  // ---- handlers
   function openCreate() {
     setEditingId(null);
     setForm(emptyForm);
@@ -116,6 +136,8 @@ export default function Vacancies() {
 
   async function handleSubmit(e) {
     e?.preventDefault?.();
+
+    // validações simples
     if (!form.name?.trim()) return alert("Informe o nome.");
     if (!form.phone?.trim()) return alert("Informe o telefone.");
 
@@ -152,6 +174,7 @@ export default function Vacancies() {
     }
   }
 
+  // ---- ui
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -179,6 +202,7 @@ export default function Vacancies() {
             <div className="text-2xl font-bold">{loading ? "—" : openCount}</div>
           </CardContent>
         </Card>
+        {/* KPIs extras (opcionais) */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Em Processo</CardTitle>
@@ -214,7 +238,7 @@ export default function Vacancies() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-
+            
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
@@ -227,7 +251,7 @@ export default function Vacancies() {
                   <SelectItem value="Fechada">Fechada</SelectItem>
                 </SelectContent>
               </Select>
-
+              
               <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="Filtrar por departamento" />
@@ -240,7 +264,7 @@ export default function Vacancies() {
                   <SelectItem value="Técnico">Técnico</SelectItem>
                 </SelectContent>
               </Select>
-
+              
               <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="Filtrar por tipo" />
@@ -253,7 +277,7 @@ export default function Vacancies() {
                   <SelectItem value="Estágio">Estágio</SelectItem>
                 </SelectContent>
               </Select>
-
+              
               <Button variant="outline" onClick={() => { setSearch(''); setStatusFilter('todos'); setDepartmentFilter('todos'); setJobTypeFilter('todos'); }}>
                 Limpar Filtros
               </Button>
@@ -336,155 +360,153 @@ export default function Vacancies() {
         </CardContent>
       </Card>
 
-      {/* Modal com container rolável */}
+      {/* MODAL centralizado no padrão dos outros */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[720px] p-0">
-          <div className="max-h-[80vh] overflow-y-auto p-6">
-            <DialogHeader className="pb-2">
-              <DialogTitle>{editingId ? "Editar Indicação" : "Nova Indicação"}</DialogTitle>
-              <DialogDescription>Preencha os dados do candidato à vaga.</DialogDescription>
-            </DialogHeader>
+        <DialogContent className="sm:max-w-[720px]">
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Editar Indicação" : "Nova Indicação"}</DialogTitle>
+            <DialogDescription>Preencha os dados do candidato à vaga.</DialogDescription>
+          </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Nome */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Nome */}
+            <div className="space-y-2">
+              <Label>Nome</Label>
+              <Input
+                placeholder="Nome completo"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                required
+              />
+            </div>
+
+            {/* Telefone / Idade */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Nome</Label>
+                <Label>Telefone</Label>
                 <Input
-                  placeholder="Nome completo"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="(99) 9 9999-9999"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   required
                 />
               </div>
-
-              {/* Telefone / Idade */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Telefone</Label>
-                  <Input
-                    placeholder="(99) 9 9999-9999"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Idade</Label>
-                  <Input
-                    type="number"
-                    min={14}
-                    placeholder="Ex.: 22"
-                    value={form.age}
-                    onChange={(e) => setForm({ ...form, age: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              {/* Endereço */}
               <div className="space-y-2">
-                <Label>Endereço Residencial</Label>
-                <Input
-                  placeholder="Rua / Bairro / Cidade"
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                />
-              </div>
-
-              {/* Sexo / Departamento */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Sexo</Label>
-                  <Select
-                    value={form.sex}
-                    onValueChange={(v) => setForm({ ...form, sex: v })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Masculino">Masculino</SelectItem>
-                      <SelectItem value="Feminino">Feminino</SelectItem>
-                      <SelectItem value="Outro">Outro</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Departamento</Label>
-                  <Select
-                    value={form.department}
-                    onValueChange={(v) => setForm({ ...form, department: v })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Operacional">Operacional</SelectItem>
-                      <SelectItem value="Comercial">Comercial</SelectItem>
-                      <SelectItem value="Administrativo">Administrativo</SelectItem>
-                      <SelectItem value="Prestação de Serviços">Prestação de Serviços</SelectItem>
-                      <SelectItem value="Outros">Outros</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Tipo / Status */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Tipo (Cargo)</Label>
-                  <Select
-                    value={form.job_type}
-                    onValueChange={(v) => setForm({ ...form, job_type: v })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CLT">CLT</SelectItem>
-                      <SelectItem value="PJ">PJ</SelectItem>
-                      <SelectItem value="Freelancer">Freelancer</SelectItem>
-                      <SelectItem value="Diarista">Diarista</SelectItem>
-                      <SelectItem value="Estágio">Estágio</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select
-                    value={form.status}
-                    onValueChange={(v) => setForm({ ...form, status: v })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Aberta">Aberta</SelectItem>
-                      <SelectItem value="Em Processo">Em Processo</SelectItem>
-                      <SelectItem value="Fechada">Fechada</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Salário */}
-              <div className="space-y-1">
-                <Label>
-                  Salário{" "}
-                  <span className="text-muted-foreground text-xs">
-                    (Obs.: Freelancer/Diarista = valor por diária)
-                  </span>
-                </Label>
+                <Label>Idade</Label>
                 <Input
                   type="number"
-                  min={0}
-                  placeholder="Ex.: 2200"
-                  value={form.salary}
-                  onChange={(e) => setForm({ ...form, salary: e.target.value })}
+                  min={14}
+                  placeholder="Ex.: 22"
+                  value={form.age}
+                  onChange={(e) => setForm({ ...form, age: e.target.value })}
                 />
               </div>
+            </div>
 
-              <div className="flex justify-end gap-3 pt-2">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit">{editingId ? "Salvar" : "Criar"}</Button>
+            {/* Endereço */}
+            <div className="space-y-2">
+              <Label>Endereço Residencial</Label>
+              <Input
+                placeholder="Rua / Bairro / Cidade"
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+              />
+            </div>
+
+            {/* Sexo / Departamento */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Sexo</Label>
+                <Select
+                  value={form.sex}
+                  onValueChange={(v) => setForm({ ...form, sex: v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Masculino">Masculino</SelectItem>
+                    <SelectItem value="Feminino">Feminino</SelectItem>
+                    <SelectItem value="Outro">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            </form>
-          </div>
+
+              <div className="space-y-2">
+                <Label>Departamento</Label>
+                <Select
+                  value={form.department}
+                  onValueChange={(v) => setForm({ ...form, department: v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Operacional">Operacional</SelectItem>
+                    <SelectItem value="Comercial">Comercial</SelectItem>
+                    <SelectItem value="Administrativo">Administrativo</SelectItem>
+                    <SelectItem value="Prestação de Serviços">Prestação de Serviços</SelectItem>
+                    <SelectItem value="Outros">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Tipo / Status */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Tipo (Cargo)</Label>
+                <Select
+                  value={form.job_type}
+                  onValueChange={(v) => setForm({ ...form, job_type: v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CLT">CLT</SelectItem>
+                    <SelectItem value="PJ">PJ</SelectItem>
+                    <SelectItem value="Freelancer">Freelancer</SelectItem>
+                    <SelectItem value="Diarista">Diarista</SelectItem>
+                    <SelectItem value="Estágio">Estágio</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={form.status}
+                  onValueChange={(v) => setForm({ ...form, status: v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Aberta">Aberta</SelectItem>
+                    <SelectItem value="Em Processo">Em Processo</SelectItem>
+                    <SelectItem value="Fechada">Fechada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Salário */}
+            <div className="space-y-1">
+              <Label>
+                Salário{" "}
+                <span className="text-muted-foreground text-xs">
+                  (Obs.: Freelancer/Diarista = valor por diária)
+                </span>
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="Ex.: 2200"
+                value={form.salary}
+                onChange={(e) => setForm({ ...form, salary: e.target.value })}
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">{editingId ? "Salvar" : "Criar"}</Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
