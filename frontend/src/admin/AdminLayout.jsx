@@ -1,11 +1,11 @@
-// frontend/src/admin/AdminLayout.jsx
+// src/admin/AdminLayout.jsx
 import React, { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Menu, X, Home, Users, Package, Activity, Briefcase, UserCog } from "lucide-react";
+import { Menu, X, Home, Users, Package, Activity, Briefcase, Settings, UserCog } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
-const Sidebar = ({ onNavigate, user, collapsed = false, hideBrand = false }) => {
-  const navItems = [
+const Sidebar = ({ onNavigate, user }) => {
+const navItems = [
     { to: "/admin", label: "Dashboard", icon: Home, end: true },
     { to: "/admin/clients", label: "Clientes", icon: Users },
     { to: "/admin/materials", label: "Materiais", icon: Package },
@@ -15,24 +15,10 @@ const Sidebar = ({ onNavigate, user, collapsed = false, hideBrand = false }) => 
   ];
 
   return (
-    <aside
-      className={[
-        "h-full border-r bg-white",
-        collapsed ? "w-[4.5rem]" : "w-72",
-        "transition-[width] duration-200 ease-in-out",
-      ].join(" ")}
-    >
-      {!hideBrand && (
-        <div className="px-3 py-4 border-b">
-          {collapsed ? (
-            <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-red-600 text-white font-extrabold">
-              R
-            </div>
-          ) : (
-            <div className="text-2xl font-extrabold text-red-600">Relâmpago</div>
-          )}
-        </div>
-      )}
+    <aside className="h-full w-72 border-r bg-white">
+      <div className="px-5 py-4 border-b">
+        <div className="text-2xl font-extrabold text-red-600">Relâmpago</div>
+      </div>
       <nav className="p-3 space-y-1">
         {navItems.map(({ to, label, icon: Icon, end }) => (
           <NavLink
@@ -40,7 +26,6 @@ const Sidebar = ({ onNavigate, user, collapsed = false, hideBrand = false }) => 
             to={to}
             end={end}
             onClick={onNavigate}
-            title={label}
             className={({ isActive }) =>
               [
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm",
@@ -49,7 +34,7 @@ const Sidebar = ({ onNavigate, user, collapsed = false, hideBrand = false }) => 
             }
           >
             <Icon size={18} />
-            {!collapsed && <span>{label}</span>}
+            <span>{label}</span>
           </NavLink>
         ))}
       </nav>
@@ -59,7 +44,6 @@ const Sidebar = ({ onNavigate, user, collapsed = false, hideBrand = false }) => 
 
 export default function AdminLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // ← novo: recolher/expandir no desktop
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -70,14 +54,13 @@ export default function AdminLayout() {
   };
 
   return (
-    <div className="min-h-dvh bg-slate-50">
+    <div className="min-h-dvh bg-slate-50 admin-no-overflow">
       {/* Topbar */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b">
-        <div className="mx-auto max-w-[1400px] px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {/* Mobile: abre o drawer */}
+        <div className="admin-container">
+          <div className="h-14 flex items-center justify-between">
             <button
-              className="md:hidden inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5"
+              className="md:hidden admin-btn-secondary"
               onClick={() => setMobileOpen(true)}
               aria-label="Abrir menu"
             >
@@ -85,26 +68,18 @@ export default function AdminLayout() {
               <span className="text-sm">Menu</span>
             </button>
 
-            {/* Desktop: recolhe/expande a sidebar */}
-            <button
-              className="hidden md:inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5"
-              onClick={() => setSidebarCollapsed((v) => !v)}
-              aria-pressed={sidebarCollapsed}
-              aria-label={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
-              title={sidebarCollapsed ? "Expandir" : "Recolher"}
-            >
-              <Menu size={18} />
-              <span className="text-sm">{sidebarCollapsed ? "Expandir" : "Menu"}</span>
-            </button>
-          </div>
+            <div className="hidden md:flex items-center gap-3 text-sm text-slate-600">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-white font-semibold">
+                {user?.name?.charAt(0)?.toUpperCase() || "A"}
+              </span>
+              <span>{user?.name || "Administrador"}</span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">
+                {user?.role === "admin" ? "Admin" : "Supervisor"}
+              </span>
+            </div>
 
-          <div className="hidden md:flex items-center gap-3 text-sm text-slate-600">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-white font-semibold">
-              {user?.name?.charAt(0)?.toUpperCase() || "A"}
-            </span>
-            <span>{user?.name || "Administrador"}</span>
             <button
-              className="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50"
+              className="admin-btn-secondary"
               onClick={logout}
               aria-label="Sair"
             >
@@ -114,21 +89,16 @@ export default function AdminLayout() {
         </div>
       </header>
 
-      {/* Corpo */}
-      <div className="mx-auto max-w-[1400px] px-4">
-        <div
-          className={[
-            "grid grid-cols-1 gap-6 py-6",
-            sidebarCollapsed ? "md:grid-cols-[4.5rem_1fr]" : "md:grid-cols-[18rem_1fr]",
-          ].join(" ")}
-        >
+      {/* Layout */}
+      <div className="admin-container">
+        <div className="admin-main-layout">
           {/* Sidebar desktop */}
           <div className="hidden md:block">
-            <Sidebar user={user} collapsed={sidebarCollapsed} />
+            <Sidebar user={user} />
           </div>
 
           {/* Conteúdo */}
-          <main className="min-h-[70dvh]">
+          <main className="admin-content">
             <Outlet />
           </main>
         </div>
@@ -138,22 +108,22 @@ export default function AdminLayout() {
       {mobileOpen && (
         <>
           <div
-            className="fixed inset-0 bg-black/20 md:hidden"
+            className="fixed inset-0 bg-black/20 md:hidden z-40"
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />
-          <div className="fixed inset-y-0 left-0 w-72 bg-white shadow-lg md:hidden animate-in slide-in-from-left">
+          <div className="fixed inset-y-0 left-0 w-72 bg-white shadow-lg md:hidden animate-in slide-in-from-left z-50">
             <div className="flex items-center justify-between border-b px-4 h-14">
               <div className="text-lg font-bold text-red-600">Relâmpago</div>
               <button
-                className="rounded-md border p-1.5"
+                className="admin-btn-secondary p-1.5"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Fechar menu"
               >
                 <X size={18} />
               </button>
             </div>
-            <Sidebar user={user} onNavigate={() => setMobileOpen(false)} hideBrand />
+            <Sidebar user={user} onNavigate={() => setMobileOpen(false)} />
           </div>
         </>
       )}
