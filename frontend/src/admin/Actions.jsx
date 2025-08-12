@@ -106,7 +106,7 @@ const initialForm = {
 
 const periodOptions = ['manhã', 'tarde', 'noite'];
 
-const ensureArrayTypes = (item) => {
+const ensureArrayTypes = (item ) => {
   if (Array.isArray(item?.types)) return item.types;
   if (typeof item?.type === 'string' && item.type.trim()) {
     return item.type.split(',').map((s) => s.trim()).filter(Boolean);
@@ -439,7 +439,7 @@ const Actions = () => {
 
   /* ===================== RENDER ===================== */
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6 w-full">
       <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -735,122 +735,4 @@ const Actions = () => {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="e_end_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
-                  <Input id="e_end_date" type="date" value={form.end_date} onChange={(e) => onChange('end_date', e.target.value)} />
-                </div>
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label>Períodos do dia</Label>
-                  <div className="flex flex-wrap gap-4">
-                    {periodOptions.map((p) => (
-                      <label key={p} className="flex items-center gap-2 cursor-pointer">
-                        <Checkbox checked={form.day_periods.includes(p)} onCheckedChange={() => togglePeriod(p)} />
-                        <span className="text-sm">{p}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="e_material_qty">Quantidade de material</Label>
-                  <Input id="e_material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
-                </div>
-
-                <FileInput
-                  id="e_material_photo_file"
-                  label="Amostra do material (imagem)"
-                  onFile={(f) => onChange('material_photo_file', f)}
-                  hint="Selecione para substituir a imagem atual."
-                  existingUrl={form.material_photo_url}
-                />
-                <FileInput
-                  id="e_protocol_photo_file"
-                  label="Amostra do protocolo (imagem)"
-                  onFile={(f) => onChange('protocol_photo_file', f)}
-                  hint="Selecione para substituir a imagem atual."
-                  existingUrl={form.protocol_photo_url}
-                />
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label htmlFor="e_notes">Observações</Label>
-                  <Textarea id="e_notes" rows={3} value={form.notes} onChange={(e) => onChange('notes', e.target.value)} />
-                </div>
-
-                <div className="flex items-center gap-2 md:col-span-2">
-                  <Checkbox id="e_active" checked={!!form.active} onCheckedChange={(v) => onChange('active', !!v)} />
-                  <Label htmlFor="e_active">Ativa</Label>
-                </div>
-              </div>
-
-              {/* Footer padrão */}
-              <div className="pt-2 mt-4 border-t flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => { setIsEditOpen(false); setEditing(null); resetForm(); }}>
-                  Cancelar
-                </Button>
-                <Button type="submit">Salvar alterações</Button>
-              </div>
-            </form>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal VER MATERIAL — casulo padrão */}
-      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
-          <div className="px-5 pt-5 pb-3 border-b">
-            <DialogHeader>
-              <DialogTitle className="text-base">Material da ação</DialogTitle>
-              <DialogDescription className="text-xs">Visualize as imagens enviadas para esta ação.</DialogDescription>
-            </DialogHeader>
-          </div>
-
-          <div className="px-5 py-4">
-            {previewItem ? (
-              <div className="space-y-4">
-                {(previewItem.material_photo_url || previewItem.protocol_photo_url) ? (
-                  <>
-                    {previewItem.material_photo_url && (
-                      <div>
-                        <Label className="text-xs text-muted-foreground mb-1 block">Amostra do material</Label>
-                        <div className="rounded-md overflow-hidden border">
-                          <img
-                            src={previewItem.material_photo_url}
-                            alt="Amostra do material"
-                            className="w-full h-auto object-contain bg-black/5"
-                            loading="lazy"
-                          />
-                        </div>
-                      </div>
-                    )}
-                    {previewItem.protocol_photo_url && (
-                      <div>
-                        <Label className="text-xs text-muted-foreground mb-1 block">Amostra do protocolo</Label>
-                        <div className="rounded-md overflow-hidden border">
-                          <img
-                            src={previewItem.protocol_photo_url}
-                            alt="Amostra do protocolo"
-                            className="w-full h-auto object-contain bg-black/5"
-                            loading="lazy"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">Nenhuma imagem disponível.</p>
-                )}
-              </div>
-            ) : null}
-
-            {/* Footer padrão */}
-            <div className="pt-2 mt-4 border-t flex justify-end">
-              <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>Fechar</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-};
-
-export default Actions;
-
+                  <Input id="e_end_date" type="date" value={form.end_

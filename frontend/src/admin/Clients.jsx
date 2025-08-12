@@ -130,332 +130,330 @@ const Clients = () => {
   };
 
   return (
-    <div className="min-h-screen w-full">
-      <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-full">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <h2 className="text-2xl font-bold tracking-tight">Clientes</h2>
+    <div className="min-h-screen w-full p-4 md:p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <h2 className="text-2xl font-bold tracking-tight">Clientes</h2>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                onClick={resetForm}
-                className="min-h-[44px] px-4 text-base font-medium gap-2
-                           sm:h-10 sm:px-4 sm:text-sm
-                           md:h-10 md:px-4 md:text-base
-                           touch-manipulation w-full sm:w-auto"
-              >
-                <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
-                <span className="whitespace-nowrap">Novo Cliente</span>
-              </Button>
-            </DialogTrigger>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button
+              onClick={resetForm}
+              className="min-h-[44px] px-4 text-base font-medium gap-2
+                         sm:h-10 sm:px-4 sm:text-sm
+                         md:h-10 md:px-4 md:text-base
+                         touch-manipulation w-full sm:w-auto"
+            >
+              <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+              <span className="whitespace-nowrap">Novo Cliente</span>
+            </Button>
+          </DialogTrigger>
 
-            {/* Modal com container rolável — mantém padrão do projeto */}
-            <DialogContent className="w-full max-w-2xl max-h-[85vh] overflow-y-auto p-0 mx-4">
-              <div className="px-6 pt-6 pb-3 border-b">
-                <DialogHeader>
-                  <DialogTitle className="text-base">{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
-                  <DialogDescription className="text-xs">
-                    {editingClient ? 'Edite as informações do cliente' : 'Adicione um novo cliente ao sistema'}
-                  </DialogDescription>
-                </DialogHeader>
-              </div>
-
-              <div className="px-6 py-5">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="name">Nome *</Label>
-                      <Input id="name" value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
-                    </div>
-                    <div>
-                      <Label htmlFor="company">Empresa *</Label>
-                      <Input id="company" value={formData.company}
-                        onChange={(e) => setFormData({ ...formData, company: e.target.value })} required />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="phone">Telefone *</Label>
-                      <Input id="phone" value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required />
-                    </div>
-                    <div>
-                      <Label htmlFor="email">Email *</Label>
-                      <Input id="email" type="email" value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="segment">Segmento</Label>
-                      <Select value={formData.segment}
-                        onValueChange={(v) => setFormData({ ...formData, segment: v })}>
-                        <SelectTrigger><SelectValue placeholder="Selecione o segmento" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Tecnologia">Tecnologia</SelectItem>
-                          <SelectItem value="Saúde">Saúde</SelectItem>
-                          <SelectItem value="Educação">Educação</SelectItem>
-                          <SelectItem value="Varejo">Varejo</SelectItem>
-                          <SelectItem value="Serviços">Serviços</SelectItem>
-                          <SelectItem value="Outro">Outro</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="status">Status</Label>
-                      <Select value={formData.status}
-                        onValueChange={(v) => setFormData({ ...formData, status: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ativo">Ativo</SelectItem>
-                          <SelectItem value="inativo">Inativo</SelectItem>
-                          <SelectItem value="pendente">Pendente</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="others">Observações</Label>
-                    <Textarea id="others" value={formData.others}
-                      onChange={(e) => setFormData({ ...formData, others: e.target.value })}
-                      placeholder="Informações adicionais sobre o cliente..." />
-                  </div>
-
-                  <div className="pt-2 border-t flex flex-col sm:flex-row justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                    <Button type="submit">{editingClient ? 'Atualizar' : 'Criar'}</Button>
-                  </div>
-                </form>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        <Card className="w-full">
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input placeholder="Buscar clientes por nome, empresa, e‑mail ou telefone..."
-                  value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filtrar por status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os status</SelectItem>
-                    <SelectItem value="ativo">Ativo</SelectItem>
-                    <SelectItem value="inativo">Inativo</SelectItem>
-                    <SelectItem value="pendente">Pendente</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={segmentFilter} onValueChange={setSegmentFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filtrar por segmento" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os segmentos</SelectItem>
-                    <SelectItem value="Tecnologia">Tecnologia</SelectItem>
-                    <SelectItem value="Saúde">Saúde</SelectItem>
-                    <SelectItem value="Educação">Educação</SelectItem>
-                    <SelectItem value="Varejo">Varejo</SelectItem>
-                    <SelectItem value="Serviços">Serviços</SelectItem>
-                    <SelectItem value="Outro">Outro</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Button variant="outline" onClick={() => { setSearchTerm(''); setStatusFilter('todos'); setSegmentFilter('todos'); }}>
-                  Limpar Filtros
-                </Button>
-              </div>
+          {/* Modal com container rolável — mantém padrão do projeto */}
+          <DialogContent className="w-full max-w-2xl max-h-[85vh] overflow-y-auto p-0 mx-4">
+            <div className="px-6 pt-6 pb-3 border-b">
+              <DialogHeader>
+                <DialogTitle className="text-base">{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
+                <DialogDescription className="text-xs">
+                  {editingClient ? 'Edite as informações do cliente' : 'Adicione um novo cliente ao sistema'}
+                </DialogDescription>
+              </DialogHeader>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle>Lista de Clientes</CardTitle>
-            <CardDescription>{filteredClients.length} cliente(s) encontrado(s)</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0 sm:p-6">
-            {loading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
-                <p className="mt-2 text-gray-600">Carregando clientes...</p>
-              </div>
-            ) : filteredClients.length === 0 ? (
-              <div className="text-center py-8">
-                <AlertCircle className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum cliente encontrado</h3>
-                <p className="mt-1 text-sm text-gray-500">{searchTerm ? 'Tente ajustar sua busca' : 'Comece adicionando um novo cliente'}</p>
-              </div>
-            ) : (
-              <div className="w-full">
-                {/* Versão mobile: Cards empilhados */}
-                <div className="block lg:hidden space-y-4 p-4">
-                  {filteredClients.map((client) => (
-                    <Card key={client.id} className="w-full">
-                      <CardContent className="p-4">
-                        <div className="space-y-3">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                <span className="font-medium truncate">{client.name}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <Building className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">{client.company || '—'}</span>
-                              </div>
+            <div className="px-6 py-5">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="name">Nome *</Label>
+                    <Input id="name" value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+                  </div>
+                  <div>
+                    <Label htmlFor="company">Empresa *</Label>
+                    <Input id="company" value={formData.company}
+                      onChange={(e) => setFormData({ ...formData, company: e.target.value })} required />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="phone">Telefone *</Label>
+                    <Input id="phone" value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required />
+                  </div>
+                  <div>
+                    <Label htmlFor="email">Email *</Label>
+                    <Input id="email" type="email" value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="segment">Segmento</Label>
+                    <Select value={formData.segment}
+                      onValueChange={(v) => setFormData({ ...formData, segment: v })}>
+                      <SelectTrigger><SelectValue placeholder="Selecione o segmento" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Tecnologia">Tecnologia</SelectItem>
+                        <SelectItem value="Saúde">Saúde</SelectItem>
+                        <SelectItem value="Educação">Educação</SelectItem>
+                        <SelectItem value="Varejo">Varejo</SelectItem>
+                        <SelectItem value="Serviços">Serviços</SelectItem>
+                        <SelectItem value="Outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="status">Status</Label>
+                    <Select value={formData.status}
+                      onValueChange={(v) => setFormData({ ...formData, status: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ativo">Ativo</SelectItem>
+                        <SelectItem value="inativo">Inativo</SelectItem>
+                        <SelectItem value="pendente">Pendente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="others">Observações</Label>
+                  <Textarea id="others" value={formData.others}
+                    onChange={(e) => setFormData({ ...formData, others: e.target.value })}
+                    placeholder="Informações adicionais sobre o cliente..." />
+                </div>
+
+                <div className="pt-2 border-t flex flex-col sm:flex-row justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+                  <Button type="submit">{editingClient ? 'Atualizar' : 'Criar'}</Button>
+                </div>
+              </form>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <Card className="w-full">
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input placeholder="Buscar clientes por nome, empresa, e‑mail ou telefone..."
+                value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="ativo">Ativo</SelectItem>
+                  <SelectItem value="inativo">Inativo</SelectItem>
+                  <SelectItem value="pendente">Pendente</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={segmentFilter} onValueChange={setSegmentFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por segmento" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os segmentos</SelectItem>
+                  <SelectItem value="Tecnologia">Tecnologia</SelectItem>
+                  <SelectItem value="Saúde">Saúde</SelectItem>
+                  <SelectItem value="Educação">Educação</SelectItem>
+                  <SelectItem value="Varejo">Varejo</SelectItem>
+                  <SelectItem value="Serviços">Serviços</SelectItem>
+                  <SelectItem value="Outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button variant="outline" onClick={() => { setSearchTerm(''); setStatusFilter('todos'); setSegmentFilter('todos'); }}>
+                Limpar Filtros
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>Lista de Clientes</CardTitle>
+          <CardDescription>{filteredClients.length} cliente(s) encontrado(s)</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0 sm:p-6">
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Carregando clientes...</p>
+            </div>
+          ) : filteredClients.length === 0 ? (
+            <div className="text-center py-8">
+              <AlertCircle className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum cliente encontrado</h3>
+              <p className="mt-1 text-sm text-gray-500">{searchTerm ? 'Tente ajustar sua busca' : 'Comece adicionando um novo cliente'}</p>
+            </div>
+          ) : (
+            <div className="w-full">
+              {/* Versão mobile: Cards empilhados */}
+              <div className="block lg:hidden space-y-4 p-4">
+                {filteredClients.map((client) => (
+                  <Card key={client.id} className="w-full">
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <span className="font-medium truncate">{client.name}</span>
                             </div>
-                            <div className="flex-shrink-0 ml-2">
-                              {getStatusBadge(client.status)}
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Building className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <span className="truncate">{client.company || '—'}</span>
                             </div>
                           </div>
+                          <div className="flex-shrink-0 ml-2">
+                            {getStatusBadge(client.status)}
+                          </div>
+                        </div>
 
-                          <div className="space-y-2 text-sm">
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{client.phone || '—'}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{client.email || '—'}</span>
+                          </div>
+                          {client.segment && (
+                            <div className="text-xs text-gray-500">
+                              Segmento: <span className="capitalize">{client.segment}</span>
+                            </div>
+                          )}
+                          {client.others && (
+                            <div className="text-xs text-gray-500">
+                              <span className="block truncate" title={client.others}>
+                                {client.others}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex gap-2 pt-2 border-t">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(client)}
+                            className="flex-1 gap-1 min-h-[36px] touch-manipulation"
+                          >
+                            <Edit className="w-4 h-4" /> Editar
+                          </Button>
+                          {isAdmin() && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete(client.id)}
+                              className="flex-1 gap-1 min-h-[36px] touch-manipulation"
+                            >
+                              <Trash2 className="w-4 h-4" /> Excluir
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Versão desktop: Tabela com scroll horizontal */}
+              <div className="hidden lg:block">
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[980px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="min-w-[180px]">Cliente</TableHead>
+                        <TableHead className="min-w-[160px]">Empresa</TableHead>
+                        <TableHead className="min-w-[160px]">Telefone</TableHead>
+                        <TableHead className="min-w-[220px]">E‑mail</TableHead>
+                        <TableHead className="min-w-[140px]">Segmento</TableHead>
+                        <TableHead className="min-w-[120px]">Status</TableHead>
+                        <TableHead className="min-w-[240px]">Observações</TableHead>
+                        <TableHead className="min-w-[160px] text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredClients.map((client) => (
+                        <TableRow key={client.id}>
+                          <TableCell>
                             <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <span className="font-medium truncate">{client.name}</span>
+                            </div>
+                          </TableCell>
+
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Building className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <span className="truncate">{client.company || '—'}</span>
+                            </div>
+                          </TableCell>
+
+                          <TableCell>
+                            <div className="flex items-center gap-2 text-sm">
                               <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                               <span className="truncate">{client.phone || '—'}</span>
                             </div>
-                            <div className="flex items-center gap-2">
+                          </TableCell>
+
+                          <TableCell>
+                            <div className="flex items-center gap-2 text-sm">
                               <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                               <span className="truncate">{client.email || '—'}</span>
                             </div>
-                            {client.segment && (
-                              <div className="text-xs text-gray-500">
-                                Segmento: <span className="capitalize">{client.segment}</span>
-                              </div>
-                            )}
-                            {client.others && (
-                              <div className="text-xs text-gray-500">
-                                <span className="block truncate" title={client.others}>
-                                  {client.others}
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                          </TableCell>
 
-                          <div className="flex gap-2 pt-2 border-t">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEdit(client)}
-                              className="flex-1 gap-1 min-h-[36px] touch-manipulation"
-                            >
-                              <Edit className="w-4 h-4" /> Editar
-                            </Button>
-                            {isAdmin() && (
+                          <TableCell>
+                            <span className="capitalize whitespace-nowrap">{client.segment || '—'}</span>
+                          </TableCell>
+
+                          <TableCell>{getStatusBadge(client.status)}</TableCell>
+
+                          <TableCell>
+                            <span className="block truncate max-w-[28ch]" title={client.others || ''}>
+                              {client.others || '—'}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
                               <Button
-                                variant="destructive"
+                                variant="outline"
                                 size="sm"
-                                onClick={() => handleDelete(client.id)}
-                                className="flex-1 gap-1 min-h-[36px] touch-manipulation"
+                                onClick={() => handleEdit(client)}
+                                className="gap-1 min-h-[36px] touch-manipulation"
                               >
-                                <Trash2 className="w-4 h-4" /> Excluir
+                                <Edit className="w-4 h-4" /> Editar
                               </Button>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-
-                {/* Versão desktop: Tabela com scroll horizontal */}
-                <div className="hidden lg:block">
-                  <div className="overflow-x-auto">
-                    <Table className="min-w-[980px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="min-w-[180px]">Cliente</TableHead>
-                          <TableHead className="min-w-[160px]">Empresa</TableHead>
-                          <TableHead className="min-w-[160px]">Telefone</TableHead>
-                          <TableHead className="min-w-[220px]">E‑mail</TableHead>
-                          <TableHead className="min-w-[140px]">Segmento</TableHead>
-                          <TableHead className="min-w-[120px]">Status</TableHead>
-                          <TableHead className="min-w-[240px]">Observações</TableHead>
-                          <TableHead className="min-w-[160px] text-right">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredClients.map((client) => (
-                          <TableRow key={client.id}>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                <span className="font-medium truncate">{client.name}</span>
-                              </div>
-                            </TableCell>
-
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Building className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">{client.company || '—'}</span>
-                              </div>
-                            </TableCell>
-
-                            <TableCell>
-                              <div className="flex items-center gap-2 text-sm">
-                                <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">{client.phone || '—'}</span>
-                              </div>
-                            </TableCell>
-
-                            <TableCell>
-                              <div className="flex items-center gap-2 text-sm">
-                                <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">{client.email || '—'}</span>
-                              </div>
-                            </TableCell>
-
-                            <TableCell>
-                              <span className="capitalize whitespace-nowrap">{client.segment || '—'}</span>
-                            </TableCell>
-
-                            <TableCell>{getStatusBadge(client.status)}</TableCell>
-
-                            <TableCell>
-                              <span className="block truncate max-w-[28ch]" title={client.others || ''}>
-                                {client.others || '—'}
-                              </span>
-                            </TableCell>
-
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
+                              {isAdmin() && (
                                 <Button
-                                  variant="outline"
+                                  variant="destructive"
                                   size="sm"
-                                  onClick={() => handleEdit(client)}
+                                  onClick={() => handleDelete(client.id)}
                                   className="gap-1 min-h-[36px] touch-manipulation"
                                 >
-                                  <Edit className="w-4 h-4" /> Editar
+                                  <Trash2 className="w-4 h-4" /> Excluir
                                 </Button>
-                                {isAdmin() && (
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => handleDelete(client.id)}
-                                    className="gap-1 min-h-[36px] touch-manipulation"
-                                  >
-                                    <Trash2 className="w-4 h-4" /> Excluir
-                                  </Button>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}
@@ -467,4 +465,3 @@ const Clients = () => {
 };
 
 export default Clients;
-
