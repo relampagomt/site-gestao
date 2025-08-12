@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea.jsx";
 import { Plus, Search, Edit, Trash2, UploadCloud, X } from "lucide-react";
 import api from "@/services/api";
 import ImagePreview from "@/components/ImagePreview.jsx";
+import { formatDateBR } from "@/utils/dates.js"; // ← formato BR
 
 const Materials = () => {
   const [materials, setMaterials] = useState([]);
@@ -116,7 +117,7 @@ const Materials = () => {
     setMode("edit");
     setForm({
       id: row.id ?? row._id ?? row.uuid ?? null,
-      date: (row.date || "").slice(0, 10),
+      date: (row.date || "").slice(0, 10), // input type="date" exige yyyy-MM-dd
       quantity: row.quantity ?? "",
       clientName: row.client_name ?? row.clientName ?? "",
       responsible: row.responsible ?? "",
@@ -370,7 +371,7 @@ const Materials = () => {
                     const id = m.id ?? m._id ?? m.uuid;
                     return (
                       <TableRow key={id || `${m.client_name}-${m.date}`}>
-                        <TableCell>{m.date?.slice(0, 10) || "—"}</TableCell>
+                        <TableCell>{formatDateBR(m.date)}</TableCell>
                         <TableCell>{(m.client_name ?? m.clientName) || "—"}</TableCell>
                         <TableCell>{m.responsible || "—"}</TableCell>
                         <TableCell>{m.quantity ?? "—"}</TableCell>

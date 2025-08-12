@@ -27,8 +27,9 @@ import {
   XCircle,
   Upload,
   ImageIcon
-  // Eye  // <- REMOVIDO: não usamos mais o botão "Ver material" na coluna de ações
 } from 'lucide-react';
+
+import { formatDateBR } from '@/utils/dates.js'; // datas em dd/MM/aaaa
 
 /* ===================== OPÇÕES ===================== */
 const ACTION_OPTIONS = [
@@ -81,7 +82,6 @@ const mockActions = [
     day_periods: ['manhã', 'tarde'],
     material_qty: 1200,
     material_photo_url: 'https://via.placeholder.com/800x500.png?text=Material',
-    protocol_photo_url: 'https://via.placeholder.com/800x500.png?text=Protocolo',
     notes: 'Campanha bairro central.',
     active: true,
   },
@@ -99,9 +99,7 @@ const initialForm = {
   notes: '',
   active: true,
   material_photo_file: null,
-  protocol_photo_file: null,
   material_photo_url: '',
-  protocol_photo_url: '',
 };
 
 const periodOptions = ['manhã', 'tarde', 'noite'];
@@ -110,32 +108,17 @@ const ensureArrayTypes = (item) => {
   if (Array.isArray(item?.types)) return item.types;
   if (typeof item?.type === 'string' && item.type.trim()) {
     return item.type.split(',').map((s) => s.trim()).filter(Boolean);
-  }
+    }
   return [];
 };
 
-// Upload — mantém padrão do projeto (não setar Content-Type manualmente)
-async function uploadFile(file, kind = 'file') {
+// Upload genérico (usaremos apenas para 'material')
+async function uploadFile(file, fieldName = 'file') {
   if (!file) return '';
-  const tryUpload = async (url, fieldName) => {
-    const fd = new FormData();
-    fd.append(fieldName, file);
-    const resp = await api.post(url, fd);
-    return resp?.data?.url || resp?.data?.secure_url || resp?.data?.location || '';
-  };
-  const attempts = [
-    ['/upload/material', 'material'],
-    ['/upload/protocol', 'protocol'],
-    ['/upload', kind],
-    ['/upload', 'file'],
-  ];
-  for (const [u, f] of attempts) {
-    try {
-      const out = await tryUpload(u, f);
-      if (out) return out;
-    } catch (_) {}
-  }
-  throw new Error('Falha no upload.');
+  const fd = new FormData();
+  fd.append(fieldName, file);
+  const resp = await api.post('/upload', fd);
+  return resp?.data?.url || resp?.data?.secure_url || resp?.data?.location || '';
 }
 
 /* ===================== Componente ===================== */
@@ -154,7 +137,7 @@ const Actions = () => {
   const [form, setForm] = useState({ ...initialForm });
   const [typesPopoverOpen, setTypesPopoverOpen] = useState(false);
 
-  // visualizar material
+  // preview somente do material
   const [previewItem, setPreviewItem] = useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
@@ -222,10 +205,8 @@ const Actions = () => {
 
       if (import.meta.env.DEV) {
         materialUrl = form.material_photo_file ? URL.createObjectURL(form.material_photo_file) : '';
-        // protocolo REMOVIDO do create (não fazemos upload nem usamos aqui)
       } else {
         if (form.material_photo_file) materialUrl = await uploadFile(form.material_photo_file, 'material');
-        // protocolo REMOVIDO do create
       }
 
       const payload = {
@@ -238,7 +219,6 @@ const Actions = () => {
         day_periods: form.day_periods,
         material_qty: Number(form.material_qty || 0),
         material_photo_url: materialUrl,
-        // protocol_photo_url: ...  // REMOVIDO do create
         notes: form.notes || '',
         active: !!form.active,
       };
@@ -265,14 +245,12 @@ const Actions = () => {
       client_name: item.client_name || '',
       company_name: item.company_name || '',
       types: ensureArrayTypes(item),
-      start_date: item.start_date || '',
-      end_date: item.end_date || '',
+      start_date: (item.start_date || '').slice(0, 10), // compatível com input date
+      end_date: (item.end_date || '').slice(0, 10),
       day_periods: Array.isArray(item.day_periods) ? item.day_periods : [],
       material_qty: item.material_qty ?? '',
       material_photo_file: null,
-      protocol_photo_file: null,
       material_photo_url: item.material_photo_url || '',
-      protocol_photo_url: item.protocol_photo_url || '',
       notes: item.notes || '',
       active: typeof item.active === 'boolean' ? item.active : true,
     });
@@ -289,14 +267,11 @@ const Actions = () => {
 
     try {
       let materialUrl = form.material_photo_url || '';
-      let protocolUrl = form.protocol_photo_url || '';
 
       if (import.meta.env.DEV) {
         if (form.material_photo_file) materialUrl = URL.createObjectURL(form.material_photo_file);
-        if (form.protocol_photo_file) protocolUrl = URL.createObjectURL(form.protocol_photo_file);
       } else {
         if (form.material_photo_file) materialUrl = await uploadFile(form.material_photo_file, 'material');
-        if (form.protocol_photo_file) protocolUrl = await uploadFile(form.protocol_photo_file, 'protocol');
       }
 
       const payload = {
@@ -309,15 +284,12 @@ const Actions = () => {
         day_periods: form.day_periods,
         material_qty: Number(form.material_qty || 0),
         material_photo_url: materialUrl,
-        protocol_photo_url: protocolUrl, // <- Editar continua podendo trocar/adicionar protocolo
         notes: form.notes || '',
         active: !!form.active,
       };
 
       if (import.meta.env.DEV) {
-        setActions((prev) =>
-          prev.map((a) => (a.id === editing.id ? { ...a, ...payload } : a))
-        );
+        setActions((prev) => prev.map((a) => (a.id === editing.id ? { ...a, ...payload } : a)));
       } else {
         await api.put(`/actions/${editing.id}`, payload);
         await loadActions();
@@ -426,7 +398,7 @@ const Actions = () => {
         {existingUrl ? (
           <button
             type="button"
-            onClick={() => { setPreviewItem({ material_photo_url: existingUrl, protocol_photo_url: '' }); setIsPreviewOpen(true); }}
+            onClick={() => { setPreviewItem({ material_photo_url: existingUrl }); setIsPreviewOpen(true); }}
             className="inline-flex items-center gap-2 text-xs underline text-blue-600"
           >
             <ImageIcon className="size-4" /> Ver imagem atual
@@ -529,7 +501,7 @@ const Actions = () => {
                         <Input id="material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
                       </div>
 
-                      {/* Upload ÚNICO no CREATE: apenas MATERIAL (protocolo removido) */}
+                      {/* Upload ÚNICO no CREATE: apenas MATERIAL */}
                       <FileInput
                         id="material_photo_file"
                         label="Amostra do material (imagem)"
@@ -537,8 +509,6 @@ const Actions = () => {
                         hint="Envie uma imagem (jpg, png...)."
                         existingUrl={null}
                       />
-
-                      {/* <FileInput ... protocolo>  — REMOVIDO no CREATE conforme pedido */}
 
                       <div className="space-y-1.5 md:col-span-2">
                         <Label htmlFor="notes">Observações</Label>
@@ -586,8 +556,10 @@ const Actions = () => {
                   ) : (
                     filtered.map((a) => {
                       const types = ensureArrayTypes(a);
-                      const range = (a.start_date || a.end_date) ? `${a.start_date || '—'} → ${a.end_date || '—'}` : '—';
-                      const hasAnyImage = a.material_photo_url || a.protocol_photo_url;
+                      const range = (a.start_date || a.end_date)
+                        ? `${formatDateBR(a.start_date)} — ${formatDateBR(a.end_date)}`
+                        : '—';
+                      const hasMaterialImage = !!a.material_photo_url;
                       return (
                         <TableRow key={a.id}>
                           <TableCell className="font-medium">{a.client_name || '-'}</TableCell>
@@ -598,20 +570,21 @@ const Actions = () => {
                               {types.length > 3 && <Badge variant="outline">+{types.length - 3}</Badge>}
                             </div>
                           </TableCell>
+
                           <TableCell>{range}</TableCell>
 
                           <TableCell>
-                            {hasAnyImage ? (
+                            {hasMaterialImage ? (
                               <button
                                 type="button"
                                 onClick={() => { setPreviewItem(a); setIsPreviewOpen(true); }}
                                 className="inline-block"
-                                title="Ver material da ação"
+                                title="Ver amostra do material"
                               >
                                 <div className="w-10 h-10 rounded-md overflow-hidden border">
                                   <img
-                                    src={a.material_photo_url || a.protocol_photo_url}
-                                    alt="thumb"
+                                    src={a.material_photo_url}
+                                    alt="thumb material"
                                     className="w-full h-full object-cover"
                                     loading="lazy"
                                   />
@@ -635,7 +608,6 @@ const Actions = () => {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2 flex-wrap">
-                              {/* Botão "Ver material" REMOVIDO desta coluna conforme pedido */}
                               <Button
                                 size="sm"
                                 variant="secondary"
@@ -733,20 +705,13 @@ const Actions = () => {
                   <Input id="e_material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
                 </div>
 
-                {/* No EDITAR, mantém uploads de material e protocolo */}
+                {/* Apenas MATERIAL no EDITAR */}
                 <FileInput
                   id="e_material_photo_file"
                   label="Amostra do material (imagem)"
                   onFile={(f) => onChange('material_photo_file', f)}
                   hint="Envie uma imagem (jpg, png...)."
                   existingUrl={form.material_photo_url}
-                />
-                <FileInput
-                  id="e_protocol_photo_file"
-                  label="Amostra do protocolo (imagem)"
-                  onFile={(f) => onChange('protocol_photo_file', f)}
-                  hint="Envie uma imagem (jpg, png...)."
-                  existingUrl={form.protocol_photo_url}
                 />
 
                 <div className="space-y-1.5 md:col-span-2">
@@ -769,14 +734,14 @@ const Actions = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Preview de imagem */}
+      {/* Preview de imagem (somente material) */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Material da ação</DialogTitle>
-            <DialogDescription>Visualização das imagens anexadas.</DialogDescription>
+            <DialogTitle>Amostra do material</DialogTitle>
+            <DialogDescription>Visualização da imagem anexada.</DialogDescription>
           </DialogHeader>
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid gap-4">
             {previewItem?.material_photo_url ? (
               <div className="border rounded-md overflow-hidden">
                 <img
@@ -786,19 +751,8 @@ const Actions = () => {
                 />
                 <div className="p-2 text-sm text-center">Amostra do material</div>
               </div>
-            ) : null}
-            {previewItem?.protocol_photo_url ? (
-              <div className="border rounded-md overflow-hidden">
-                <img
-                  src={previewItem.protocol_photo_url}
-                  alt="Protocolo"
-                  className="w-full h-auto object-contain"
-                />
-                <div className="p-2 text-sm text-center">Amostra do protocolo</div>
-              </div>
-            ) : null}
-            {!previewItem?.material_photo_url && !previewItem?.protocol_photo_url && (
-              <div className="text-sm text-muted-foreground">Sem imagens para exibir.</div>
+            ) : (
+              <div className="text-sm text-muted-foreground">Sem imagem para exibir.</div>
             )}
           </div>
         </DialogContent>
