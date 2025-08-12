@@ -1,303 +1,506 @@
 // frontend/src/admin/Vacancies.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import api from "@/services/api";
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Label } from "@/components/ui/label.jsx";
-import { Textarea } from "@/components/ui/textarea.jsx";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select.jsx";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog.jsx";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
+import { Badge } from "@/components/ui/badge.jsx";
+import { Plus, Pencil, Trash2 } from "lucide-react";
+import api from "@/services/api";
 
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+const emptyForm = {
+  name: "",
+  phone: "",
+  address: "",
+  age: "",
+  sex: "Outro",
+  department: "Operacional",
+  job_type: "CLT",
+  status: "Aberta",
+  salary: "",
+};
 
-const Vacancies = () => {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [q, setQ] = useState("");
+export default function Vacancies() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // modal (create/edit)
+  // modal
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState("create");
-  const [saving, setSaving] = useState(false);
-
-  // dialog excluir
-  const [openDelete, setOpenDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [rowToDelete, setRowToDelete] = useState(null);
-
-  const emptyForm = {
-    id: null,
-    indication_name: "",
-    role: "",
-    client: "",
-    contact: "",
-    notes: "",
-    status: "Aberta", // texto simples para evitar Select
-  };
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [search, setSearch] = useState("");
 
-  async function fetchRows() {
-    setLoading(true);
+  // filtros
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [departmentFilter, setDepartmentFilter] = useState("todos");
+  const [jobTypeFilter, setJobTypeFilter] = useState("todos");
+
+  useEffect(() => { load(); }, []);
+
+  async function load() {
     try {
-      const { data } = await api.get("/vacancies");
-      setRows(Array.isArray(data) ? data : data?.items ?? []);
+      setLoading(true);
+      const { data } = await api.get("/job-vacancies");
+      setItems(Array.isArray(data) ? data : []);
     } catch (e) {
-      console.error("Erro ao carregar vagas/indicações:", e);
+      console.error("Erro ao carregar vagas:", e);
+      setItems([]);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    fetchRows();
-  }, []);
+  const filtered = useMemo(() => {
+    let result = items;
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter((v) =>
+        [
+          v?.name,
+          v?.phone,
+          v?.address,
+          v?.department,
+          v?.job_type,
+          v?.status,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(q)
+      );
+    }
+    if (statusFilter !== "todos") result = result.filter((v) => v.status === statusFilter);
+    if (departmentFilter !== "todos") result = result.filter((v) => v.department === departmentFilter);
+    if (jobTypeFilter !== "todos") result = result.filter((v) => v.job_type === jobTypeFilter);
+    return result;
+  }, [items, search, statusFilter, departmentFilter, jobTypeFilter]);
 
-  function onChange(e) {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
-  }
+  const total = items.length;
+  const openCount = items.filter((v) => (v?.status || "").toLowerCase() === "aberta").length;
 
   function openCreate() {
-    setMode("create");
+    setEditingId(null);
     setForm(emptyForm);
     setOpen(true);
   }
 
-  function openEdit(row) {
-    setMode("edit");
+  function openEdit(v) {
+    setEditingId(v.id);
     setForm({
-      id: row.id ?? row._id ?? row.uuid ?? null,
-      indication_name: row.indication_name ?? row.name ?? "",
-      role: row.role ?? row.position ?? "",
-      client: row.client ?? row.company ?? "",
-      contact: row.contact ?? row.phone ?? row.email ?? "",
-      notes: row.notes ?? "",
-      status: row.status ?? "Aberta",
+      name: v.name || "",
+      phone: v.phone || "",
+      address: v.address || "",
+      age: v.age?.toString?.() || "",
+      sex: v.sex || "Outro",
+      department: v.department || "Operacional",
+      job_type: v.job_type || "CLT",
+      status: v.status || "Aberta",
+      salary: v.salary?.toString?.() || "",
     });
     setOpen(true);
   }
 
-  function confirmDelete(row) {
-    setRowToDelete(row);
-    setOpenDelete(true);
-  }
+  async function handleSubmit(e) {
+    e?.preventDefault?.();
+    if (!form.name?.trim()) return alert("Informe o nome.");
+    if (!form.phone?.trim()) return alert("Informe o telefone.");
 
-  async function onSubmit(e) {
-    e.preventDefault();
-    setSaving(true);
+    const payload = {
+      ...form,
+      age: form.age ? Number(form.age) : null,
+      salary: form.salary ? Number(form.salary) : null,
+    };
+
     try {
-      const payload = {
-        indication_name: form.indication_name,
-        role: form.role,
-        client: form.client,
-        contact: form.contact,
-        notes: form.notes || "",
-        status: form.status || "Aberta",
-      };
-
-      if (mode === "create") {
-        await api.post("/vacancies", payload);
+      if (editingId) {
+        await api.put(`/job-vacancies/${editingId}`, payload);
       } else {
-        const id = form.id;
-        if (!id) throw new Error("ID do registro não encontrado para edição.");
-        await api.put(`/vacancies/${id}`, payload);
+        await api.post("/job-vacancies", payload);
       }
-
       setOpen(false);
       setForm(emptyForm);
-      fetchRows();
-    } catch (err) {
-      console.error("Erro ao salvar indicação/vaga:", err);
-      alert("Erro ao salvar.");
-    } finally {
-      setSaving(false);
+      setEditingId(null);
+      await load();
+    } catch (e) {
+      console.error("Erro ao salvar vaga:", e);
+      alert("Não foi possível salvar. Tente novamente.");
     }
   }
 
-  async function onDelete() {
-    if (!rowToDelete) return;
-    setDeleting(true);
+  async function handleDelete(id) {
+    if (!confirm("Remover esta indicação?")) return;
     try {
-      const id = rowToDelete.id ?? rowToDelete._id ?? rowToDelete.uuid;
-      if (!id) throw new Error("ID do registro não encontrado para exclusão.");
-      await api.delete(`/vacancies/${id}`);
-      setOpenDelete(false);
-      setRowToDelete(null);
-      fetchRows();
-    } catch (err) {
-      console.error("Erro ao excluir:", err);
-      alert("Erro ao excluir.");
-    } finally {
-      setDeleting(false);
+      await api.delete(`/job-vacancies/${id}`);
+      await load();
+    } catch (e) {
+      console.error("Erro ao remover vaga:", e);
+      alert("Não foi possível remover. Tente novamente.");
     }
   }
-
-  const filtered = useMemo(() => {
-    const k = q.trim().toLowerCase();
-    if (!k) return rows;
-    return rows.filter((r) =>
-      [r.indication_name ?? r.name, r.role ?? r.position, r.client ?? r.company, r.status]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(k))
-    );
-  }, [rows, q]);
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl md:text-2xl font-semibold">Vagas</h1>
+    <div className="admin-page-container admin-space-y-6">
+      <div className="admin-page-header">
+        <h2 className="admin-page-title">Vagas</h2>
+        {/* Botão movido para o container de filtros */}
       </div>
 
+      {/* KPIs */}
+      <div className="admin-filters">
+        <Card className="admin-card">
+          <CardHeader className="admin-card-header pb-2">
+            <CardTitle className="admin-card-title text-sm font-medium">Total de Vagas</CardTitle>
+            <CardDescription className="admin-card-description">Registros cadastrados</CardDescription>
+          </CardHeader>
+          <CardContent className="admin-card-content">
+            <div className="text-2xl font-bold">{loading ? "—" : total}</div>
+          </CardContent>
+        </Card>
+        <Card className="admin-card">
+          <CardHeader className="admin-card-header pb-2">
+            <CardTitle className="admin-card-title text-sm font-medium">Vagas Abertas</CardTitle>
+            <CardDescription className="admin-card-description">Disponíveis</CardDescription>
+          </CardHeader>
+          <CardContent className="admin-card-content">
+            <div className="text-2xl font-bold">{loading ? "—" : openCount}</div>
+          </CardContent>
+        </Card>
+        <Card className="admin-card">
+          <CardHeader className="admin-card-header pb-2">
+            <CardTitle className="admin-card-title text-sm font-medium">Em Processo</CardTitle>
+            <CardDescription className="admin-card-description">Triagem/Contato</CardDescription>
+          </CardHeader>
+          <CardContent className="admin-card-content">
+            <div className="text-2xl font-bold">
+              {loading ? "—" : items.filter((v) => (v.status || "").toLowerCase() === "em processo").length}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="admin-card">
+          <CardHeader className="admin-card-header pb-2">
+            <CardTitle className="admin-card-title text-sm font-medium">Fechadas</CardTitle>
+            <CardDescription className="admin-card-description">Encerradas</CardDescription>
+          </CardHeader>
+          <CardContent className="admin-card-content">
+            <div className="text-2xl font-bold">
+              {loading ? "—" : items.filter((v) => (v.status || "").toLowerCase() === "fechada").length}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Busca e Filtros */}
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Registros</CardTitle>
-          <CardDescription>Indicações e vagas cadastradas</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {/* === Container de filtros + Botão "+ Novo Indicação" (aqui dentro) === */}
-          <div className="flex items-center gap-2 mb-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            <div className="w-full">
               <Input
-                className="pl-9"
-                placeholder="Filtrar por nome, cargo, cliente, status..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
+                placeholder="Buscar por nome, telefone, endereço, etc…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
             </div>
 
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
-                  <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
-                  <span className="whitespace-nowrap">Novo Indicação</span>
-                </Button>
-              </DialogTrigger>
+            {/* + Nova Indicação agora ao lado dos filtros */}
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="Aberta">Aberta</SelectItem>
+                  <SelectItem value="Em Processo">Em Processo</SelectItem>
+                  <SelectItem value="Fechada">Fechada</SelectItem>
+                </SelectContent>
+              </Select>
 
-              <DialogContent className="max-w-2xl p-0">
-                <div className="max-h-[80vh] overflow-y-auto p-6">
-                  <DialogHeader className="pb-2">
-                    <DialogTitle>{mode === "create" ? "Nova Indicação" : "Editar Indicação"}</DialogTitle>
-                    <DialogDescription>
-                      {mode === "create" ? "Cadastre uma nova indicação." : "Atualize os dados da indicação."}
-                    </DialogDescription>
-                  </DialogHeader>
+              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por departamento" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os departamentos</SelectItem>
+                  <SelectItem value="Comercial">Comercial</SelectItem>
+                  <SelectItem value="Operacional">Operacional</SelectItem>
+                  <SelectItem value="Administrativo">Administrativo</SelectItem>
+                  <SelectItem value="Técnico">Técnico</SelectItem>
+                </SelectContent>
+              </Select>
 
-                  <form onSubmit={onSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="md:col-span-2">
-                        <Label>Nome (indicado)</Label>
-                        <Input name="indication_name" value={form.indication_name} onChange={onChange} required />
-                      </div>
-                      <div>
-                        <Label>Cargo / Vaga</Label>
-                        <Input name="role" value={form.role} onChange={onChange} />
-                      </div>
-                      <div>
-                        <Label>Cliente</Label>
-                        <Input name="client" value={form.client} onChange={onChange} />
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label>Contato (telefone/e-mail)</Label>
-                        <Input name="contact" value={form.contact} onChange={onChange} />
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label>Status</Label>
-                        <Input name="status" value={form.status} onChange={onChange} placeholder="Aberta, Em avaliação, Fechada..." />
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label>Observações</Label>
-                        <Textarea name="notes" value={form.notes} onChange={onChange} />
-                      </div>
-                    </div>
+              <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os tipos</SelectItem>
+                  <SelectItem value="CLT">CLT</SelectItem>
+                  <SelectItem value="PJ">PJ</SelectItem>
+                  <SelectItem value="Freelancer">Freelancer</SelectItem>
+                  <SelectItem value="Estágio">Estágio</SelectItem>
+                </SelectContent>
+              </Select>
 
-                    <div className="flex justify-end gap-2 pt-2">
-                      <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                        Cancelar
-                      </Button>
-                      <Button type="submit" disabled={saving}>
-                        {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
-                      </Button>
-                    </div>
-                  </form>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearch("");
+                  setStatusFilter("todos");
+                  setDepartmentFilter("todos");
+                  setJobTypeFilter("todos");
+                }}
+              >
+                Limpar Filtros
+              </Button>
 
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Cargo</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow><TableCell colSpan={5}>Carregando…</TableCell></TableRow>
-                ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={5}>Nenhum registro</TableCell></TableRow>
-                ) : (
-                  filtered.map((r) => {
-                    const id = r.id ?? r._id ?? r.uuid;
-                    return (
-                      <TableRow key={id || `${r.indication_name}-${r.role}-${r.client}`}>
-                        <TableCell className="font-medium">{r.indication_name ?? r.name ?? "—"}</TableCell>
-                        <TableCell>{r.role ?? r.position ?? "—"}</TableCell>
-                        <TableCell>{r.client ?? r.company ?? "—"}</TableCell>
-                        <TableCell>{r.status ?? "—"}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(r)}>
-                              <Edit className="size-4" />
-                              Editar
-                            </Button>
-                            <Button size="sm" variant="destructive" className="gap-2" onClick={() => confirmDelete(r)}>
-                              <Trash2 className="size-4" />
-                              Excluir
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
+              {/* Botão movido para cá */}
+              <Button onClick={openCreate} className="admin-btn-primary">
+                <Plus className="mr-2 h-4 w-4" /> Nova Indicação
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Dialog simples de exclusão */}
-      <Dialog open={openDelete} onOpenChange={setOpenDelete}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Excluir indicação?</DialogTitle>
-            <DialogDescription>Esta ação não pode ser desfeita.</DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpenDelete(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={onDelete} disabled={deleting}>
-              {deleting ? "Excluindo..." : "Excluir"}
-            </Button>
+      {/* Tabela */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base sm:text-lg">Lista de Vagas</CardTitle>
+          <CardDescription>Gerencie as indicações de candidatos</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="min-w-full table-auto text-sm">
+              <thead className="text-left text-muted-foreground">
+                <tr className="border-b">
+                  <th className="py-2 pr-4">Nome</th>
+                  <th className="py-2 pr-4">Telefone</th>
+                  <th className="py-2 pr-4">Endereço</th>
+                  <th className="py-2 pr-4">Idade</th>
+                  <th className="py-2 pr-4">Sexo</th>
+                  <th className="py-2 pr-4">Departamento</th>
+                  <th className="py-2 pr-4">Tipo (Cargo)</th>
+                  <th className="py-2 pr-4">Salário</th>
+                  <th className="py-2 pr-4">Status</th>
+                  <th className="py-2 pr-2 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!loading && filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="py-6 text-center text-muted-foreground">
+                      Nenhum registro encontrado.
+                    </td>
+                  </tr>
+                )}
+                {filtered.map((v) => (
+                  <tr key={v.id} className="border-b last:border-0">
+                    <td className="py-3 pr-4">{v.name}</td>
+                    <td className="py-3 pr-4">{v.phone}</td>
+                    <td className="py-3 pr-4">{v.address}</td>
+                    <td className="py-3 pr-4">{v.age ?? "—"}</td>
+                    <td className="py-3 pr-4">{v.sex}</td>
+                    <td className="py-3 pr-4">
+                      <Badge variant="secondary">{v.department}</Badge>
+                    </td>
+                    <td className="py-3 pr-4">{v.job_type}</td>
+                    <td className="py-3 pr-4">
+                      {v.salary ? `R$ ${Number(v.salary).toLocaleString()}` : "—"}
+                    </td>
+                    <td className="py-3 pr-4">
+                      <Badge
+                        className={
+                          (v.status || "").toLowerCase() === "aberta"
+                            ? "bg-emerald-600"
+                            : (v.status || "").toLowerCase() === "fechada"
+                            ? "bg-zinc-600"
+                            : "bg-amber-600"
+                        }
+                      >
+                        {v.status || "—"}
+                      </Badge>
+                    </td>
+                    <td className="py-3 pr-2 text-right whitespace-nowrap">
+                      <Button variant="outline" size="icon" className="mr-2" onClick={() => openEdit(v)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="destructive" size="icon" onClick={() => handleDelete(v.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Modal com container rolável */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-[720px] p-0">
+          <div className="max-h-[80vh] overflow-y-auto p-6">
+            <DialogHeader className="pb-2">
+              <DialogTitle>{editingId ? "Editar Indicação" : "Nova Indicação"}</DialogTitle>
+              <DialogDescription>Preencha os dados do candidato à vaga.</DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Nome */}
+              <div className="space-y-2">
+                <Label>Nome</Label>
+                <Input
+                  placeholder="Nome completo"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                />
+              </div>
+
+              {/* Telefone / Idade */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Telefone</Label>
+                  <Input
+                    placeholder="(99) 9 9999-9999"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Idade</Label>
+                  <Input
+                    type="number"
+                    min={14}
+                    placeholder="Ex.: 22"
+                    value={form.age}
+                    onChange={(e) => setForm({ ...form, age: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Endereço */}
+              <div className="space-y-2">
+                <Label>Endereço Residencial</Label>
+                <Input
+                  placeholder="Rua / Bairro / Cidade"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                />
+              </div>
+
+              {/* Sexo / Departamento */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Sexo</Label>
+                  <Select
+                    value={form.sex}
+                    onValueChange={(v) => setForm({ ...form, sex: v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Masculino">Masculino</SelectItem>
+                      <SelectItem value="Feminino">Feminino</SelectItem>
+                      <SelectItem value="Outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Departamento</Label>
+                  <Select
+                    value={form.department}
+                    onValueChange={(v) => setForm({ ...form, department: v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Operacional">Operacional</SelectItem>
+                      <SelectItem value="Comercial">Comercial</SelectItem>
+                      <SelectItem value="Administrativo">Administrativo</SelectItem>
+                      <SelectItem value="Prestação de Serviços">Prestação de Serviços</SelectItem>
+                      <SelectItem value="Outros">Outros</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Tipo / Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Tipo (Cargo)</Label>
+                  <Select
+                    value={form.job_type}
+                    onValueChange={(v) => setForm({ ...form, job_type: v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CLT">CLT</SelectItem>
+                      <SelectItem value="PJ">PJ</SelectItem>
+                      <SelectItem value="Freelancer">Freelancer</SelectItem>
+                      <SelectItem value="Diarista">Diarista</SelectItem>
+                      <SelectItem value="Estágio">Estágio</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select
+                    value={form.status}
+                    onValueChange={(v) => setForm({ ...form, status: v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Aberta">Aberta</SelectItem>
+                      <SelectItem value="Em Processo">Em Processo</SelectItem>
+                      <SelectItem value="Fechada">Fechada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Salário */}
+              <div className="space-y-1">
+                <Label>
+                  Salário{" "}
+                  <span className="text-muted-foreground text-xs">
+                    (Obs.: Freelancer/Diarista = valor por diária)
+                  </span>
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="Ex.: 2200"
+                  value={form.salary}
+                  onChange={(e) => setForm({ ...form, salary: e.target.value })}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit">{editingId ? "Salvar" : "Criar"}</Button>
+              </div>
+            </form>
           </div>
         </DialogContent>
       </Dialog>
     </div>
   );
-};
-
-export default Vacancies;
+}
