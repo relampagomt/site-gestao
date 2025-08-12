@@ -110,7 +110,7 @@ const ensureArrayTypes = (item) => {
   if (Array.isArray(item?.types)) return item.types;
   if (typeof item?.type === 'string' && item.type.trim()) {
     return item.type.split(',').map((s) => s.trim()).filter(Boolean);
-    }
+  }
   return [];
 };
 
@@ -154,7 +154,7 @@ const Actions = () => {
   const [form, setForm] = useState({ ...initialForm });
   const [typesPopoverOpen, setTypesPopoverOpen] = useState(false);
 
-  // visualizar material (novo)
+  // visualizar material
   const [previewItem, setPreviewItem] = useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
@@ -461,102 +461,110 @@ const Actions = () => {
             {/* Modal CRIAR — padronizado como o modal de material */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="size-4" />
+                <Button className="h-9 px-3 md:h-10 md:px-4 text-sm md:text-base gap-2
+                                   [&>svg]:h-4 [&>svg]:w-4 md:[&>svg]:h-5 md:[&>svg]:w-5">
+                  <Plus />
                   Nova Ação
                 </Button>
               </DialogTrigger>
-              <DialogContent className="w-full max-w-xl max-h-[85vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Cadastrar ação</DialogTitle>
-                  <DialogDescription>Preencha os campos abaixo para registrar a ação.</DialogDescription>
-                </DialogHeader>
 
-                <form className="space-y-4" onSubmit={handleCreate}>
-                  <div className="grid md:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="client_name">Nome do cliente</Label>
-                      <Input id="client_name" value={form.client_name} onChange={(e) => onChange('client_name', e.target.value)} required />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="company_name">Nome da empresa</Label>
-                      <Input id="company_name" value={form.company_name} onChange={(e) => onChange('company_name', e.target.value)} required />
-                    </div>
+              {/* CASULO PADRÃO */}
+              <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
+                <div className="px-5 pt-5 pb-3 border-b">
+                  <DialogHeader>
+                    <DialogTitle className="text-base">Cadastrar ação</DialogTitle>
+                    <DialogDescription className="text-xs">Preencha os campos abaixo para registrar a ação.</DialogDescription>
+                  </DialogHeader>
+                </div>
 
-                    <div className="space-y-1.5 md:col-span-2">
-                      <Label>Tipo(s) de ação</Label>
-                      <TypeSelector />
-                      {form.types.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {form.types.map((t) => (
-                            <Badge key={t} variant="secondary" className="gap-1">
-                              {t}
-                              <button type="button" onClick={() => toggleType(t)} className="ml-1 opacity-70 hover:opacity-100">
-                                <X className="size-3" />
-                              </button>
-                            </Badge>
+                <div className="px-5 py-4">
+                  <form className="space-y-4" onSubmit={handleCreate}>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="client_name">Nome do cliente</Label>
+                        <Input id="client_name" value={form.client_name} onChange={(e) => onChange('client_name', e.target.value)} required />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="company_name">Nome da empresa</Label>
+                        <Input id="company_name" value={form.company_name} onChange={(e) => onChange('company_name', e.target.value)} required />
+                      </div>
+
+                      <div className="space-y-1.5 md:col-span-2">
+                        <Label>Tipo(s) de ação</Label>
+                        <TypeSelector />
+                        {form.types.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {form.types.map((t) => (
+                              <Badge key={t} variant="secondary" className="gap-1">
+                                {t}
+                                <button type="button" onClick={() => toggleType(t)} className="ml-1 opacity-70 hover:opacity-100">
+                                  <X className="size-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="start_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
+                        <Input id="start_date" type="date" value={form.start_date} onChange={(e) => onChange('start_date', e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="end_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
+                        <Input id="end_date" type="date" value={form.end_date} onChange={(e) => onChange('end_date', e.target.value)} />
+                      </div>
+
+                      <div className="space-y-1.5 md:col-span-2">
+                        <Label>Períodos do dia</Label>
+                        <div className="flex flex-wrap gap-4">
+                          {periodOptions.map((p) => (
+                            <label key={p} className="flex items-center gap-2 cursor-pointer">
+                              <Checkbox checked={form.day_periods.includes(p)} onCheckedChange={() => togglePeriod(p)} />
+                              <span className="text-sm">{p}</span>
+                            </label>
                           ))}
                         </div>
-                      )}
-                    </div>
+                      </div>
 
-                    <div className="space-y-1.5">
-                      <Label htmlFor="start_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
-                      <Input id="start_date" type="date" value={form.start_date} onChange={(e) => onChange('start_date', e.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="end_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
-                      <Input id="end_date" type="date" value={form.end_date} onChange={(e) => onChange('end_date', e.target.value)} />
-                    </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="material_qty">Quantidade de material</Label>
+                        <Input id="material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
+                      </div>
 
-                    <div className="space-y-1.5 md:col-span-2">
-                      <Label>Períodos do dia</Label>
-                      <div className="flex flex-wrap gap-4">
-                        {periodOptions.map((p) => (
-                          <label key={p} className="flex items-center gap-2 cursor-pointer">
-                            <Checkbox checked={form.day_periods.includes(p)} onCheckedChange={() => togglePeriod(p)} />
-                            <span className="text-sm">{p}</span>
-                          </label>
-                        ))}
+                      <FileInput
+                        id="material_photo_file"
+                        label="Amostra do material (imagem)"
+                        onFile={(f) => onChange('material_photo_file', f)}
+                        hint="Envie uma imagem (jpg, png...)."
+                        existingUrl={null}
+                      />
+                      <FileInput
+                        id="protocol_photo_file"
+                        label="Amostra do protocolo (imagem)"
+                        onFile={(f) => onChange('protocol_photo_file', f)}
+                        hint="Envie uma imagem (jpg, png...)."
+                        existingUrl={null}
+                      />
+
+                      <div className="space-y-1.5 md:col-span-2">
+                        <Label htmlFor="notes">Observações</Label>
+                        <Textarea id="notes" rows={3} value={form.notes} onChange={(e) => onChange('notes', e.target.value)} />
+                      </div>
+
+                      <div className="flex items-center gap-2 md:col-span-2">
+                        <Checkbox id="active" checked={!!form.active} onCheckedChange={(v) => onChange('active', !!v)} />
+                        <Label htmlFor="active">Ativo</Label>
                       </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <Label htmlFor="material_qty">Quantidade de material</Label>
-                      <Input id="material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
+                    {/* Footer padrão */}
+                    <div className="pt-2 mt-4 border-t flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
+                      <Button type="submit">Salvar</Button>
                     </div>
-
-                    <FileInput
-                      id="material_photo_file"
-                      label="Amostra do material (imagem)"
-                      onFile={(f) => onChange('material_photo_file', f)}
-                      hint="Envie uma imagem (jpg, png...)."
-                      existingUrl={null}
-                    />
-                    <FileInput
-                      id="protocol_photo_file"
-                      label="Amostra do protocolo (imagem)"
-                      onFile={(f) => onChange('protocol_photo_file', f)}
-                      hint="Envie uma imagem (jpg, png...)."
-                      existingUrl={null}
-                    />
-
-                    <div className="space-y-1.5 md:col-span-2">
-                      <Label htmlFor="notes">Observações</Label>
-                      <Textarea id="notes" rows={3} value={form.notes} onChange={(e) => onChange('notes', e.target.value)} />
-                    </div>
-
-                    <div className="flex items-center gap-2 md:col-span-2">
-                      <Checkbox id="active" checked={!!form.active} onCheckedChange={(v) => onChange('active', !!v)} />
-                      <Label htmlFor="active">Ativo</Label>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-                    <Button type="submit">Salvar</Button>
-                  </div>
-                </form>
+                  </form>
+                </div>
               </DialogContent>
             </Dialog>
           </div>
@@ -572,15 +580,16 @@ const Actions = () => {
                   <TableHead>Empresa</TableHead>
                   <TableHead>Tipos</TableHead>
                   <TableHead>Validade</TableHead>
+                  <TableHead>Material</TableHead>{/* novo */}
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8">Carregando...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center py-8">Carregando...</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">Nenhuma ação encontrada.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Nenhuma ação encontrada.</TableCell></TableRow>
                 ) : (
                   filtered.map((a) => {
                     const types = ensureArrayTypes(a);
@@ -597,6 +606,30 @@ const Actions = () => {
                           </div>
                         </TableCell>
                         <TableCell>{range}</TableCell>
+
+                        {/* Miniatura igual ao padrão de Materiais */}
+                        <TableCell>
+                          {hasAnyImage ? (
+                            <button
+                              type="button"
+                              onClick={() => { setPreviewItem(a); setIsPreviewOpen(true); }}
+                              className="inline-block"
+                              title="Ver material da ação"
+                            >
+                              <div className="w-10 h-10 rounded-md overflow-hidden border">
+                                <img
+                                  src={a.material_photo_url || a.protocol_photo_url}
+                                  alt="thumb"
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                />
+                              </div>
+                            </button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+
                         <TableCell>
                           {a.active ? (
                             <span className="inline-flex items-center gap-1 text-green-600">
@@ -614,17 +647,18 @@ const Actions = () => {
                               <Button
                                 size="sm"
                                 variant="outline"
+                                className="gap-1 [&>svg]:h-4 [&>svg]:w-4"
                                 onClick={() => { setPreviewItem(a); setIsPreviewOpen(true); }}
                                 title="Ver material da ação"
                               >
-                                <Eye className="size-4 mr-1" /> Ver material
+                                <Eye /> Ver material
                               </Button>
                             )}
-                            <Button size="sm" variant="secondary" onClick={() => openEdit(a)}>
-                              <Edit className="size-4 mr-1" /> Editar
+                            <Button size="sm" variant="secondary" onClick={() => openEdit(a)} className="gap-1">
+                              <Edit className="size-4" /> Editar
                             </Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleDelete(a.id)}>
-                              <Trash2 className="size-4 mr-1" /> Excluir
+                            <Button size="sm" variant="destructive" onClick={() => handleDelete(a.id)} className="gap-1">
+                              <Trash2 className="size-4" /> Excluir
                             </Button>
                           </div>
                         </TableCell>
@@ -641,153 +675,163 @@ const Actions = () => {
         </CardContent>
       </Card>
 
-      {/* Modal EDITAR — padronizado */}
+      {/* Modal EDITAR — casulo padrão do Materiais */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) { setEditing(null); resetForm(); } }}>
-        <DialogContent className="w-full max-w-xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Editar ação</DialogTitle>
-            <DialogDescription>Atualize as informações e salve.</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
+          <div className="px-5 pt-5 pb-3 border-b">
+            <DialogHeader>
+              <DialogTitle className="text-base">Editar ação</DialogTitle>
+              <DialogDescription className="text-xs">Atualize as informações e salve.</DialogDescription>
+            </DialogHeader>
+          </div>
 
-          <form className="space-y-4" onSubmit={handleEdit}>
-            <div className="grid md:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="e_client_name">Nome do cliente</Label>
-                <Input id="e_client_name" value={form.client_name} onChange={(e) => onChange('client_name', e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="e_company_name">Nome da empresa</Label>
-                <Input id="e_company_name" value={form.company_name} onChange={(e) => onChange('company_name', e.target.value)} />
-              </div>
+          <div className="px-5 py-4">
+            <form className="space-y-4" onSubmit={handleEdit}>
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="e_client_name">Nome do cliente</Label>
+                  <Input id="e_client_name" value={form.client_name} onChange={(e) => onChange('client_name', e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="e_company_name">Nome da empresa</Label>
+                  <Input id="e_company_name" value={form.company_name} onChange={(e) => onChange('company_name', e.target.value)} />
+                </div>
 
-              <div className="space-y-1.5 md:col-span-2">
-                <Label>Tipo(s) de ação</Label>
-                <TypeSelector />
-                {form.types.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {form.types.map((t) => (
-                      <Badge key={t} variant="secondary" className="gap-1">
-                        {t}
-                        <button type="button" onClick={() => toggleType(t)} className="ml-1 opacity-70 hover:opacity-100">
-                          <X className="size-3" />
-                        </button>
-                      </Badge>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label>Tipo(s) de ação</Label>
+                  <TypeSelector />
+                  {form.types.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {form.types.map((t) => (
+                        <Badge key={t} variant="secondary" className="gap-1">
+                          {t}
+                          <button type="button" onClick={() => toggleType(t)} className="ml-1 opacity-70 hover:opacity-100">
+                            <X className="size-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="e_start_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
+                  <Input id="e_start_date" type="date" value={form.start_date} onChange={(e) => onChange('start_date', e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="e_end_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
+                  <Input id="e_end_date" type="date" value={form.end_date} onChange={(e) => onChange('end_date', e.target.value)} />
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label>Períodos do dia</Label>
+                  <div className="flex flex-wrap gap-4">
+                    {periodOptions.map((p) => (
+                      <label key={p} className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox checked={form.day_periods.includes(p)} onCheckedChange={() => togglePeriod(p)} />
+                        <span className="text-sm">{p}</span>
+                      </label>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="e_start_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
-                <Input id="e_start_date" type="date" value={form.start_date} onChange={(e) => onChange('start_date', e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="e_end_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
-                <Input id="e_end_date" type="date" value={form.end_date} onChange={(e) => onChange('end_date', e.target.value)} />
-              </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="e_material_qty">Quantidade de material</Label>
+                  <Input id="e_material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
+                </div>
 
-              <div className="space-y-1.5 md:col-span-2">
-                <Label>Períodos do dia</Label>
-                <div className="flex flex-wrap gap-4">
-                  {periodOptions.map((p) => (
-                    <label key={p} className="flex items-center gap-2 cursor-pointer">
-                      <Checkbox checked={form.day_periods.includes(p)} onCheckedChange={() => togglePeriod(p)} />
-                      <span className="text-sm">{p}</span>
-                    </label>
-                  ))}
+                <FileInput
+                  id="e_material_photo_file"
+                  label="Amostra do material (imagem)"
+                  onFile={(f) => onChange('material_photo_file', f)}
+                  hint="Selecione para substituir a imagem atual."
+                  existingUrl={form.material_photo_url}
+                />
+                <FileInput
+                  id="e_protocol_photo_file"
+                  label="Amostra do protocolo (imagem)"
+                  onFile={(f) => onChange('protocol_photo_file', f)}
+                  hint="Selecione para substituir a imagem atual."
+                  existingUrl={form.protocol_photo_url}
+                />
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="e_notes">Observações</Label>
+                  <Textarea id="e_notes" rows={3} value={form.notes} onChange={(e) => onChange('notes', e.target.value)} />
+                </div>
+
+                <div className="flex items-center gap-2 md:col-span-2">
+                  <Checkbox id="e_active" checked={!!form.active} onCheckedChange={(v) => onChange('active', !!v)} />
+                  <Label htmlFor="e_active">Ativa</Label>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="e_material_qty">Quantidade de material</Label>
-                <Input id="e_material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
+              {/* Footer padrão */}
+              <div className="pt-2 mt-4 border-t flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => { setIsEditOpen(false); setEditing(null); resetForm(); }}>
+                  Cancelar
+                </Button>
+                <Button type="submit">Salvar alterações</Button>
               </div>
-
-              <FileInput
-                id="e_material_photo_file"
-                label="Amostra do material (imagem)"
-                onFile={(f) => onChange('material_photo_file', f)}
-                hint="Selecione para substituir a imagem atual."
-                existingUrl={form.material_photo_url}
-              />
-              <FileInput
-                id="e_protocol_photo_file"
-                label="Amostra do protocolo (imagem)"
-                onFile={(f) => onChange('protocol_photo_file', f)}
-                hint="Selecione para substituir a imagem atual."
-                existingUrl={form.protocol_photo_url}
-              />
-
-              <div className="space-y-1.5 md:col-span-2">
-                <Label htmlFor="e_notes">Observações</Label>
-                <Textarea id="e_notes" rows={3} value={form.notes} onChange={(e) => onChange('notes', e.target.value)} />
-              </div>
-
-              <div className="flex items-center gap-2 md:col-span-2">
-                <Checkbox id="e_active" checked={!!form.active} onCheckedChange={(v) => onChange('active', !!v)} />
-                <Label htmlFor="e_active">Ativa</Label>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => { setIsEditOpen(false); setEditing(null); resetForm(); }}>
-                Cancelar
-              </Button>
-              <Button type="submit">Salvar alterações</Button>
-            </div>
-          </form>
+            </form>
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* Modal VER MATERIAL — mesmo padrão visual */}
+      {/* Modal VER MATERIAL — casulo padrão */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="w-full max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Material da ação</DialogTitle>
-            <DialogDescription>Visualize as imagens enviadas para esta ação.</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
+          <div className="px-5 pt-5 pb-3 border-b">
+            <DialogHeader>
+              <DialogTitle className="text-base">Material da ação</DialogTitle>
+              <DialogDescription className="text-xs">Visualize as imagens enviadas para esta ação.</DialogDescription>
+            </DialogHeader>
+          </div>
 
-          {previewItem ? (
-            <div className="space-y-4">
-              {(previewItem.material_photo_url || previewItem.protocol_photo_url) ? (
-                <>
-                  {previewItem.material_photo_url && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground mb-1 block">Amostra do material</Label>
-                      <div className="rounded-md overflow-hidden border">
-                        <img
-                          src={previewItem.material_photo_url}
-                          alt="Amostra do material"
-                          className="w-full h-auto object-contain bg-black/5"
-                          loading="lazy"
-                        />
+          <div className="px-5 py-4">
+            {previewItem ? (
+              <div className="space-y-4">
+                {(previewItem.material_photo_url || previewItem.protocol_photo_url) ? (
+                  <>
+                    {previewItem.material_photo_url && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Amostra do material</Label>
+                        <div className="rounded-md overflow-hidden border">
+                          <img
+                            src={previewItem.material_photo_url}
+                            alt="Amostra do material"
+                            className="w-full h-auto object-contain bg-black/5"
+                            loading="lazy"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {previewItem.protocol_photo_url && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground mb-1 block">Amostra do protocolo</Label>
-                      <div className="rounded-md overflow-hidden border">
-                        <img
-                          src={previewItem.protocol_photo_url}
-                          alt="Amostra do protocolo"
-                          className="w-full h-auto object-contain bg-black/5"
-                          loading="lazy"
-                        />
+                    )}
+                    {previewItem.protocol_photo_url && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Amostra do protocolo</Label>
+                        <div className="rounded-md overflow-hidden border">
+                          <img
+                            src={previewItem.protocol_photo_url}
+                            alt="Amostra do protocolo"
+                            className="w-full h-auto object-contain bg-black/5"
+                            loading="lazy"
+                          />
+                        </div>
                       </div>
-                  </div>
-                  )}
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">Esta ação não possui imagens anexadas.</p>
-              )}
-              <div className="flex justify-end">
-                <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>Fechar</Button>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Esta ação não possui imagens anexadas.</p>
+                )}
+
+                <div className="pt-2 border-t flex justify-end">
+                  <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>Fechar</Button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Selecione uma ação para visualizar.</p>
-          )}
+            ) : (
+              <p className="text-sm text-muted-foreground">Selecione uma ação para visualizar.</p>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
@@ -795,3 +839,4 @@ const Actions = () => {
 };
 
 export default Actions;
+

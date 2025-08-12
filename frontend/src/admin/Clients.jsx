@@ -38,7 +38,7 @@ const Clients = () => {
     try {
       setLoading(true);
       const { data } = await api.get('/clients');
-      setClients(data || []);
+      setClients(Array.isArray(data) ? data : (data?.items || data?.results || data?.clients || []));
     } catch (error) {
       console.error('Erro ao buscar clientes:', error);
     } finally {
@@ -107,9 +107,11 @@ const Clients = () => {
   };
 
   const filteredClients = clients.filter(client => {
-    const matchesSearch = client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch =
+      (client.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (client.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (client.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (client.phone || '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'todos' || client.status === statusFilter;
     const matchesSegment = segmentFilter === 'todos' || client.segment === segmentFilter;
@@ -134,23 +136,27 @@ const Clients = () => {
       <div className="flex justify-end">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm} className="flex items-center space-x-2">
-              <Plus className="w-4 h-4" />
+            <Button onClick={resetForm}
+              className="h-9 px-3 md:h-10 md:px-4 text-sm md:text-base gap-2
+                         [&>svg]:h-4 [&>svg]:w-4 md:[&>svg]:h-5 md:[&>svg]:w-5">
+              <Plus />
               <span className="hidden sm:inline">Novo Cliente</span>
               <span className="sm:hidden">Novo</span>
             </Button>
           </DialogTrigger>
 
-          {/* Modal com container rolável */}
-          <DialogContent className="max-w-2xl p-0">
-            <div className="max-h-[80vh] overflow-y-auto p-6">
+          {/* Modal com container rolável — mantém padrão do projeto */}
+          <DialogContent className="w-full max-w-2xl max-h-[80vh] overflow-y-auto p-0">
+            <div className="px-6 pt-6 pb-3 border-b">
               <DialogHeader>
-                <DialogTitle>{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
-                <DialogDescription>
+                <DialogTitle className="text-base">{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
+                <DialogDescription className="text-xs">
                   {editingClient ? 'Edite as informações do cliente' : 'Adicione um novo cliente ao sistema'}
                 </DialogDescription>
               </DialogHeader>
+            </div>
 
+            <div className="px-6 py-5">
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -185,13 +191,12 @@ const Clients = () => {
                       onValueChange={(v) => setFormData({ ...formData, segment: v })}>
                       <SelectTrigger><SelectValue placeholder="Selecione o segmento" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="varejo">Varejo</SelectItem>
-                        <SelectItem value="servicos">Serviços</SelectItem>
-                        <SelectItem value="alimentacao">Alimentação</SelectItem>
-                        <SelectItem value="saude">Saúde</SelectItem>
-                        <SelectItem value="educacao">Educação</SelectItem>
-                        <SelectItem value="tecnologia">Tecnologia</SelectItem>
-                        <SelectItem value="outros">Outros</SelectItem>
+                        <SelectItem value="Tecnologia">Tecnologia</SelectItem>
+                        <SelectItem value="Saúde">Saúde</SelectItem>
+                        <SelectItem value="Educação">Educação</SelectItem>
+                        <SelectItem value="Varejo">Varejo</SelectItem>
+                        <SelectItem value="Serviços">Serviços</SelectItem>
+                        <SelectItem value="Outro">Outro</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -216,7 +221,7 @@ const Clients = () => {
                     placeholder="Informações adicionais sobre o cliente..." />
                 </div>
 
-                <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
+                <div className="pt-2 border-t flex flex-col sm:flex-row justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
                   <Button type="submit">{editingClient ? 'Atualizar' : 'Criar'}</Button>
                 </div>
@@ -231,7 +236,7 @@ const Clients = () => {
           <div className="space-y-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input placeholder="Buscar clientes por nome, empresa ou email..."
+              <Input placeholder="Buscar clientes por nome, empresa, e‑mail ou telefone..."
                 value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
             </div>
             
@@ -289,70 +294,80 @@ const Clients = () => {
               <p className="mt-1 text-sm text-gray-500">{searchTerm ? 'Tente ajustar sua busca' : 'Comece adicionando um novo cliente'}</p>
             </div>
           ) : (
+            // Mantemos TODAS as colunas e habilitamos scroll horizontal no mobile
             <div className="overflow-x-auto">
-              <div className="min-w-[700px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="min-w-[150px]">Cliente</TableHead>
-                      <TableHead className="min-w-[150px] hidden sm:table-cell">Empresa</TableHead>
-                      <TableHead className="min-w-[200px] hidden md:table-cell">Contato</TableHead>
-                      <TableHead className="min-w-[120px] hidden lg:table-cell">Segmento</TableHead>
-                      <TableHead className="min-w-[100px]">Status</TableHead>
-                      <TableHead className="min-w-[100px]">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredClients.map((client) => (
-                      <TableRow key={client.id}>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <div className="min-w-0">
-                              <span className="font-medium truncate block">{client.name}</span>
-                              <div className="sm:hidden text-xs text-gray-500 truncate">{client.company}</div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell">
-                          <div className="flex items-center space-x-2">
-                            <Building className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span className="truncate">{client.company}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2 text-sm">
-                              <Phone className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                              <span className="truncate">{client.phone}</span>
-                            </div>
-                            <div className="flex items-center space-x-2 text-sm">
-                              <Mail className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                              <span className="truncate">{client.email}</span>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          <span className="capitalize whitespace-nowrap">{client.segment || 'Não informado'}</span>
-                        </TableCell>
-                        <TableCell>{getStatusBadge(client.status)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-1">
-                            <Button variant="outline" size="sm" onClick={() => handleEdit(client)} className="whitespace-nowrap">
-                              <Edit className="w-4 h-4" />
+              <Table className="min-w-[980px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[180px]">Cliente</TableHead>
+                    <TableHead className="min-w-[160px]">Empresa</TableHead>
+                    <TableHead className="min-w-[160px]">Telefone</TableHead>
+                    <TableHead className="min-w-[220px]">E‑mail</TableHead>
+                    <TableHead className="min-w-[140px]">Segmento</TableHead>
+                    <TableHead className="min-w-[120px]">Status</TableHead>
+                    <TableHead className="min-w-[240px]">Observações</TableHead>
+                    <TableHead className="min-w-[120px]" align="right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredClients.map((client) => (
+                    <TableRow key={client.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="font-medium truncate">{client.name}</span>
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Building className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="truncate">{client.company || '—'}</span>
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          <span className="truncate">{client.phone || '—'}</span>
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          <span className="truncate">{client.email || '—'}</span>
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <span className="capitalize whitespace-nowrap">{client.segment || '—'}</span>
+                      </TableCell>
+
+                      <TableCell>{getStatusBadge(client.status)}</TableCell>
+
+                      <TableCell>
+                        <span className="block truncate max-w-[28ch]" title={client.others || ''}>
+                          {client.others || '—'}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => handleEdit(client)} className="gap-1">
+                            <Edit className="w-4 h-4" /> Editar
+                          </Button>
+                          {isAdmin() && (
+                            <Button variant="destructive" size="sm" onClick={() => handleDelete(client.id)} className="gap-1">
+                              <Trash2 className="w-4 h-4" /> Excluir
                             </Button>
-                            {isAdmin() && (
-                              <Button variant="outline" size="sm" onClick={() => handleDelete(client.id)} className="text-red-600 hover:text-red-700 whitespace-nowrap">
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
@@ -362,3 +377,4 @@ const Clients = () => {
 };
 
 export default Clients;
+
