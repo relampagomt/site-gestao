@@ -50,46 +50,10 @@ function buildMonthlyFromActions(actions, monthsDates) {
 
 function buildDistributionFromActions(actions) {
   const map = new Map();
-  
-  // Definir as categorias de serviços
-  const serviceCategories = {
-    "Serviços de Panfletagem e Distribuição": [
-      "PAP (Porta a Porta)", "Arrastão", "Semáforos", "Ponto fixo", 
-      "Distribuição em eventos", "Carro de Som", "Entrega personalizada"
-    ],
-    "Serviços de Ações Promocionais e Interação": [
-      "Distribuição de Amostras (Sampling)", "Degustação", "Demonstração", 
-      "Blitz promocional", "Captação de cadastros", "Distribuição de Brindes"
-    ],
-    "Serviços Complementares": [
-      "Criação e design", "Confecção e produção", "Impressão", 
-      "Logística (Coleta e Entrega)", "Planejamento estratégico", "Relatório e monitoramento"
-    ]
-  };
-
-  // Função para encontrar a categoria de um serviço
-  function findServiceCategory(serviceName) {
-    for (const [category, services] of Object.entries(serviceCategories)) {
-      if (services.includes(serviceName)) {
-        return category;
-      }
-    }
-    return "Outros";
-  }
-
   actions.forEach(a => {
-    const description = a.description || "";
-    if (description) {
-      // Dividir a descrição por vírgulas para obter os serviços individuais
-      const services = description.split(',').map(s => s.trim()).filter(Boolean);
-      
-      services.forEach(service => {
-        const category = findServiceCategory(service);
-        map.set(category, (map.get(category) || 0) + 1);
-      });
-    }
+    const t = (a.service_type || a.type || a.category || a.action_type || 'Outro').toString();
+    map.set(t, (map.get(t) || 0) + 1);
   });
-
   return Array.from(map.entries()).map(([name, value], idx) => ({
     name,
     value,

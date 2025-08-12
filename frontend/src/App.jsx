@@ -11,7 +11,6 @@ import Clients from './admin/Clients';
 import Materials from './admin/Materials';
 import Actions from './admin/Actions';
 import Vacancies from './admin/Vacancies';
-import Settings from './admin/Settings';
 import Users from './admin/Users';
 import SupervisorDashboard from './pages/SupervisorDashboard';
 import './App.css';
@@ -37,7 +36,6 @@ function App() {
               <Route path="materials" element={<Materials />} />
               <Route path="actions" element={<Actions />} />
               <Route path="vacancies" element={<Vacancies />} />
-              <Route path="settings" element={<Settings />} />
               <Route 
                 path="usuarios" 
                 element={

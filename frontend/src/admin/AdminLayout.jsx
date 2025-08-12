@@ -5,14 +5,12 @@ import { Menu, X, Home, Users, Package, Activity, Briefcase, Settings, UserCog }
 import { useAuth } from "../contexts/AuthContext";
 
 const Sidebar = ({ onNavigate, user }) => {
-  const navItems = [
+const navItems = [
     { to: "/admin", label: "Dashboard", icon: Home, end: true },
     { to: "/admin/clients", label: "Clientes", icon: Users },
     { to: "/admin/materials", label: "Materiais", icon: Package },
     { to: "/admin/actions", label: "Ações", icon: Activity },
     { to: "/admin/vacancies", label: "Vagas", icon: Briefcase },
-    { to: "/admin/settings", label: "Configurações", icon: Settings },
-    // Só mostra "Usuários" para admin
     ...(user?.role === "admin" ? [{ to: "/admin/usuarios", label: "Usuários", icon: UserCog }] : []),
   ];
 

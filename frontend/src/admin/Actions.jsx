@@ -14,39 +14,9 @@ import {
 } from "@/components/ui/dialog.jsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
 import { Textarea } from "@/components/ui/textarea.jsx";
-import { Checkbox } from "@/components/ui/checkbox.jsx";
 import { Plus, Search, Edit, Trash2, UploadCloud, X } from "lucide-react";
 import api from "@/services/api";
 import ImagePreview from "@/components/ImagePreview.jsx";
-
-// Definição dos serviços organizados por categoria
-const SERVICES = {
-  "Serviços de Panfletagem e Distribuição": [
-    "PAP (Porta a Porta)",
-    "Arrastão",
-    "Semáforos",
-    "Ponto fixo",
-    "Distribuição em eventos",
-    "Carro de Som",
-    "Entrega personalizada"
-  ],
-  "Serviços de Ações Promocionais e Interação": [
-    "Distribuição de Amostras (Sampling)",
-    "Degustação",
-    "Demonstração",
-    "Blitz promocional",
-    "Captação de cadastros",
-    "Distribuição de Brindes"
-  ],
-  "Serviços Complementares": [
-    "Criação e design",
-    "Confecção e produção",
-    "Impressão",
-    "Logística (Coleta e Entrega)",
-    "Planejamento estratégico",
-    "Relatório e monitoramento"
-  ]
-};
 
 const ActionsPage = () => {
   const [items, setItems] = useState([]);
@@ -65,7 +35,7 @@ const ActionsPage = () => {
     id: null,
     date: new Date().toISOString().slice(0, 10),
     clientName: "",
-    selectedServices: [], // Mudança: array de serviços selecionados
+    description: "",
     notes: "",
     photoUrl: null,
   };
@@ -117,16 +87,6 @@ const ActionsPage = () => {
     setForm((f) => ({ ...f, [name]: value }));
   }
 
-  // Função para lidar com seleção de serviços
-  function handleServiceToggle(service) {
-    setForm((f) => ({
-      ...f,
-      selectedServices: f.selectedServices.includes(service)
-        ? f.selectedServices.filter(s => s !== service)
-        : [...f.selectedServices, service]
-    }));
-  }
-
   function openCreate() {
     setMode("create");
     setForm(emptyForm);
@@ -135,18 +95,11 @@ const ActionsPage = () => {
 
   function openEdit(row) {
     setMode("edit");
-    // Converter description de volta para array de serviços se necessário
-    let selectedServices = [];
-    if (row.description) {
-      // Se description contém serviços separados por vírgula, converter para array
-      selectedServices = row.description.split(',').map(s => s.trim()).filter(Boolean);
-    }
-    
     setForm({
       id: row.id ?? row._id ?? row.uuid ?? null,
       date: (row.date || "").slice(0, 10),
       clientName: row.client_name ?? row.clientName ?? "",
-      selectedServices: selectedServices,
+      description: row.description ?? "",
       notes: row.notes ?? "",
       photoUrl: row.image_url ?? row.photo_url ?? row.photoUrl ?? null,
     });
@@ -165,7 +118,7 @@ const ActionsPage = () => {
       const payload = {
         date: form.date,
         client_name: form.clientName,
-        description: form.selectedServices.join(', '), // Converter array para string
+        description: form.description,
         notes: form.notes || "",
         image_url: form.photoUrl || null,
       };
@@ -257,33 +210,14 @@ const ActionsPage = () => {
                   </div>
 
                   <div className="md:col-span-2">
-                    <Label>Serviços</Label>
-                    <div className="border rounded-md p-4 max-h-64 overflow-y-auto space-y-4">
-                      {Object.entries(SERVICES).map(([category, services]) => (
-                        <div key={category} className="space-y-2">
-                          <h4 className="font-medium text-sm text-gray-700">{category}</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-4">
-                            {services.map((service) => (
-                              <div key={service} className="flex items-center space-x-2">
-                                <Checkbox
-                                  id={service}
-                                  checked={form.selectedServices.includes(service)}
-                                  onCheckedChange={() => handleServiceToggle(service)}
-                                />
-                                <Label htmlFor={service} className="text-sm cursor-pointer">
-                                  {service}
-                                </Label>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {form.selectedServices.length > 0 && (
-                      <div className="mt-2 text-sm text-gray-600">
-                        Selecionados: {form.selectedServices.join(', ')}
-                      </div>
-                    )}
+                    <Label>Descrição</Label>
+                    <Textarea
+                      name="description"
+                      placeholder="O que foi feito"
+                      value={form.description}
+                      onChange={onChange}
+                      required
+                    />
                   </div>
 
                   <div className="md:col-span-2">
@@ -321,7 +255,7 @@ const ActionsPage = () => {
                   <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                     Cancelar
                   </Button>
-                  <Button type="submit" disabled={saving || uploadingPhoto || form.selectedServices.length === 0}>
+                  <Button type="submit" disabled={saving || uploadingPhoto}>
                     {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
                   </Button>
                 </div>
@@ -355,7 +289,7 @@ const ActionsPage = () => {
                 <TableRow>
                   <TableHead>Data</TableHead>
                   <TableHead>Cliente</TableHead>
-                  <TableHead>Serviços</TableHead>
+                  <TableHead>Descrição</TableHead>
                   <TableHead>Imagem</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
