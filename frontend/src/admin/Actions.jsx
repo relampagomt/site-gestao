@@ -447,33 +447,36 @@ const Actions = () => {
             <CardDescription>Cadastre e gerencie ações promocionais e de distribuição.</CardDescription>
           </div>
 
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 opacity-60" />
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Buscar por cliente, empresa, tipo ou observação"
-                className="pl-9 w-[260px]"
+                className="pl-9 w-full sm:w-[260px]"
               />
             </div>
 
             {/* Modal CRIAR — padronizado como o modal de material */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
-                <Button className="h-9 px-3 md:h-10 md:px-4 text-sm md:text-base gap-2
-                                   [&>svg]:h-4 [&>svg]:w-4 md:[&>svg]:h-5 md:[&>svg]:w-5">
-                  <Plus />
-                  Nova Ação
+                <Button
+                  className="min-h-[44px] px-4 text-base font-medium gap-2
+                             sm:h-10 sm:px-4 sm:text-sm
+                             md:h-10 md:px-4 md:text-base
+                             touch-manipulation"
+                >
+                  <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+                  <span className="whitespace-nowrap">Nova Ação</span>
                 </Button>
               </DialogTrigger>
 
-              {/* CASULO PADRÃO */}
               <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
                 <div className="px-5 pt-5 pb-3 border-b">
                   <DialogHeader>
-                    <DialogTitle className="text-base">Cadastrar ação</DialogTitle>
-                    <DialogDescription className="text-xs">Preencha os campos abaixo para registrar a ação.</DialogDescription>
+                    <DialogTitle className="text-base">Criar ação</DialogTitle>
+                    <DialogDescription className="text-xs">Preencha os campos para criar uma nova ação.</DialogDescription>
                   </DialogHeader>
                 </div>
 
@@ -482,11 +485,11 @@ const Actions = () => {
                     <div className="grid md:grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label htmlFor="client_name">Nome do cliente</Label>
-                        <Input id="client_name" value={form.client_name} onChange={(e) => onChange('client_name', e.target.value)} required />
+                        <Input id="client_name" value={form.client_name} onChange={(e) => onChange('client_name', e.target.value)} />
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="company_name">Nome da empresa</Label>
-                        <Input id="company_name" value={form.company_name} onChange={(e) => onChange('company_name', e.target.value)} required />
+                        <Input id="company_name" value={form.company_name} onChange={(e) => onChange('company_name', e.target.value)} />
                       </div>
 
                       <div className="space-y-1.5 md:col-span-2">
@@ -573,101 +576,113 @@ const Actions = () => {
         {/* Tabela */}
         <CardContent>
           <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Empresa</TableHead>
-                  <TableHead>Tipos</TableHead>
-                  <TableHead>Validade</TableHead>
-                  <TableHead>Material</TableHead>{/* novo */}
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-8">Carregando...</TableCell></TableRow>
-                ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Nenhuma ação encontrada.</TableCell></TableRow>
-                ) : (
-                  filtered.map((a) => {
-                    const types = ensureArrayTypes(a);
-                    const range = (a.start_date || a.end_date) ? `${a.start_date || '—'} → ${a.end_date || '—'}` : '—';
-                    const hasAnyImage = a.material_photo_url || a.protocol_photo_url;
-                    return (
-                      <TableRow key={a.id}>
-                        <TableCell className="font-medium">{a.client_name || '-'}</TableCell>
-                        <TableCell>{a.company_name || '-'}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {types.slice(0, 3).map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
-                            {types.length > 3 && <Badge variant="outline">+{types.length - 3}</Badge>}
-                          </div>
-                        </TableCell>
-                        <TableCell>{range}</TableCell>
+            <div className="overflow-x-auto">
+              <Table className="min-w-[980px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Empresa</TableHead>
+                    <TableHead>Tipos</TableHead>
+                    <TableHead>Validade</TableHead>
+                    <TableHead>Material</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-8">Carregando...</TableCell></TableRow>
+                  ) : filtered.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Nenhuma ação encontrada.</TableCell></TableRow>
+                  ) : (
+                    filtered.map((a) => {
+                      const types = ensureArrayTypes(a);
+                      const range = (a.start_date || a.end_date) ? `${a.start_date || '—'} → ${a.end_date || '—'}` : '—';
+                      const hasAnyImage = a.material_photo_url || a.protocol_photo_url;
+                      return (
+                        <TableRow key={a.id}>
+                          <TableCell className="font-medium">{a.client_name || '-'}</TableCell>
+                          <TableCell>{a.company_name || '-'}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {types.slice(0, 3).map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
+                              {types.length > 3 && <Badge variant="outline">+{types.length - 3}</Badge>}
+                            </div>
+                          </TableCell>
+                          <TableCell>{range}</TableCell>
 
-                        {/* Miniatura igual ao padrão de Materiais */}
-                        <TableCell>
-                          {hasAnyImage ? (
-                            <button
-                              type="button"
-                              onClick={() => { setPreviewItem(a); setIsPreviewOpen(true); }}
-                              className="inline-block"
-                              title="Ver material da ação"
-                            >
-                              <div className="w-10 h-10 rounded-md overflow-hidden border">
-                                <img
-                                  src={a.material_photo_url || a.protocol_photo_url}
-                                  alt="thumb"
-                                  className="w-full h-full object-cover"
-                                  loading="lazy"
-                                />
-                              </div>
-                            </button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-
-                        <TableCell>
-                          {a.active ? (
-                            <span className="inline-flex items-center gap-1 text-green-600">
-                              <CheckCircle className="size-4" /> Ativa
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-red-600">
-                              <XCircle className="size-4" /> Inativa
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {hasAnyImage && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1 [&>svg]:h-4 [&>svg]:w-4"
+                          {/* Miniatura igual ao padrão de Materiais */}
+                          <TableCell>
+                            {hasAnyImage ? (
+                              <button
+                                type="button"
                                 onClick={() => { setPreviewItem(a); setIsPreviewOpen(true); }}
+                                className="inline-block"
                                 title="Ver material da ação"
                               >
-                                <Eye /> Ver material
-                              </Button>
+                                <div className="w-10 h-10 rounded-md overflow-hidden border">
+                                  <img
+                                    src={a.material_photo_url || a.protocol_photo_url}
+                                    alt="thumb"
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                  />
+                                </div>
+                              </button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
                             )}
-                            <Button size="sm" variant="secondary" onClick={() => openEdit(a)} className="gap-1">
-                              <Edit className="size-4" /> Editar
-                            </Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleDelete(a.id)} className="gap-1">
-                              <Trash2 className="size-4" /> Excluir
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
+                          </TableCell>
+
+                          <TableCell>
+                            {a.active ? (
+                              <span className="inline-flex items-center gap-1 text-green-600">
+                                <CheckCircle className="size-4" /> Ativa
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-red-600">
+                                <XCircle className="size-4" /> Inativa
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2 flex-wrap">
+                              {hasAnyImage && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 min-h-[36px] touch-manipulation"
+                                  onClick={() => { setPreviewItem(a); setIsPreviewOpen(true); }}
+                                  title="Ver material da ação"
+                                >
+                                  <Eye className="h-4 w-4" /> Ver material
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => openEdit(a)}
+                                className="gap-1 min-h-[36px] touch-manipulation"
+                              >
+                                <Edit className="size-4" /> Editar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleDelete(a.id)}
+                                className="gap-1 min-h-[36px] touch-manipulation"
+                              >
+                                <Trash2 className="size-4" /> Excluir
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
           <p className="text-xs text-muted-foreground mt-3">
             Total: <strong>{filtered.length}</strong> ação(ões)
@@ -821,16 +836,15 @@ const Actions = () => {
                     )}
                   </>
                 ) : (
-                  <p className="text-sm text-muted-foreground">Esta ação não possui imagens anexadas.</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">Nenhuma imagem disponível.</p>
                 )}
-
-                <div className="pt-2 border-t flex justify-end">
-                  <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>Fechar</Button>
-                </div>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Selecione uma ação para visualizar.</p>
-            )}
+            ) : null}
+
+            {/* Footer padrão */}
+            <div className="pt-2 mt-4 border-t flex justify-end">
+              <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>Fechar</Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

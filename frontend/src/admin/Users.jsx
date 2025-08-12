@@ -313,14 +313,14 @@ const Users = () => {
             <CardDescription>Gerencie contas, perfis e permissões.</CardDescription>
           </div>
 
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 opacity-60" />
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Buscar por nome, usuário, e‑mail ou perfil"
-                className="pl-9 w-[260px]"
+                className="pl-9 w-full sm:w-[260px]"
               />
             </div>
 
@@ -328,12 +328,14 @@ const Users = () => {
               <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                 <DialogTrigger asChild>
                   <Button
-                    className="h-9 px-3 md:h-10 md:px-4 text-sm md:text-base gap-2
-                               [&>svg]:h-4 [&>svg]:w-4 md:[&>svg]:h-5 md:[&>svg]:w-5"
+                    className="min-h-[44px] px-4 text-base font-medium gap-2
+                               sm:h-10 sm:px-4 sm:text-sm
+                               md:h-10 md:px-4 md:text-base
+                               touch-manipulation"
                     onClick={resetForm}
                   >
-                    <Plus />
-                    Novo Usuário
+                    <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+                    <span className="whitespace-nowrap">Novo Usuário</span>
                   </Button>
                 </DialogTrigger>
 
@@ -496,18 +498,23 @@ const Users = () => {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                          <div className="flex justify-end gap-2 flex-wrap">
                             <Button
                               size="sm"
                               variant="outline"
-                              className="gap-1"
+                              className="gap-1 min-h-[36px] touch-manipulation"
                               onClick={() => handleToggleActive(u.id, !!u.active)}
                               title={u.active ? 'Desativar' : 'Ativar'}
                             >
                               {u.active ? 'Desativar' : 'Ativar'}
                             </Button>
 
-                            <Button size="sm" variant="secondary" onClick={() => openEdit(u)} className="gap-1">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => openEdit(u)}
+                              className="gap-1 min-h-[36px] touch-manipulation"
+                            >
                               <Edit className="size-4" />
                               Editar
                             </Button>
@@ -517,7 +524,7 @@ const Users = () => {
                                 size="sm"
                                 variant="destructive"
                                 onClick={() => handleDeleteUser(u.id)}
-                                className="gap-1"
+                                className="gap-1 min-h-[36px] touch-manipulation"
                               >
                                 <Trash2 className="size-4" />
                                 Excluir
