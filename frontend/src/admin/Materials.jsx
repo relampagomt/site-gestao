@@ -188,7 +188,7 @@ const Materials = () => {
     const k = q.trim().toLowerCase();
     if (!k) return materials;
     return materials.filter((m) =>
-      [m.client_name, m.responsible, String(m.quantity)]
+      [m.client_name, m.responsible, String(m.quantity), m.notes] // ← inclui observações na busca
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(k))
     );
@@ -213,7 +213,7 @@ const Materials = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="Buscar por cliente, responsável ou quantidade..."
+                placeholder="Buscar por cliente, responsável, quantidade ou observações..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -352,6 +352,7 @@ const Materials = () => {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Responsável</TableHead>
                   <TableHead>Qtd</TableHead>
+                  <TableHead>Observações</TableHead> {/* ← NOVA COLUNA */}
                   <TableHead>Amostra</TableHead>
                   <TableHead>Protocolo</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -360,11 +361,11 @@ const Materials = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7}>Carregando…</TableCell>
+                    <TableCell colSpan={8}>Carregando…</TableCell> {/* 8 colunas */}
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7}>Nenhum registro</TableCell>
+                    <TableCell colSpan={8}>Nenhum registro</TableCell> {/* 8 colunas */}
                   </TableRow>
                 ) : (
                   filtered.map((m) => {
@@ -375,6 +376,13 @@ const Materials = () => {
                         <TableCell>{(m.client_name ?? m.clientName) || "—"}</TableCell>
                         <TableCell>{m.responsible || "—"}</TableCell>
                         <TableCell>{m.quantity ?? "—"}</TableCell>
+                        <TableCell title={m.notes || ""}>
+                          {m.notes ? (
+                            <span className="line-clamp-2 max-w-[320px] block">{m.notes}</span>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
                         <TableCell>
                           {m.material_sample_url ? (
                             <ImagePreview
