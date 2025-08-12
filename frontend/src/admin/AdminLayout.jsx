@@ -1,10 +1,17 @@
 // frontend/src/admin/AdminLayout.jsx
 import React, { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Menu, X, Home, Users, Package, Activity, Briefcase, UserCog } from "lucide-react";
+import { Menu, X, Home, Users, Package, Activity, Briefcase, UserCog, LogOut } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
-const Sidebar = ({ onNavigate, user, collapsed = false, hideBrand = false }) => {
+const Sidebar = ({
+  onNavigate,
+  onLogout,
+  user,
+  collapsed = false,
+  hideBrand = false,
+  showLogout = false, // ← habilita o botão Sair no rodapé (usado no mobile)
+}) => {
   const navItems = [
     { to: "/admin", label: "Dashboard", icon: Home, end: true },
     { to: "/admin/clients", label: "Clientes", icon: Users },
@@ -34,26 +41,48 @@ const Sidebar = ({ onNavigate, user, collapsed = false, hideBrand = false }) => 
           )}
         </div>
       )}
-      <nav className="p-3 space-y-1">
-        {navItems.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={onNavigate}
-            title={label}
-            className={({ isActive }) =>
-              [
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm",
-                isActive ? "bg-red-50 text-red-700 border border-red-100" : "text-slate-700 hover:bg-slate-50",
-              ].join(" ")
-            }
-          >
-            <Icon size={18} />
-            {!collapsed && <span>{label}</span>}
-          </NavLink>
-        ))}
-      </nav>
+
+      {/* Conteúdo do menu com rodapé fixo opcional */}
+      <div className="h-[calc(100%-3.5rem)] md:h-auto flex flex-col">
+        <nav className="p-3 space-y-1 flex-1 overflow-auto">
+          {navItems.map(({ to, label, icon: Icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              onClick={onNavigate}
+              title={label}
+              className={({ isActive }) =>
+                [
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm",
+                  isActive
+                    ? "bg-red-50 text-red-700 border border-red-100"
+                    : "text-slate-700 hover:bg-slate-50",
+                ].join(" ")
+              }
+            >
+              <Icon size={18} />
+              {!collapsed && <span>{label}</span>}
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* Botão Sair fixo no rodapé do menu lateral quando showLogout = true (usado no mobile) */}
+        {showLogout && (
+          <div className="p-3 border-t">
+            <button
+              type="button"
+              onClick={onLogout}
+              className="w-full inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-red-700 hover:bg-red-50"
+              aria-label="Sair"
+              title="Sair"
+            >
+              <LogOut size={18} />
+              {!collapsed && <span>Sair</span>}
+            </button>
+          </div>
+        )}
+      </div>
     </aside>
   );
 };
@@ -112,6 +141,7 @@ export default function AdminLayout() {
             </button>
           </div>
 
+          {/* Ações desktop (inclui Sair) */}
           <div className="hidden md:flex items-center gap-3 text-sm text-slate-600">
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-white font-semibold">
               {user?.name?.charAt(0)?.toUpperCase() || "A"}
@@ -156,7 +186,7 @@ export default function AdminLayout() {
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />
-          <div className="fixed inset-y-0 left-0 w-72 bg-white shadow-lg md:hidden animate-in slide-in-from-left">
+          <div className="fixed inset-y-0 left-0 w-72 bg-white shadow-lg md:hidden animate-in slide-in-from-left flex flex-col">
             <div className="flex items-center justify-between border-b px-4 h-14">
               <div className="text-lg font-bold text-red-600">Relâmpago</div>
               <button
@@ -168,7 +198,17 @@ export default function AdminLayout() {
                 <X size={18} />
               </button>
             </div>
-            <Sidebar user={user} onNavigate={() => setMobileOpen(false)} hideBrand />
+
+            {/* Sidebar mobile com botão Sair no rodapé */}
+            <div className="flex-1 overflow-hidden">
+              <Sidebar
+                user={user}
+                onNavigate={() => setMobileOpen(false)}
+                onLogout={logout}
+                hideBrand
+                showLogout
+              />
+            </div>
           </div>
         </>
       )}
