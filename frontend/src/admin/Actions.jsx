@@ -25,6 +25,8 @@ import {
   X,
   CheckCircle,
   XCircle,
+  Upload,
+  ImageIcon
 } from 'lucide-react';
 
 // -------------------- OPÇÕES (como solicitado) --------------------
@@ -65,23 +67,20 @@ const ACTION_OPTIONS = [
   },
 ];
 
-const ALL_ACTION_TYPES = ACTION_OPTIONS.flatMap((g) => g.items);
-
 // -------------------- Mock DEV --------------------
 const mockActions = [
   {
     id: 'a1',
     client_name: 'Cliente Exemplo',
     company_name: 'Empresa XYZ',
-    // MULTI!
     types: ['PAP (Porta a Porta)', 'Semáforos'],
-    // compat legada
     type: 'PAP (Porta a Porta), Semáforos',
     start_date: '2025-08-01',
     end_date: '2025-08-10',
     day_periods: ['manhã', 'tarde'],
     material_qty: 1200,
     material_photo_url: '',
+    protocol_photo_url: '',
     notes: 'Campanha bairro central.',
     active: true,
   },
@@ -91,17 +90,21 @@ const mockActions = [
 const initialForm = {
   client_name: '',
   company_name: '',
-  // MULTI
   types: [],
-  // validade
   start_date: '',
   end_date: '',
-  // campos já existentes
   day_periods: [],
   material_qty: '',
-  material_photo_url: '',
   notes: '',
   active: true,
+
+  // uploads (arquivos):
+  material_photo_file: null,
+  protocol_photo_file: null,
+
+  // existentes (urls já salvas no registro):
+  material_photo_url: '',
+  protocol_photo_url: '',
 };
 
 const periodOptions = ['manhã', 'tarde', 'noite'];
@@ -114,7 +117,17 @@ const ensureArrayTypes = (item) => {
   return [];
 };
 
-// -------------------- Componente --------------------
+// Upload helper (ajuste o endpoint/campo conforme seu backend)
+async function uploadFile(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const resp = await api.post('/upload', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  // esperado: { url: 'https://...' }
+  return resp?.data?.url;
+}
+
 const Actions = () => {
   const { user } = useAuth();
   const isAdmin = String(user?.role || user?.claims?.role || '').toLowerCase() === 'admin';
@@ -205,35 +218,52 @@ const Actions = () => {
     }
 
     try {
+      let materialUrl = '';
+      let protocolUrl = '';
+
       if (import.meta.env.DEV) {
+        // Em DEV, simulamos upload criando objectURL (não persiste)
+        if (form.material_photo_file) {
+          materialUrl = URL.createObjectURL(form.material_photo_file);
+        }
+        if (form.protocol_photo_file) {
+          protocolUrl = URL.createObjectURL(form.protocol_photo_file);
+        }
+
         const newItem = {
           id: `dev-${Date.now()}`,
           ...form,
-          // compat legada para componentes antigos
-          type: form.types.join(', '),
+          type: form.types.join(', '), // compat
           material_qty: Number(form.material_qty || 0),
+          material_photo_url: materialUrl,
+          protocol_photo_url: protocolUrl,
         };
         setActions((prev) => [...prev, newItem]);
         setIsCreateOpen(false);
         resetForm();
-        alert('Ação criada (simulação DEV).');
+        alert('Ação criada (upload simulado em DEV).');
         return;
+      }
+
+      // Upload reais (se houver arquivos)
+      if (form.material_photo_file) {
+        materialUrl = await uploadFile(form.material_photo_file);
+      }
+      if (form.protocol_photo_file) {
+        protocolUrl = await uploadFile(form.protocol_photo_file);
       }
 
       const payload = {
         client_name: form.client_name,
         company_name: form.company_name,
-        // >>> MULTI <<<
         types: form.types,
-        // compat legada (se algo no backend ainda usa 'type' como string)
-        type: form.types.join(', '),
-        // validade
+        type: form.types.join(', '), // compat
         start_date: form.start_date || null,
         end_date: form.end_date || null,
-        // demais campos
         day_periods: form.day_periods,
         material_qty: Number(form.material_qty || 0),
-        material_photo_url: form.material_photo_url || '',
+        material_photo_url: materialUrl,
+        protocol_photo_url: protocolUrl,
         notes: form.notes || '',
         active: !!form.active,
       };
@@ -260,7 +290,10 @@ const Actions = () => {
       end_date: item.end_date || '',
       day_periods: Array.isArray(item.day_periods) ? item.day_periods : [],
       material_qty: item.material_qty ?? '',
+      material_photo_file: null,
+      protocol_photo_file: null,
       material_photo_url: item.material_photo_url || '',
+      protocol_photo_url: item.protocol_photo_url || '',
       notes: item.notes || '',
       active: typeof item.active === 'boolean' ? item.active : true,
     });
@@ -281,15 +314,27 @@ const Actions = () => {
     }
 
     try {
+      let materialUrl = form.material_photo_url || '';
+      let protocolUrl = form.protocol_photo_url || '';
+
       if (import.meta.env.DEV) {
+        if (form.material_photo_file) {
+          materialUrl = URL.createObjectURL(form.material_photo_file);
+        }
+        if (form.protocol_photo_file) {
+          protocolUrl = URL.createObjectURL(form.protocol_photo_file);
+        }
+
         setActions((prev) =>
           prev.map((a) =>
             a.id === editing.id
               ? {
                   ...a,
                   ...form,
-                  type: form.types.join(', '), // compat
+                  type: form.types.join(', '),
                   material_qty: Number(form.material_qty || 0),
+                  material_photo_url: materialUrl,
+                  protocol_photo_url: protocolUrl,
                 }
               : a
           )
@@ -297,8 +342,16 @@ const Actions = () => {
         setIsEditOpen(false);
         setEditing(null);
         resetForm();
-        alert('Ação atualizada (simulação DEV).');
+        alert('Ação atualizada (upload simulado em DEV).');
         return;
+      }
+
+      // Se usuário escolheu novos arquivos, faz upload e substitui URL
+      if (form.material_photo_file) {
+        materialUrl = await uploadFile(form.material_photo_file);
+      }
+      if (form.protocol_photo_file) {
+        protocolUrl = await uploadFile(form.protocol_photo_file);
       }
 
       const payload = {
@@ -310,7 +363,8 @@ const Actions = () => {
         end_date: form.end_date || null,
         day_periods: form.day_periods,
         material_qty: Number(form.material_qty || 0),
-        material_photo_url: form.material_photo_url || '',
+        material_photo_url: materialUrl,
+        protocol_photo_url: protocolUrl,
         notes: form.notes || '',
         active: !!form.active,
       };
@@ -403,13 +457,38 @@ const Actions = () => {
     </Popover>
   );
 
+  const FileInput = ({ id, label, onFile, hint, existingUrl }) => {
+    return (
+      <div className="space-y-1.5">
+        <Label htmlFor={id} className="flex items-center gap-2">
+          <Upload className="size-4" /> {label}
+        </Label>
+        <Input
+          id={id}
+          type="file"
+          accept="image/*"
+          onChange={(e) => {
+            const file = e.target.files?.[0] || null;
+            onFile(file);
+          }}
+        />
+        <p className="text-[11px] text-muted-foreground">{hint}</p>
+        {existingUrl ? (
+          <a href={existingUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs underline text-blue-600">
+            <ImageIcon className="size-4" /> Ver imagem atual
+          </a>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <CardTitle>Ações</CardTitle>
-            <CardDescription>Cadastre e gerencie ações promocionais e de distribuição.</CardDescription>
+            <CardDescription>Cadastre e gerencie ações promocionais e de distribuição (com upload de amostras e protocolo).</CardDescription>
           </div>
 
           <div className="flex gap-2 items-center">
@@ -518,6 +597,7 @@ const Actions = () => {
                       </div>
                     </div>
 
+                    {/* Quantidade de material */}
                     <div className="space-y-1.5">
                       <Label htmlFor="material_qty">Quantidade de material</Label>
                       <Input
@@ -530,16 +610,24 @@ const Actions = () => {
                       />
                     </div>
 
-                    <div className="space-y-1.5">
-                      <Label htmlFor="material_photo_url">Foto do material (URL)</Label>
-                      <Input
-                        id="material_photo_url"
-                        value={form.material_photo_url}
-                        onChange={(e) => onChange('material_photo_url', e.target.value)}
-                        placeholder="https://..."
-                      />
-                    </div>
+                    {/* Uploads */}
+                    <FileInput
+                      id="material_photo_file"
+                      label="Amostra do material (imagem)"
+                      onFile={(f) => onChange('material_photo_file', f)}
+                      hint="Envie uma foto do material (jpg, png...)."
+                      existingUrl={null}
+                    />
 
+                    <FileInput
+                      id="protocol_photo_file"
+                      label="Amostra do protocolo (imagem)"
+                      onFile={(f) => onChange('protocol_photo_file', f)}
+                      hint="Envie uma foto do protocolo (jpg, png...)."
+                      existingUrl={null}
+                    />
+
+                    {/* Observações */}
                     <div className="space-y-1.5 md:col-span-2">
                       <Label htmlFor="notes">Observações</Label>
                       <Textarea
@@ -693,6 +781,7 @@ const Actions = () => {
                 )}
               </div>
 
+              {/* Validade */}
               <div className="space-y-1.5">
                 <Label htmlFor="e_start_date" className="flex items-center gap-2">
                   <CalendarIcon className="size-4" /> Início
@@ -716,6 +805,7 @@ const Actions = () => {
                 />
               </div>
 
+              {/* Períodos do dia */}
               <div className="space-y-1.5 md:col-span-2">
                 <Label>Períodos do dia</Label>
                 <div className="flex flex-wrap gap-4">
@@ -731,6 +821,7 @@ const Actions = () => {
                 </div>
               </div>
 
+              {/* Quantidade de material */}
               <div className="space-y-1.5">
                 <Label htmlFor="e_material_qty">Quantidade de material</Label>
                 <Input
@@ -742,14 +833,22 @@ const Actions = () => {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="e_material_photo_url">Foto do material (URL)</Label>
-                <Input
-                  id="e_material_photo_url"
-                  value={form.material_photo_url}
-                  onChange={(e) => onChange('material_photo_url', e.target.value)}
-                />
-              </div>
+              {/* Uploads com preview de existente */}
+              <FileInput
+                id="e_material_photo_file"
+                label="Amostra do material (imagem)"
+                onFile={(f) => onChange('material_photo_file', f)}
+                hint="Selecione para substituir a imagem atual."
+                existingUrl={form.material_photo_url}
+              />
+
+              <FileInput
+                id="e_protocol_photo_file"
+                label="Amostra do protocolo (imagem)"
+                onFile={(f) => onChange('protocol_photo_file', f)}
+                hint="Selecione para substituir a imagem atual."
+                existingUrl={form.protocol_photo_url}
+              />
 
               <div className="space-y-1.5 md:col-span-2">
                 <Label htmlFor="e_notes">Observações</Label>
