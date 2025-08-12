@@ -1,24 +1,39 @@
-// src/admin/AdminLayout.jsx
-import React, { useState } from "react";
+// frontend/src/admin/AdminLayout.jsx
+import React, { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Menu, X, Home, Users, Package, Activity, Briefcase, Settings, UserCog } from "lucide-react";
+import { Menu, X, Home, Users, Package, Activity, Briefcase, UserCog } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
-const Sidebar = ({ onNavigate, user }) => {
-const navItems = [
+const Sidebar = ({ onNavigate, user, collapsed = false, hideBrand = false }) => {
+  const navItems = [
     { to: "/admin", label: "Dashboard", icon: Home, end: true },
     { to: "/admin/clients", label: "Clientes", icon: Users },
     { to: "/admin/materials", label: "Materiais", icon: Package },
     { to: "/admin/actions", label: "Ações", icon: Activity },
     { to: "/admin/vacancies", label: "Vagas", icon: Briefcase },
-    ...(user?.role === "admin" ? [{ to: "/admin/usuarios", label: "Usuários", icon: UserCog }] : []),
+    ...(String(user?.role).toLowerCase() === "admin"
+      ? [{ to: "/admin/usuarios", label: "Usuários", icon: UserCog }]
+      : []),
   ];
 
   return (
-    <aside className="h-full w-72 border-r bg-white">
-      <div className="px-5 py-4 border-b">
-        <div className="text-2xl font-extrabold text-red-600">Relâmpago</div>
-      </div>
+    <aside
+      className={[
+        "h-full border-r bg-white transition-[width] duration-200 ease-in-out",
+        collapsed ? "w-[4.5rem]" : "w-72",
+      ].join(" ")}
+    >
+      {!hideBrand && (
+        <div className="px-3 py-4 border-b">
+          {collapsed ? (
+            <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-red-600 text-white font-extrabold">
+              R
+            </div>
+          ) : (
+            <div className="text-2xl font-extrabold text-red-600">Relâmpago</div>
+          )}
+        </div>
+      )}
       <nav className="p-3 space-y-1">
         {navItems.map(({ to, label, icon: Icon, end }) => (
           <NavLink
@@ -26,6 +41,7 @@ const navItems = [
             to={to}
             end={end}
             onClick={onNavigate}
+            title={label}
             className={({ isActive }) =>
               [
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm",
@@ -34,7 +50,7 @@ const navItems = [
             }
           >
             <Icon size={18} />
-            <span>{label}</span>
+            {!collapsed && <span>{label}</span>}
           </NavLink>
         ))}
       </nav>
@@ -43,9 +59,18 @@ const navItems = [
 };
 
 export default function AdminLayout() {
+  // estado PERSISTENTE (funciona no dashboard e em todas as páginas)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    return localStorage.getItem("relampago.sidebarCollapsed") === "1";
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
-  const navigate = useNavigate();
+
+  useEffect(() => {
+    localStorage.setItem("relampago.sidebarCollapsed", sidebarCollapsed ? "1" : "0");
+  }, [sidebarCollapsed]);
+
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const logout = () => {
     localStorage.removeItem("token");
@@ -53,14 +78,19 @@ export default function AdminLayout() {
     navigate("/login");
   };
 
+  // width da sidebar controlada por CSS var (garante que o Dashboard respeite o recolhimento)
+  const asideWidth = sidebarCollapsed ? "4.5rem" : "18rem";
+
   return (
-    <div className="min-h-dvh bg-slate-50 admin-no-overflow">
+    <div className="min-h-dvh bg-slate-50">
       {/* Topbar */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b">
-        <div className="admin-container">
-          <div className="h-14 flex items-center justify-between">
+        <div className="mx-auto max-w-[1400px] px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {/* Mobile abre drawer */}
             <button
-              className="md:hidden admin-btn-secondary"
+              type="button"
+              className="md:hidden inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5"
               onClick={() => setMobileOpen(true)}
               aria-label="Abrir menu"
             >
@@ -68,37 +98,51 @@ export default function AdminLayout() {
               <span className="text-sm">Menu</span>
             </button>
 
-            <div className="hidden md:flex items-center gap-3 text-sm text-slate-600">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-white font-semibold">
-                {user?.name?.charAt(0)?.toUpperCase() || "A"}
-              </span>
-              <span>{user?.name || "Administrador"}</span>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">
-                {user?.role === "admin" ? "Admin" : "Supervisor"}
-              </span>
-            </div>
-
+            {/* Desktop recolhe/expande (AGORA GLOBAL) */}
             <button
-              className="admin-btn-secondary"
+              type="button"
+              className="hidden md:inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5"
+              onClick={() => setSidebarCollapsed((v) => !v)}
+              aria-pressed={sidebarCollapsed}
+              aria-label={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+              title={sidebarCollapsed ? "Expandir" : "Recolher"}
+            >
+              <Menu size={18} />
+              <span className="text-sm">{sidebarCollapsed ? "Expandir" : "Menu"}</span>
+            </button>
+          </div>
+
+          <div className="hidden md:flex items-center gap-3 text-sm text-slate-600">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-white font-semibold">
+              {user?.name?.charAt(0)?.toUpperCase() || "A"}
+            </span>
+            <span>{user?.name || "Administrador"}</span>
+            <button
+              type="button"
+              className="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50"
               onClick={logout}
               aria-label="Sair"
             >
-              <span>Sair</span>
+              Sair
             </button>
           </div>
         </div>
       </header>
 
-      {/* Layout */}
-      <div className="admin-container">
-        <div className="admin-main-layout">
+      {/* Corpo */}
+      <div className="mx-auto max-w-[1400px] px-4">
+        {/* Grid com largura da sidebar controlada por var (funciona em qualquer página, inclusive Dashboard) */}
+        <div
+          className="grid grid-cols-1 gap-6 py-6 md:[grid-template-columns:var(--aside-w)_1fr]"
+          style={{ ["--aside-w"]: asideWidth }}
+        >
           {/* Sidebar desktop */}
           <div className="hidden md:block">
-            <Sidebar user={user} />
+            <Sidebar user={user} collapsed={sidebarCollapsed} />
           </div>
 
           {/* Conteúdo */}
-          <main className="admin-content">
+          <main className="min-h-[70dvh]">
             <Outlet />
           </main>
         </div>
@@ -108,22 +152,23 @@ export default function AdminLayout() {
       {mobileOpen && (
         <>
           <div
-            className="fixed inset-0 bg-black/20 md:hidden z-40"
+            className="fixed inset-0 bg-black/20 md:hidden"
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />
-          <div className="fixed inset-y-0 left-0 w-72 bg-white shadow-lg md:hidden animate-in slide-in-from-left z-50">
+          <div className="fixed inset-y-0 left-0 w-72 bg-white shadow-lg md:hidden animate-in slide-in-from-left">
             <div className="flex items-center justify-between border-b px-4 h-14">
               <div className="text-lg font-bold text-red-600">Relâmpago</div>
               <button
-                className="admin-btn-secondary p-1.5"
+                type="button"
+                className="rounded-md border p-1.5"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Fechar menu"
               >
                 <X size={18} />
               </button>
             </div>
-            <Sidebar user={user} onNavigate={() => setMobileOpen(false)} />
+            <Sidebar user={user} onNavigate={() => setMobileOpen(false)} hideBrand />
           </div>
         </>
       )}
