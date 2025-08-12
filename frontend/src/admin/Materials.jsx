@@ -19,22 +19,18 @@ import api from "@/services/api";
 import ImagePreview from "@/components/ImagePreview.jsx";
 
 const Materials = () => {
-  // listagem / busca
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
 
-  // modal (create/edit)
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("create"); // 'create' | 'edit'
   const [saving, setSaving] = useState(false);
 
-  // dialog excluir
   const [openDelete, setOpenDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
 
-  // formulário
   const emptyForm = {
     id: null,
     date: new Date().toISOString().slice(0, 10),
@@ -47,11 +43,9 @@ const Materials = () => {
   };
   const [form, setForm] = useState(emptyForm);
 
-  // estados de upload
   const [uploadingSample, setUploadingSample] = useState(false);
   const [uploadingProtocol, setUploadingProtocol] = useState(false);
 
-  // buscar materiais
   async function fetchMaterials() {
     setLoading(true);
     try {
@@ -68,7 +62,6 @@ const Materials = () => {
     fetchMaterials();
   }, []);
 
-  // upload genérico
   async function uploadFile(file) {
     const fd = new FormData();
     fd.append("file", file);
@@ -204,131 +197,7 @@ const Materials = () => {
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-semibold">Materiais</h1>
-
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            {/* === Botão padronizado como nas outras páginas === */}
-            <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
-              <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
-              <span className="whitespace-nowrap">Novo</span>
-            </Button>
-          </DialogTrigger>
-
-          {/* Modal com container rolável */}
-          <DialogContent className="max-w-2xl p-0">
-            <div className="max-h-[80vh] overflow-y-auto p-6">
-              <DialogHeader className="pb-2">
-                <DialogTitle>{mode === "create" ? "Novo Material" : "Editar Material"}</DialogTitle>
-                <DialogDescription>
-                  {mode === "create" ? "Cadastre um recebimento/coleta." : "Edite as informações do material."}
-                </DialogDescription>
-              </DialogHeader>
-
-              <form onSubmit={onSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <Label>Data</Label>
-                    <Input type="date" name="date" value={form.date} onChange={onChange} required />
-                  </div>
-                  <div>
-                    <Label>Quantidade</Label>
-                    <Input
-                      type="number"
-                      name="quantity"
-                      placeholder="Ex.: 10000"
-                      value={form.quantity}
-                      onChange={onChange}
-                      required
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Cliente</Label>
-                    <Input
-                      name="clientName"
-                      placeholder="Nome do cliente"
-                      value={form.clientName}
-                      onChange={onChange}
-                      required
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Responsável pela coleta/recebimento</Label>
-                    <Input
-                      name="responsible"
-                      placeholder="Responsável"
-                      value={form.responsible}
-                      onChange={onChange}
-                      required
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Observações</Label>
-                    <Textarea name="notes" placeholder="Opcional" value={form.notes} onChange={onChange} />
-                  </div>
-                </div>
-
-                {/* Amostra do Material */}
-                <div className="space-y-2">
-                  <Label>Amostra do Material</Label>
-                  <div className="flex items-center gap-3">
-                    <Input type="file" accept="image/*" onChange={onSampleChange} />
-                    <Button type="button" variant="outline" disabled className="gap-2">
-                      <UploadCloud className="size-4" />
-                      {uploadingSample ? "Enviando..." : "Upload"}
-                    </Button>
-                  </div>
-                  {form.sampleUrl && (
-                    <div className="relative inline-flex items-center gap-2 mt-2">
-                      <ImagePreview src={form.sampleUrl} alt="Amostra" size={96} />
-                      <button
-                        type="button"
-                        onClick={() => setForm((f) => ({ ...f, sampleUrl: null }))}
-                        className="bg-white border rounded-full p-1 shadow"
-                        title="Remover"
-                      >
-                        <X className="size-4 text-red-600" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Protocolo */}
-                <div className="space-y-2">
-                  <Label>Protocolo</Label>
-                  <div className="flex items-center gap-3">
-                    <Input type="file" accept="image/*" onChange={onProtocolChange} />
-                    <Button type="button" variant="outline" disabled className="gap-2">
-                      <UploadCloud className="size-4" />
-                      {uploadingProtocol ? "Enviando..." : "Upload"}
-                    </Button>
-                  </div>
-                  {form.protocolUrl && (
-                    <div className="relative inline-flex items-center gap-2 mt-2">
-                      <ImagePreview src={form.protocolUrl} alt="Protocolo" size={96} />
-                      <button
-                        type="button"
-                        onClick={() => setForm((f) => ({ ...f, protocolUrl: null }))}
-                        className="bg-white border rounded-full p-1 shadow"
-                        title="Remover"
-                      >
-                        <X className="size-4 text-red-600" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit" disabled={saving || uploadingSample || uploadingProtocol}>
-                    {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Botão "+ Novo" foi movido para o container de filtros em "Registros" */}
       </div>
 
       <Card>
@@ -337,6 +206,7 @@ const Materials = () => {
           <CardDescription>Lista de materiais cadastrados</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* === Container de filtros + Botão "+ Novo" (agora aqui) === */}
           <div className="flex items-center gap-2 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -347,6 +217,130 @@ const Materials = () => {
                 onChange={(e) => setQ(e.target.value)}
               />
             </div>
+
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
+                  <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+                  <span className="whitespace-nowrap">Novo</span>
+                </Button>
+              </DialogTrigger>
+
+              {/* Modal com container rolável */}
+              <DialogContent className="max-w-2xl p-0">
+                <div className="max-h-[80vh] overflow-y-auto p-6">
+                  <DialogHeader className="pb-2">
+                    <DialogTitle>{mode === "create" ? "Novo Material" : "Editar Material"}</DialogTitle>
+                    <DialogDescription>
+                      {mode === "create" ? "Cadastre um recebimento/coleta." : "Edite as informações do material."}
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <form onSubmit={onSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <Label>Data</Label>
+                        <Input type="date" name="date" value={form.date} onChange={onChange} required />
+                      </div>
+                      <div>
+                        <Label>Quantidade</Label>
+                        <Input
+                          type="number"
+                          name="quantity"
+                          placeholder="Ex.: 10000"
+                          value={form.quantity}
+                          onChange={onChange}
+                          required
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label>Cliente</Label>
+                        <Input
+                          name="clientName"
+                          placeholder="Nome do cliente"
+                          value={form.clientName}
+                          onChange={onChange}
+                          required
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label>Responsável pela coleta/recebimento</Label>
+                        <Input
+                          name="responsible"
+                          placeholder="Responsável"
+                          value={form.responsible}
+                          onChange={onChange}
+                          required
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label>Observações</Label>
+                        <Textarea name="notes" placeholder="Opcional" value={form.notes} onChange={onChange} />
+                      </div>
+                    </div>
+
+                    {/* Amostra do Material */}
+                    <div className="space-y-2">
+                      <Label>Amostra do Material</Label>
+                      <div className="flex items-center gap-3">
+                        <Input type="file" accept="image/*" onChange={onSampleChange} />
+                        <Button type="button" variant="outline" disabled className="gap-2">
+                          <UploadCloud className="size-4" />
+                          {uploadingSample ? "Enviando..." : "Upload"}
+                        </Button>
+                      </div>
+                      {form.sampleUrl && (
+                        <div className="relative inline-flex items-center gap-2 mt-2">
+                          <ImagePreview src={form.sampleUrl} alt="Amostra" size={96} />
+                          <button
+                            type="button"
+                            onClick={() => setForm((f) => ({ ...f, sampleUrl: null }))}
+                            className="bg-white border rounded-full p-1 shadow"
+                            title="Remover"
+                          >
+                            <X className="size-4 text-red-600" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Protocolo */}
+                    <div className="space-y-2">
+                      <Label>Protocolo</Label>
+                      <div className="flex items-center gap-3">
+                        <Input type="file" accept="image/*" onChange={onProtocolChange} />
+                        <Button type="button" variant="outline" disabled className="gap-2">
+                          <UploadCloud className="size-4" />
+                          {uploadingProtocol ? "Enviando..." : "Upload"}
+                        </Button>
+                      </div>
+                      {form.protocolUrl && (
+                        <div className="relative inline-flex items-center gap-2 mt-2">
+                          <ImagePreview src={form.protocolUrl} alt="Protocolo" size={96} />
+                          <button
+                            type="button"
+                            onClick={() => setForm((f) => ({ ...f, protocolUrl: null }))}
+                            className="bg-white border rounded-full p-1 shadow"
+                            title="Remover"
+                          >
+                            <X className="size-4 text-red-600" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                        Cancelar
+                      </Button>
+                      <Button type="submit" disabled={saving || uploadingSample || uploadingProtocol}>
+                        {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
 
           <div className="overflow-x-auto">
@@ -424,7 +418,6 @@ const Materials = () => {
         </CardContent>
       </Card>
 
-      {/* Dialog simples de exclusão */}
       <Dialog open={openDelete} onOpenChange={setOpenDelete}>
         <DialogContent className="max-w-sm">
           <DialogHeader>

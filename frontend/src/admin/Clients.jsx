@@ -1,464 +1,301 @@
 // frontend/src/admin/Clients.jsx
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Badge } from '../components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Textarea } from '../components/ui/textarea';
-import { useAuth } from '../contexts/AuthContext';
-import { Plus, Search, Edit, Trash2, Phone, Mail, Building, User, AlertCircle } from 'lucide-react';
-import api from '@/services/api';
+import React, { useEffect, useMemo, useState } from "react";
+import api from "@/services/api";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
+import { Button } from "@/components/ui/button.jsx";
+import { Input } from "@/components/ui/input.jsx";
+import { Label } from "@/components/ui/label.jsx";
+import { Textarea } from "@/components/ui/textarea.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog.jsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
+
+import { Plus, Search, Edit, Trash2 } from "lucide-react";
 
 const Clients = () => {
-  const { user } = useAuth();
-  const isAdmin = String(user?.role || user?.claims?.role || '').toLowerCase() === 'admin';
-
   const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('todos');
-  const [segmentFilter, setSegmentFilter] = useState('todos');
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    company: '',
-    segment: '',
-    status: 'ativo',
-    others: ''
-  });
+  const [loading, setLoading] = useState(false);
+  const [q, setQ] = useState("");
 
-  useEffect(() => { fetchClients(); }, []);
+  // modal (create/edit)
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("create");
+  const [saving, setSaving] = useState(false);
 
-  const fetchClients = async () => {
+  // dialog excluir
+  const [openDelete, setOpenDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [rowToDelete, setRowToDelete] = useState(null);
+
+  const emptyForm = {
+    id: null,
+    name: "",
+    email: "",
+    phone: "",
+    document: "",
+    address: "",
+    notes: "",
+  };
+  const [form, setForm] = useState(emptyForm);
+
+  async function fetchClients() {
+    setLoading(true);
     try {
-      setLoading(true);
-      const { data } = await api.get('/clients');
-      setClients(Array.isArray(data) ? data : (data?.items || data?.results || data?.clients || []));
-    } catch (error) {
-      console.error('Erro ao buscar clientes:', error);
+      const { data } = await api.get("/clients");
+      setClients(Array.isArray(data) ? data : data?.items ?? []);
+    } catch (e) {
+      console.error("Erro ao carregar clientes:", e);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleSubmit = async (e) => {
+  useEffect(() => {
+    fetchClients();
+  }, []);
+
+  function onChange(e) {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+  }
+
+  function openCreate() {
+    setMode("create");
+    setForm(emptyForm);
+    setOpen(true);
+  }
+
+  function openEdit(row) {
+    setMode("edit");
+    setForm({
+      id: row.id ?? row._id ?? row.uuid ?? null,
+      name: row.name ?? "",
+      email: row.email ?? "",
+      phone: row.phone ?? "",
+      document: row.document ?? row.cnpj ?? row.cpf ?? "",
+      address: row.address ?? "",
+      notes: row.notes ?? "",
+    });
+    setOpen(true);
+  }
+
+  function confirmDelete(row) {
+    setRowToDelete(row);
+    setOpenDelete(true);
+  }
+
+  async function onSubmit(e) {
     e.preventDefault();
+    setSaving(true);
     try {
-      if (editingClient) {
-        await api.put(`/clients/${editingClient.id}`, formData);
+      const payload = {
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        document: form.document || null,
+        address: form.address || "",
+        notes: form.notes || "",
+      };
+
+      if (mode === "create") {
+        await api.post("/clients", payload);
       } else {
-        await api.post('/clients', formData);
+        const id = form.id;
+        if (!id) throw new Error("ID do registro não encontrado para edição.");
+        await api.put(`/clients/${id}`, payload);
       }
-      await fetchClients();
-      setIsDialogOpen(false);
-      resetForm();
-    } catch (error) {
-      console.error('Erro ao salvar cliente:', error);
-      alert(error?.response?.data?.message || 'Erro ao salvar cliente');
+
+      setOpen(false);
+      setForm(emptyForm);
+      fetchClients();
+    } catch (err) {
+      console.error("Erro ao salvar cliente:", err);
+      alert("Erro ao salvar cliente.");
+    } finally {
+      setSaving(false);
     }
-  };
+  }
 
-  const handleEdit = (client) => {
-    setEditingClient(client);
-    setFormData({
-      name: client.name || '',
-      email: client.email || '',
-      phone: client.phone || '',
-      company: client.company || '',
-      segment: client.segment || '',
-      status: client.status || 'ativo',
-      others: client.others || ''
-    });
-    setIsDialogOpen(true);
-  };
-
-  const handleDelete = async (clientId) => {
-    if (!isAdmin) {
-      alert('Apenas administradores podem excluir clientes');
-      return;
+  async function onDelete() {
+    if (!rowToDelete) return;
+    setDeleting(true);
+    try {
+      const id = rowToDelete.id ?? rowToDelete._id ?? rowToDelete.uuid;
+      if (!id) throw new Error("ID do registro não encontrado para exclusão.");
+      await api.delete(`/clients/${id}`);
+      setOpenDelete(false);
+      setRowToDelete(null);
+      fetchClients();
+    } catch (err) {
+      console.error("Erro ao excluir cliente:", err);
+      alert("Erro ao excluir cliente.");
+    } finally {
+      setDeleting(false);
     }
-    if (window.confirm('Tem certeza que deseja excluir este cliente?')) {
-      try {
-        await api.delete(`/clients/${clientId}`);
-        await fetchClients();
-      } catch (error) {
-        console.error('Erro ao excluir cliente:', error);
-        alert(error?.response?.data?.message || 'Erro ao excluir cliente');
-      }
-    }
-  };
+  }
 
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      company: '',
-      segment: '',
-      status: 'ativo',
-      others: ''
-    });
-    setEditingClient(null);
-  };
-
-  const filteredClients = clients.filter(client => {
-    const matchesSearch =
-      (client.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (client.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (client.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (client.phone || '').toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === 'todos' || client.status === statusFilter;
-    const matchesSegment = segmentFilter === 'todos' || client.segment === segmentFilter;
-
-    return matchesSearch && matchesStatus && matchesSegment;
-  });
-
-  const getStatusBadge = (status) => {
-    const statusMap = {
-      ativo: { variant: 'default', label: 'Ativo' },
-      inativo: { variant: 'secondary', label: 'Inativo' },
-      pendente: { variant: 'outline', label: 'Pendente' }
-    };
-    const s = statusMap[status] || statusMap.ativo;
-    return <Badge variant={s.variant}>{s.label}</Badge>;
-  };
+  const filtered = useMemo(() => {
+    const k = q.trim().toLowerCase();
+    if (!k) return clients;
+    return clients.filter((c) =>
+      [c.name, c.email, c.phone, c.document]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(k))
+    );
+  }, [clients, q]);
 
   return (
-    <div className="admin-page-container admin-space-y-6">
-      <div className="admin-page-header">
-        <h2 className="admin-page-title">Clientes</h2>
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl md:text-2xl font-semibold">Clientes</h1>
+      </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={resetForm}
-              className="admin-btn-primary"
-            >
-              <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
-              <span className="whitespace-nowrap">Novo Cliente</span>
-            </Button>
-          </DialogTrigger>
-
-            {/* Modal com container rolável — mantém padrão do projeto */}
-            <DialogContent className="w-full max-w-2xl max-h-[85vh] overflow-y-auto p-0 mx-4">
-              <div className="px-6 pt-6 pb-3 border-b">
-                <DialogHeader>
-                  <DialogTitle className="text-base">{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
-                  <DialogDescription className="text-xs">
-                    {editingClient ? 'Edite as informações do cliente' : 'Adicione um novo cliente ao sistema'}
-                  </DialogDescription>
-                </DialogHeader>
-              </div>
-
-              <div className="px-6 py-5">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="name">Nome *</Label>
-                      <Input id="name" value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
-                    </div>
-                    <div>
-                      <Label htmlFor="company">Empresa *</Label>
-                      <Input id="company" value={formData.company}
-                        onChange={(e) => setFormData({ ...formData, company: e.target.value })} required />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="phone">Telefone *</Label>
-                      <Input id="phone" value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required />
-                    </div>
-                    <div>
-                      <Label htmlFor="email">Email *</Label>
-                      <Input id="email" type="email" value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="segment">Segmento</Label>
-                      <Select value={formData.segment}
-                        onValueChange={(v) => setFormData({ ...formData, segment: v })}>
-                        <SelectTrigger><SelectValue placeholder="Selecione o segmento" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Tecnologia">Tecnologia</SelectItem>
-                          <SelectItem value="Saúde">Saúde</SelectItem>
-                          <SelectItem value="Educação">Educação</SelectItem>
-                          <SelectItem value="Varejo">Varejo</SelectItem>
-                          <SelectItem value="Serviços">Serviços</SelectItem>
-                          <SelectItem value="Outro">Outro</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="status">Status</Label>
-                      <Select value={formData.status}
-                        onValueChange={(v) => setFormData({ ...formData, status: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ativo">Ativo</SelectItem>
-                          <SelectItem value="inativo">Inativo</SelectItem>
-                          <SelectItem value="pendente">Pendente</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="others">Observações</Label>
-                    <Textarea id="others" value={formData.others}
-                      onChange={(e) => setFormData({ ...formData, others: e.target.value })}
-                      placeholder="Informações adicionais sobre o cliente..." />
-                  </div>
-
-                  <div className="pt-2 border-t flex flex-col sm:flex-row justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                    <Button type="submit">{editingClient ? 'Atualizar' : 'Criar'}</Button>
-                  </div>
-                </form>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        <Card className="admin-card">
-          <CardContent className="admin-card-content">
-            <div className="admin-space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input placeholder="Buscar clientes por nome, empresa, e‑mail ou telefone..."
-                  value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
-              </div>
-
-              <div className="admin-filters">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filtrar por status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os status</SelectItem>
-                    <SelectItem value="ativo">Ativo</SelectItem>
-                    <SelectItem value="inativo">Inativo</SelectItem>
-                    <SelectItem value="pendente">Pendente</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={segmentFilter} onValueChange={setSegmentFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filtrar por segmento" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os segmentos</SelectItem>
-                    <SelectItem value="Tecnologia">Tecnologia</SelectItem>
-                    <SelectItem value="Saúde">Saúde</SelectItem>
-                    <SelectItem value="Educação">Educação</SelectItem>
-                    <SelectItem value="Varejo">Varejo</SelectItem>
-                    <SelectItem value="Serviços">Serviços</SelectItem>
-                    <SelectItem value="Outro">Outro</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Button variant="outline" className="admin-btn-secondary" onClick={() => { setSearchTerm(''); setStatusFilter('todos'); setSegmentFilter('todos'); }}>
-                  Limpar Filtros
-                </Button>
-              </div>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Registros</CardTitle>
+          <CardDescription>Lista de clientes cadastrados</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* === Container de filtros + "+ Novo Cliente" (aqui dentro) === */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Buscar por nome, e-mail, telefone..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="admin-card">
-          <CardHeader className="admin-card-header">
-            <CardTitle className="admin-card-title">Lista de Clientes</CardTitle>
-            <CardDescription className="admin-card-description">{filteredClients.length} cliente(s) encontrado(s)</CardDescription>
-          </CardHeader>
-          <CardContent className="admin-card-content">
-            {loading ? (
-              <div className="admin-loading">
-                <div className="admin-loading-spinner"></div>
-                <p className="mt-2 text-gray-600">Carregando clientes...</p>
-              </div>
-            ) : filteredClients.length === 0 ? (
-              <div className="admin-empty-state">
-                <AlertCircle className="admin-empty-icon" />
-                <h3 className="admin-empty-title">Nenhum cliente encontrado</h3>
-                <p className="admin-empty-description">{searchTerm ? 'Tente ajustar sua busca' : 'Comece adicionando um novo cliente'}</p>
-              </div>
-            ) : (
-              <div className="w-full">
-                {/* Versão mobile: Cards empilhados */}
-                <div className="block lg:hidden space-y-4 p-4">
-                  {filteredClients.map((client) => (
-                    <Card key={client.id} className="w-full">
-                      <CardContent className="p-4">
-                        <div className="space-y-3">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                <span className="font-medium truncate">{client.name}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <Building className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">{client.company || '—'}</span>
-                              </div>
-                            </div>
-                            <div className="flex-shrink-0 ml-2">
-                              {getStatusBadge(client.status)}
-                            </div>
-                          </div>
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
+                  <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+                  <span className="whitespace-nowrap">Novo Cliente</span>
+                </Button>
+              </DialogTrigger>
 
-                          <div className="space-y-2 text-sm">
-                            <div className="flex items-center gap-2">
-                              <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                              <span className="truncate">{client.phone || '—'}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                              <span className="truncate">{client.email || '—'}</span>
-                            </div>
-                            {client.segment && (
-                              <div className="text-xs text-gray-500">
-                                Segmento: <span className="capitalize">{client.segment}</span>
-                              </div>
-                            )}
-                            {client.others && (
-                              <div className="text-xs text-gray-500">
-                                <span className="block truncate" title={client.others}>
-                                  {client.others}
-                                </span>
-                              </div>
-                            )}
-                          </div>
+              <DialogContent className="max-w-2xl p-0">
+                <div className="max-h-[80vh] overflow-y-auto p-6">
+                  <DialogHeader className="pb-2">
+                    <DialogTitle>{mode === "create" ? "Novo Cliente" : "Editar Cliente"}</DialogTitle>
+                    <DialogDescription>
+                      {mode === "create" ? "Cadastre um novo cliente." : "Atualize os dados do cliente."}
+                    </DialogDescription>
+                  </DialogHeader>
 
-                          <div className="flex gap-2 pt-2 border-t">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEdit(client)}
-                              className="admin-btn-secondary flex-1 gap-1 min-h-[36px] touch-manipulation"
-                            >
-                              <Edit className="w-4 h-4" /> Editar
+                  <form onSubmit={onSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="md:col-span-2">
+                        <Label>Nome</Label>
+                        <Input name="name" value={form.name} onChange={onChange} required />
+                      </div>
+                      <div>
+                        <Label>E-mail</Label>
+                        <Input type="email" name="email" value={form.email} onChange={onChange} />
+                      </div>
+                      <div>
+                        <Label>Telefone</Label>
+                        <Input name="phone" value={form.phone} onChange={onChange} />
+                      </div>
+                      <div>
+                        <Label>Documento (CPF/CNPJ)</Label>
+                        <Input name="document" value={form.document} onChange={onChange} />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label>Endereço</Label>
+                        <Input name="address" value={form.address} onChange={onChange} />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label>Observações</Label>
+                        <Textarea name="notes" value={form.notes} onChange={onChange} />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                        Cancelar
+                      </Button>
+                      <Button type="submit" disabled={saving}>
+                        {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>E-mail</TableHead>
+                  <TableHead>Telefone</TableHead>
+                  <TableHead>Documento</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow><TableCell colSpan={5}>Carregando…</TableCell></TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow><TableCell colSpan={5}>Nenhum registro</TableCell></TableRow>
+                ) : (
+                  filtered.map((c) => {
+                    const id = c.id ?? c._id ?? c.uuid;
+                    return (
+                      <TableRow key={id || `${c.name}-${c.email}-${c.phone}`}>
+                        <TableCell className="font-medium">{c.name || "—"}</TableCell>
+                        <TableCell>{c.email || "—"}</TableCell>
+                        <TableCell>{c.phone || "—"}</TableCell>
+                        <TableCell>{c.document || "—"}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(c)}>
+                              <Edit className="size-4" />
+                              Editar
                             </Button>
-                            {isAdmin && (
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => handleDelete(client.id)}
-                                className="admin-btn-secondary flex-1 gap-1 min-h-[36px] touch-manipulation text-red-600 hover:text-red-700"
-                              >
-                                <Trash2 className="w-4 h-4" /> Excluir
-                              </Button>
-                            )}
+                            <Button size="sm" variant="destructive" className="gap-2" onClick={() => confirmDelete(c)}>
+                              <Trash2 className="size-4" />
+                              Excluir
+                            </Button>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
-                {/* Versão desktop: Tabela com scroll horizontal */}
-                <div className="hidden lg:block">
-                  <div className="overflow-x-auto">
-                    <Table className="min-w-[980px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="min-w-[180px]">Cliente</TableHead>
-                          <TableHead className="min-w-[160px]">Empresa</TableHead>
-                          <TableHead className="min-w-[160px]">Telefone</TableHead>
-                          <TableHead className="min-w-[220px]">E‑mail</TableHead>
-                          <TableHead className="min-w-[140px]">Segmento</TableHead>
-                          <TableHead className="min-w-[120px]">Status</TableHead>
-                          <TableHead className="min-w-[240px]">Observações</TableHead>
-                          <TableHead className="min-w-[160px] text-right">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredClients.map((client) => (
-                          <TableRow key={client.id}>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                <span className="font-medium truncate">{client.name}</span>
-                              </div>
-                            </TableCell>
-
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Building className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">{client.company || '—'}</span>
-                              </div>
-                            </TableCell>
-
-                            <TableCell>
-                              <div className="flex items-center gap-2 text-sm">
-                                <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">{client.phone || '—'}</span>
-                              </div>
-                            </TableCell>
-
-                            <TableCell>
-                              <div className="flex items-center gap-2 text-sm">
-                                <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">{client.email || '—'}</span>
-                              </div>
-                            </TableCell>
-
-                            <TableCell>
-                              <span className="capitalize whitespace-nowrap">{client.segment || '—'}</span>
-                            </TableCell>
-
-                            <TableCell>{getStatusBadge(client.status)}</TableCell>
-
-                            <TableCell>
-                              <span className="block truncate max-w-[28ch]" title={client.others || ''}>
-                                {client.others || '—'}
-                              </span>
-                            </TableCell>
-
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleEdit(client)}
-                                  className="gap-1 min-h-[36px] touch-manipulation"
-                                >
-                                  <Edit className="w-4 h-4" /> Editar
-                                </Button>
-                                {isAdmin && (
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => handleDelete(client.id)}
-                                    className="gap-1 min-h-[36px] touch-manipulation"
-                                  >
-                                    <Trash2 className="w-4 h-4" /> Excluir
-                                  </Button>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Dialog simples de exclusão */}
+      <Dialog open={openDelete} onOpenChange={setOpenDelete}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Excluir cliente?</DialogTitle>
+            <DialogDescription>Esta ação não pode ser desfeita.</DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpenDelete(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={onDelete} disabled={deleting}>
+              {deleting ? "Excluindo..." : "Excluir"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
