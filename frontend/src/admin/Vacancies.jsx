@@ -159,8 +159,8 @@ export default function Vacancies() {
         {/* Botão movido para o container de filtros */}
       </div>
 
-      {/* KPIs */}
-      <div className="admin-filters">
+      {/* KPIs — agora em grid 2x2 no desktop */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="admin-card">
           <CardHeader className="admin-card-header pb-2">
             <CardTitle className="admin-card-title text-sm font-medium">Total de Vagas</CardTitle>
@@ -170,6 +170,7 @@ export default function Vacancies() {
             <div className="text-2xl font-bold">{loading ? "—" : total}</div>
           </CardContent>
         </Card>
+
         <Card className="admin-card">
           <CardHeader className="admin-card-header pb-2">
             <CardTitle className="admin-card-title text-sm font-medium">Vagas Abertas</CardTitle>
@@ -179,6 +180,7 @@ export default function Vacancies() {
             <div className="text-2xl font-bold">{loading ? "—" : openCount}</div>
           </CardContent>
         </Card>
+
         <Card className="admin-card">
           <CardHeader className="admin-card-header pb-2">
             <CardTitle className="admin-card-title text-sm font-medium">Em Processo</CardTitle>
@@ -190,6 +192,7 @@ export default function Vacancies() {
             </div>
           </CardContent>
         </Card>
+
         <Card className="admin-card">
           <CardHeader className="admin-card-header pb-2">
             <CardTitle className="admin-card-title text-sm font-medium">Fechadas</CardTitle>
@@ -215,7 +218,7 @@ export default function Vacancies() {
               />
             </div>
 
-            {/* + Nova Indicação agora ao lado dos filtros */}
+            {/* + Nova Indicação ao lado dos filtros */}
             <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
@@ -267,7 +270,6 @@ export default function Vacancies() {
                 Limpar Filtros
               </Button>
 
-              {/* Botão movido para cá */}
               <Button onClick={openCreate} className="admin-btn-primary">
                 <Plus className="mr-2 h-4 w-4" /> Nova Indicação
               </Button>
@@ -350,7 +352,7 @@ export default function Vacancies() {
         </CardContent>
       </Card>
 
-      {/* Modal com container rolável */}
+      {/* Modal */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[720px] p-0">
           <div className="max-h-[80vh] overflow-y-auto p-6">
@@ -360,7 +362,6 @@ export default function Vacancies() {
             </DialogHeader>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Nome */}
               <div className="space-y-2">
                 <Label>Nome</Label>
                 <Input
@@ -371,7 +372,6 @@ export default function Vacancies() {
                 />
               </div>
 
-              {/* Telefone / Idade */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Telefone</Label>
@@ -394,7 +394,6 @@ export default function Vacancies() {
                 </div>
               </div>
 
-              {/* Endereço */}
               <div className="space-y-2">
                 <Label>Endereço Residencial</Label>
                 <Input
@@ -404,7 +403,6 @@ export default function Vacancies() {
                 />
               </div>
 
-              {/* Sexo / Departamento */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Sexo</Label>
@@ -439,7 +437,6 @@ export default function Vacancies() {
                 </div>
               </div>
 
-              {/* Tipo / Status */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tipo (Cargo)</Label>
@@ -474,7 +471,6 @@ export default function Vacancies() {
                 </div>
               </div>
 
-              {/* Salário */}
               <div className="space-y-1">
                 <Label>
                   Salário{" "}
