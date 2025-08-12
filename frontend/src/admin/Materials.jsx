@@ -207,9 +207,10 @@ const Materials = () => {
 
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2" onClick={openCreate}>
-              <Plus className="size-4" />
-              Novo
+            {/* === Botão padronizado como nas outras páginas === */}
+            <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
+              <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+              <span className="whitespace-nowrap">Novo</span>
             </Button>
           </DialogTrigger>
 
