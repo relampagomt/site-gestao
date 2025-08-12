@@ -17,7 +17,11 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
     );
   }
 
-  if (!isAuthenticated) {
+  // Verifica se há token e user no localStorage
+  const token = localStorage.getItem('token');
+  const user = localStorage.getItem('user');
+  
+  if (!isAuthenticated || !token || !user) {
     return <Navigate to="/login" replace />;
   }
 
