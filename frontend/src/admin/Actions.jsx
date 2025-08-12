@@ -106,7 +106,7 @@ const initialForm = {
 
 const periodOptions = ['manhã', 'tarde', 'noite'];
 
-const ensureArrayTypes = (item ) => {
+const ensureArrayTypes = (item  ) => {
   if (Array.isArray(item?.types)) return item.types;
   if (typeof item?.type === 'string' && item.type.trim()) {
     return item.type.split(',').map((s) => s.trim()).filter(Boolean);
@@ -730,9 +730,4 @@ const Actions = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="e_start_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
-                  <Input id="e_start_date" type="date" value={form.start_date} onChange={(e) => onChange('start_date', e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="e_end_date" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
-                  <Input id="e_end_date" type="date" value={form.end_
+                  <Label htmlFor="e_start_date" className="flex items-center gap-2"><CalendarIcon className="size-4
