@@ -26,8 +26,8 @@ import {
   CheckCircle,
   XCircle,
   Upload,
-  ImageIcon,
-  Eye
+  ImageIcon
+  // Eye  // <- REMOVIDO: não usamos mais o botão "Ver material" na coluna de ações
 } from 'lucide-react';
 
 /* ===================== OPÇÕES ===================== */
@@ -219,14 +219,13 @@ const Actions = () => {
 
     try {
       let materialUrl = '';
-      let protocolUrl = '';
 
       if (import.meta.env.DEV) {
         materialUrl = form.material_photo_file ? URL.createObjectURL(form.material_photo_file) : '';
-        protocolUrl = form.protocol_photo_file ? URL.createObjectURL(form.protocol_photo_file) : '';
+        // protocolo REMOVIDO do create (não fazemos upload nem usamos aqui)
       } else {
         if (form.material_photo_file) materialUrl = await uploadFile(form.material_photo_file, 'material');
-        if (form.protocol_photo_file) protocolUrl = await uploadFile(form.protocol_photo_file, 'protocol');
+        // protocolo REMOVIDO do create
       }
 
       const payload = {
@@ -239,7 +238,7 @@ const Actions = () => {
         day_periods: form.day_periods,
         material_qty: Number(form.material_qty || 0),
         material_photo_url: materialUrl,
-        protocol_photo_url: protocolUrl,
+        // protocol_photo_url: ...  // REMOVIDO do create
         notes: form.notes || '',
         active: !!form.active,
       };
@@ -310,7 +309,7 @@ const Actions = () => {
         day_periods: form.day_periods,
         material_qty: Number(form.material_qty || 0),
         material_photo_url: materialUrl,
-        protocol_photo_url: protocolUrl,
+        protocol_photo_url: protocolUrl, // <- Editar continua podendo trocar/adicionar protocolo
         notes: form.notes || '',
         active: !!form.active,
       };
@@ -530,6 +529,7 @@ const Actions = () => {
                         <Input id="material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
                       </div>
 
+                      {/* Upload ÚNICO no CREATE: apenas MATERIAL (protocolo removido) */}
                       <FileInput
                         id="material_photo_file"
                         label="Amostra do material (imagem)"
@@ -537,13 +537,8 @@ const Actions = () => {
                         hint="Envie uma imagem (jpg, png...)."
                         existingUrl={null}
                       />
-                      <FileInput
-                        id="protocol_photo_file"
-                        label="Amostra do protocolo (imagem)"
-                        onFile={(f) => onChange('protocol_photo_file', f)}
-                        hint="Envie uma imagem (jpg, png...)."
-                        existingUrl={null}
-                      />
+
+                      {/* <FileInput ... protocolo>  — REMOVIDO no CREATE conforme pedido */}
 
                       <div className="space-y-1.5 md:col-span-2">
                         <Label htmlFor="notes">Observações</Label>
@@ -640,17 +635,7 @@ const Actions = () => {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2 flex-wrap">
-                              {hasAnyImage && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-1 min-h-[36px] touch-manipulation"
-                                  onClick={() => { setPreviewItem(a); setIsPreviewOpen(true); }}
-                                  title="Ver material da ação"
-                                >
-                                  <Eye className="h-4 w-4" /> Ver material
-                                </Button>
-                              )}
+                              {/* Botão "Ver material" REMOVIDO desta coluna conforme pedido */}
                               <Button
                                 size="sm"
                                 variant="secondary"
@@ -748,6 +733,7 @@ const Actions = () => {
                   <Input id="e_material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
                 </div>
 
+                {/* No EDITAR, mantém uploads de material e protocolo */}
                 <FileInput
                   id="e_material_photo_file"
                   label="Amostra do material (imagem)"
