@@ -60,6 +60,7 @@ def create_app():
     from src.routes.job_vacancy import job_vacancy_bp
     from src.routes.metrics import metrics_bp
     from src.routes.upload import upload_bp  # rota de upload
+    from src.routes.user import user_bp # rota de gerenciamento de usuários
     from src.services.user_service import ensure_admin_seed
 
     # -----------------------
@@ -72,6 +73,7 @@ def create_app():
     app.register_blueprint(job_vacancy_bp, url_prefix="/api")
     app.register_blueprint(metrics_bp, url_prefix="/api/metrics")
     app.register_blueprint(upload_bp, url_prefix="/api")  # POST /api/upload
+    app.register_blueprint(user_bp, url_prefix="/api") # Rotas de usuário
 
     # -----------------------
     # Healthcheck

@@ -150,3 +150,22 @@ __all__ = [
     "create_admin_user",   # importante pro main.py
     "verify_password",
 ]
+
+
+def get_all_users() -> list[Dict[str, Any]]:
+    """
+    Retorna todos os usuários cadastrados (sem password_hash).
+    """
+    users = get_all_documents("users")
+    for user in users:
+        user.pop("password_hash", None)
+    return users
+
+def delete_user(user_id: str) -> bool:
+    """
+    Deleta um usuário pelo ID.
+    """
+    return delete_document("users", user_id)
+
+
+
