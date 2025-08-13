@@ -18,78 +18,63 @@ import { Plus, Search, Edit, Trash2, UploadCloud, X } from "lucide-react";
 import api from "@/services/api";
 import ImagePreview from "@/components/ImagePreview.jsx";
 
-/* ================= helpers de data (America/Cuiaba) ================= */
+/* ==================== Data utils (America/Cuiaba) ==================== */
 const TZ = "America/Cuiaba";
-const MESES = [
-  "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-  "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
-];
-
 const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
 const isDMY = (s) => /^\d{2}\/\d{2}\/\d{4}$/.test(String(s || ""));
 
-// Converte QUALQUER valor para 'YYYY-MM-DD' no fuso America/Cuiaba
+// → normaliza QUALQUER entrada para 'YYYY-MM-DD' já no fuso de Cuiabá
 function toYMDInCuiaba(value) {
   if (!value) return "";
   const s = String(value).trim();
 
-  // Já está em YYYY-MM-DD
+  // já vem em YYYY-MM-DD
   if (isYMD(s.slice(0, 10))) return s.slice(0, 10);
 
-  // Está em DD/MM/AAAA -> vira YYYY-MM-DD (sem criar Date)
+  // se vier em DD/MM/AAAA (caso de seed manual), converte direto
   if (isDMY(s)) {
     const [d, m, y] = s.split("/");
     return `${y}-${m}-${d}`;
   }
 
-  // Tem hora/Z/ISO? Normaliza pelo fuso
+  // ISO/Date: converte para Cuiabá
   const d = new Date(s);
   if (isNaN(d)) return "";
-
-  // Usa Intl com en-CA para gerar YYYY-MM-DD no fuso de Cuiabá
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const basic = fmt.format(d); // geralmente já é YYYY-MM-DD
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
+  const basic = fmt.format(d);
   if (isYMD(basic)) return basic;
 
-  // Fallback por partes
   const parts = fmt.formatToParts(d);
-  const year = parts.find((p) => p.type === "year")?.value || "0000";
-  const month = parts.find((p) => p.type === "month")?.value || "01";
-  const day = parts.find((p) => p.type === "day")?.value || "01";
-  return `${year}-${month}-${day}`;
+  const y = parts.find((p) => p.type === "year")?.value || "0000";
+  const m = parts.find((p) => p.type === "month")?.value || "01";
+  const dd = parts.find((p) => p.type === "day")?.value || "01";
+  return `${y}-${m}-${dd}`;
 }
 
-// Exibe 'DD/MM/AAAA' a partir de 'YYYY-MM-DD' (sem Date/TimeZone)
+// → exibe DD/MM/AAAA SEM criar Date (evita timezone)
 function formatBRFromYMD(ymd) {
   const s = String(ymd || "").slice(0, 10);
   if (!isYMD(s)) return "—";
   const [y, m, d] = s.split("-");
   return `${d}/${m}/${y}`;
 }
+/* ==================================================================== */
 
-/* ================= componente ================= */
 const Materials = () => {
+  // listagem / busca
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
 
-  // filtros (PT-BR)
-  const hoje = new Date();
-  const [mes, setMes] = useState("todos"); // 0..11 ou "todos"
-  const [ano, setAno] = useState("todos"); // YYYY ou "todos"
-  const anosDisponiveis = Array.from({ length: 8 }, (_, i) => hoje.getFullYear() - 5 + i);
+  // filtro por mês (YYYY-MM)
+  const [month, setMonth] = useState("");
 
-  // modal
+  // modal (create/edit)
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState("create");
+  const [mode, setMode] = useState("create"); // 'create' | 'edit'
   const [saving, setSaving] = useState(false);
 
-  // excluir
+  // dialog excluir
   const [openDelete, setOpenDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
@@ -97,7 +82,7 @@ const Materials = () => {
   // formulário
   const emptyForm = {
     id: null,
-    date: toYMDInCuiaba(new Date()), // já no fuso de Cuiabá
+    date: toYMDInCuiaba(new Date()), // já correto no fuso Cuiabá
     quantity: "",
     clientName: "",
     responsible: "",
@@ -107,11 +92,11 @@ const Materials = () => {
   };
   const [form, setForm] = useState(emptyForm);
 
-  // upload states
+  // estados de upload
   const [uploadingSample, setUploadingSample] = useState(false);
   const [uploadingProtocol, setUploadingProtocol] = useState(false);
 
-  /* -------- carregar -------- */
+  // buscar materiais
   async function fetchMaterials() {
     setLoading(true);
     try {
@@ -119,14 +104,16 @@ const Materials = () => {
       setMaterials(Array.isArray(data) ? data : data?.items ?? []);
     } catch (e) {
       console.error("Erro ao carregar materials:", e);
-      setMaterials([]);
     } finally {
       setLoading(false);
     }
   }
-  useEffect(() => { fetchMaterials(); }, []);
 
-  /* -------- uploads -------- */
+  useEffect(() => {
+    fetchMaterials();
+  }, []);
+
+  // upload genérico
   async function uploadFile(file) {
     const fd = new FormData();
     fd.append("file", file);
@@ -135,6 +122,7 @@ const Materials = () => {
     });
     return data?.url;
   }
+
   async function onSampleChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -142,10 +130,14 @@ const Materials = () => {
     try {
       const url = await uploadFile(file);
       setForm((f) => ({ ...f, sampleUrl: url }));
-    } catch {
+    } catch (err) {
+      console.error("Erro no upload da amostra:", err);
       alert("Falha ao enviar a amostra. Tente novamente.");
-    } finally { setUploadingSample(false); }
+    } finally {
+      setUploadingSample(false);
+    }
   }
+
   async function onProtocolChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -153,27 +145,30 @@ const Materials = () => {
     try {
       const url = await uploadFile(file);
       setForm((f) => ({ ...f, protocolUrl: url }));
-    } catch {
+    } catch (err) {
+      console.error("Erro no upload do protocolo:", err);
       alert("Falha ao enviar o protocolo. Tente novamente.");
-    } finally { setUploadingProtocol(false); }
+    } finally {
+      setUploadingProtocol(false);
+    }
   }
 
-  /* -------- form helpers -------- */
   function onChange(e) {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
   }
+
   function openCreate() {
     setMode("create");
     setForm(emptyForm);
     setOpen(true);
   }
+
   function openEdit(row) {
     setMode("edit");
     setForm({
       id: row.id ?? row._id ?? row.uuid ?? null,
-      // normaliza QUEM quer que seja o formato que veio do backend:
-      date: toYMDInCuiaba(row.date),
+      date: toYMDInCuiaba(row.date), // normaliza qualquer formato
       quantity: row.quantity ?? "",
       clientName: row.client_name ?? row.clientName ?? "",
       responsible: row.responsible ?? "",
@@ -183,17 +178,18 @@ const Materials = () => {
     });
     setOpen(true);
   }
-  function confirmDelete(row) { setRowToDelete(row); setOpenDelete(true); }
+
+  function confirmDelete(row) {
+    setRowToDelete(row);
+    setOpenDelete(true);
+  }
 
   async function onSubmit(e) {
     e.preventDefault();
     setSaving(true);
     try {
-      // normaliza ANTES de enviar
-      const normalizedYMD = toYMDInCuiaba(form.date);
-
       const payload = {
-        date: normalizedYMD, // sempre YYYY-MM-DD no fuso Cuiabá
+        date: toYMDInCuiaba(form.date), // sempre YYYY-MM-DD estável
         quantity: Number(form.quantity || 0),
         client_name: form.clientName,
         responsible: form.responsible,
@@ -239,7 +235,7 @@ const Materials = () => {
     }
   }
 
-  /* -------- filtro + ordenação (desc) SEM timezone -------- */
+  // filtro + ordenação (desc) por data
   const filtered = useMemo(() => {
     let list = Array.isArray(materials) ? [...materials] : [];
 
@@ -253,31 +249,26 @@ const Materials = () => {
       );
     }
 
-    // normaliza TODAS as linhas para YMD em Cuiabá
+    // normaliza todas as datas e remove inválidas
     list = list
       .map((m) => ({ ...m, _ymd: toYMDInCuiaba(m.date) }))
       .filter((m) => m._ymd);
 
-    // filtro mês/ano
-    if (mes !== "todos" || ano !== "todos") {
-      list = list.filter((m) => {
-        const y = Number(m._ymd.slice(0, 4));
-        const mm = Number(m._ymd.slice(5, 7)) - 1;
-        const okMes = mes === "todos" ? true : mm === Number(mes);
-        const okAno = ano === "todos" ? true : y === Number(ano);
-        return okMes && okAno;
-      });
+    // filtro por mês YYYY-MM
+    if (month) {
+      list = list.filter((m) => m._ymd.slice(0, 7) === month);
     }
 
-    // ordena por YMD desc
+    // ordena por data (mais recentes primeiro)
     list.sort((a, b) => b._ymd.localeCompare(a._ymd));
     return list;
-  }, [materials, q, mes, ano]);
+  }, [materials, q, month]);
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-semibold">Materiais</h1>
+        {/* Botão "+ Novo" está no container de filtros em "Registros" */}
       </div>
 
       <Card>
@@ -286,8 +277,9 @@ const Materials = () => {
           <CardDescription>Lista de materiais cadastrados</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Filtros + Botão Novo */}
+          {/* === Filtros + Botão "+ Novo" === */}
           <div className="flex flex-col md:flex-row md:items-center gap-2 mb-4">
+            {/* Busca texto */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
@@ -298,40 +290,27 @@ const Materials = () => {
               />
             </div>
 
+            {/* Filtro por mês (pt-BR), tamanho reduzido */}
             <div className="flex items-center gap-2">
-              <Label className="text-xs md:text-sm">Mês</Label>
-              <select
-                className="border rounded-md text-sm h-9 px-2 w-[120px] bg-white"
-                value={mes}
-                onChange={(e) => setMes(e.target.value)}
-              >
-                <option value="todos">Todos</option>
-                {MESES.map((m, idx) => (
-                  <option key={m} value={idx}>{m}</option>
-                ))}
-              </select>
+              <Label htmlFor="filter-month" className="text-xs md:text-sm whitespace-nowrap">
+                Mês
+              </Label>
+              <Input
+                id="filter-month"
+                type="month"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                className="w-[130px]"
+                lang="pt-BR"
+              />
+              {month && (
+                <Button variant="outline" size="sm" onClick={() => setMonth("")}>
+                  Limpar mês
+                </Button>
+              )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <Label className="text-xs md:text-sm">Ano</Label>
-              <select
-                className="border rounded-md text-sm h-9 px-2 w-[100px] bg-white"
-                value={ano}
-                onChange={(e) => setAno(e.target.value)}
-              >
-                <option value="todos">Todos</option>
-                {anosDisponiveis.map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </div>
-
-            {(mes !== "todos" || ano !== "todos") && (
-              <Button variant="outline" size="sm" onClick={() => { setMes("todos"); setAno("todos"); }}>
-                Limpar
-              </Button>
-            )}
-
+            {/* Botão Novo */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
@@ -340,6 +319,7 @@ const Materials = () => {
                 </Button>
               </DialogTrigger>
 
+              {/* Modal com container rolável */}
               <DialogContent className="max-w-2xl p-0">
                 <div className="max-h-[80vh] overflow-y-auto p-6">
                   <DialogHeader className="pb-2">
@@ -353,8 +333,14 @@ const Materials = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <Label>Data</Label>
-                        {/* input date sempre recebe YMD estável */}
-                        <Input type="date" name="date" value={form.date} onChange={onChange} required />
+                        <Input
+                          lang="pt-BR"               // força calendário em pt-BR
+                          type="date"
+                          name="date"
+                          value={form.date}
+                          onChange={onChange}
+                          required
+                        />
                       </div>
                       <div>
                         <Label>Quantidade</Label>
@@ -393,7 +379,7 @@ const Materials = () => {
                       </div>
                     </div>
 
-                    {/* Amostra */}
+                    {/* Amostra do Material */}
                     <div className="space-y-2">
                       <Label>Amostra do Material</Label>
                       <div className="flex items-center gap-3">
@@ -473,16 +459,19 @@ const Materials = () => {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={8}>Carregando…</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={8}>Carregando…</TableCell>
+                  </TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={8}>Nenhum registro</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={8}>Nenhum registro</TableCell>
+                  </TableRow>
                 ) : (
                   filtered.map((m) => {
                     const id = m.id ?? m._id ?? m.uuid;
                     const ymd = m._ymd ?? toYMDInCuiaba(m.date);
                     return (
                       <TableRow key={id || `${m.client_name}-${ymd}`}>
-                        {/* Sempre DD/MM/AAAA */}
                         <TableCell>{formatBRFromYMD(ymd)}</TableCell>
                         <TableCell>{(m.client_name ?? m.clientName) || "—"}</TableCell>
                         <TableCell>{m.responsible || "—"}</TableCell>
@@ -492,21 +481,35 @@ const Materials = () => {
                         </TableCell>
                         <TableCell>
                           {m.material_sample_url ? (
-                            <ImagePreview src={m.material_sample_url} alt={`Amostra - ${m.client_name || ""}`} size={48} />
-                          ) : "—"}
+                            <ImagePreview
+                              src={m.material_sample_url}
+                              alt={`Amostra - ${m.client_name || ""}`}
+                              size={48}
+                            />
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                         <TableCell>
                           {m.protocol_url ? (
-                            <ImagePreview src={m.protocol_url} alt={`Protocolo - ${m.client_name || ""}`} size={48} />
-                          ) : "—"}
+                            <ImagePreview
+                              src={m.protocol_url}
+                              alt={`Protocolo - ${m.client_name || ""}`}
+                              size={48}
+                            />
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(m)}>
-                              <Edit className="size-4" /> Editar
+                              <Edit className="size-4" />
+                              Editar
                             </Button>
                             <Button size="sm" variant="destructive" className="gap-2" onClick={() => confirmDelete(m)}>
-                              <Trash2 className="size-4" /> Excluir
+                              <Trash2 className="size-4" />
+                              Excluir
                             </Button>
                           </div>
                         </TableCell>
@@ -520,7 +523,7 @@ const Materials = () => {
         </CardContent>
       </Card>
 
-      {/* Excluir */}
+      {/* Dialog simples de exclusão */}
       <Dialog open={openDelete} onOpenChange={setOpenDelete}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
