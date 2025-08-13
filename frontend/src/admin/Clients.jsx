@@ -32,7 +32,7 @@ import { Checkbox } from "@/components/ui/checkbox.jsx";
 import { Plus, Search, Edit, Trash2, ChevronsUpDown, Check, X } from "lucide-react";
 
 /* =======================================================
-   SEGMENTOS (com export para reuso se quiser)
+   SEGMENTOS
 ======================================================= */
 export const SEGMENTOS = [
   // AGRICULTURA, PECUÁRIA E PESCA
@@ -77,7 +77,6 @@ export const SEGMENTOS = [
   "Corretoras de Seguros","Imobiliárias","Correios","Startups","Freelancers","Influenciadores Digitais","Profissionais Autônomos","Serviços Religiosos"
 ];
 
-/* Utilitário: garante array de segmentos a partir do registro */
 const ensureArraySegments = (row) => {
   if (Array.isArray(row?.segments)) return row.segments;
   if (typeof row?.segment === "string" && row.segment.trim()) {
@@ -89,7 +88,7 @@ const ensureArraySegments = (row) => {
   return [];
 };
 
-/* Combobox multi-seleção com busca (Segmentos) */
+/* Combobox multi com busca para Segmentos */
 function SegmentosSelect({ value = [], onChange }) {
   const [open, setOpen] = useState(false);
   const toggle = (item) => {
@@ -158,10 +157,9 @@ const Clients = () => {
     id: null,
     name: "",
     company: "",
-    segments: [],   // ← NOVO (array)
+    segments: [],
     email: "",
     phone: "",
-    document: "",
     address: "",
     notes: "",
   };
@@ -203,7 +201,6 @@ const Clients = () => {
       segments: ensureArraySegments(row),
       email: row.email ?? "",
       phone: row.phone ?? "",
-      document: row.document ?? row.cnpj ?? row.cpf ?? "",
       address: row.address ?? "",
       notes: row.notes ?? "",
     });
@@ -223,11 +220,10 @@ const Clients = () => {
         name: form.name,
         company: form.company || "",
         company_name: form.company || "",
-        segments: form.segments,                 // ← envia array
-        segment: form.segments.join(", "),       // ← compatibilidade
+        segments: form.segments,
+        segment: form.segments.join(", "),
         email: form.email,
         phone: form.phone,
-        document: form.document || null,
         address: form.address || "",
         notes: form.notes || "",
       };
@@ -274,7 +270,7 @@ const Clients = () => {
     if (!k) return clients;
     return clients.filter((c) => {
       const segs = ensureArraySegments(c).join(" ");
-      return [c.name, c.company, c.company_name, c.email, c.phone, c.document, segs]
+      return [c.name, c.company, c.company_name, c.email, c.phone, c.address, segs]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(k));
     });
@@ -292,13 +288,13 @@ const Clients = () => {
           <CardDescription>Lista de clientes cadastrados</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* === Container de filtros + "+ Novo Cliente" (aqui dentro) === */}
+          {/* Filtros + botão "+ Novo Cliente" */}
           <div className="flex items-center gap-2 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="Buscar por nome, empresa, segmento, e-mail, telefone..."
+                placeholder="Buscar por nome, empresa, segmento, e-mail ou telefone..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -328,13 +324,12 @@ const Clients = () => {
                         <Input name="name" value={form.name} onChange={onChange} required />
                       </div>
 
-                      {/* Empresa */}
                       <div className="md:col-span-2">
                         <Label>Empresa</Label>
                         <Input name="company" value={form.company} onChange={onChange} />
                       </div>
 
-                      {/* Segmentos (combobox multi com busca) */}
+                      {/* Segmentos */}
                       <div className="md:col-span-2 space-y-2">
                         <Label>Segmentos</Label>
                         <SegmentosSelect
@@ -370,10 +365,6 @@ const Clients = () => {
                         <Label>Telefone</Label>
                         <Input name="phone" value={form.phone} onChange={onChange} />
                       </div>
-                      <div>
-                        <Label>Documento (CPF/CNPJ)</Label>
-                        <Input name="document" value={form.document} onChange={onChange} />
-                      </div>
                       <div className="md:col-span-2">
                         <Label>Endereço</Label>
                         <Input name="address" value={form.address} onChange={onChange} />
@@ -404,18 +395,17 @@ const Clients = () => {
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead>Empresa</TableHead>
-                  <TableHead>Segmentos</TableHead>{/* ← NOVA COLUNA */}
+                  <TableHead>Segmentos</TableHead>
                   <TableHead>E-mail</TableHead>
                   <TableHead>Telefone</TableHead>
-                  <TableHead>Documento</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={7}>Carregando…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6}>Carregando…</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={7}>Nenhum registro</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6}>Nenhum registro</TableCell></TableRow>
                 ) : (
                   filtered.map((c) => {
                     const id = c.id ?? c._id ?? c.uuid;
@@ -436,7 +426,6 @@ const Clients = () => {
                         </TableCell>
                         <TableCell>{c.email || "—"}</TableCell>
                         <TableCell>{c.phone || "—"}</TableCell>
-                        <TableCell>{c.document || "—"}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(c)}>
