@@ -35,44 +35,34 @@ import { Plus, Search, Edit, Trash2, ChevronsUpDown, Check, X } from "lucide-rea
    SEGMENTOS
 ======================================================= */
 export const SEGMENTOS = [
-  // AGRICULTURA, PECUÁRIA E PESCA
   "Agricultura","Pecuária","Pesca e Aquicultura","Floricultura","Silvicultura e Reflorestamento","Produção de Café",
   "Cultivo de Soja","Cultivo de Milho","Cultivo de Cana-de-Açúcar","Cultivo de Hortaliças","Fruticultura","Apicultura (Mel e derivados)",
   "Avicultura","Suinocultura","Bovinocultura de Corte","Bovinocultura de Leite","Pesqueiros e Pesque-Pagues",
-  // INDÚSTRIA E PRODUÇÃO
   "Indústria Alimentícia","Indústria de Bebidas","Indústria Têxtil","Indústria de Calçados","Indústria de Embalagens","Indústria Química",
   "Indústria Farmacêutica","Indústria de Cosméticos","Indústria de Plásticos","Indústria de Papel e Celulose","Indústria Automotiva",
   "Indústria Metalúrgica","Indústria Moveleira","Construção Civil","Pré-moldados","Fábricas de Tijolos e Blocos","Fábricas de Cimento",
   "Serralherias","Marcenarias","Mineração e Extração","Indústria de Vidros","Indústria de Cerâmica",
-  // COMÉRCIO VAREJISTA E ATACADISTA
   "Supermercados e Hipermercados","Atacados e Distribuidores","Mercearias e Minimercados","Lojas de Roupas e Acessórios",
   "Lojas de Calçados","Lojas de Eletrodomésticos","Lojas de Eletrônicos","Lojas de Móveis e Decoração","Material de Construção",
   "Lojas de Informática","Lojas de Telefonia e Acessórios","Lojas de Brinquedos","Livrarias e Papelarias","Joalherias e Óticas",
   "Comércio de Veículos","Revendas de Motos","Revendas de Caminhões","Concessionárias Náuticas","Postos de Combustível",
   "Oficinas Mecânicas","Autopeças","Loja de Pneus","Peixarias","Açougues","Sacolões e Hortifrutis",
-  // SERVIÇOS
   "Agências de Publicidade e Marketing","Consultoria Empresarial","Assessoria Contábil","Escritórios de Advocacia","Serviços de Engenharia",
   "Serviços de Arquitetura","Serviços de TI e Software","Manutenção e Reparos","Serviços de Limpeza","Serviços de Segurança",
   "Serviços de Transporte","Logística e Armazenagem","Aluguel de Equipamentos","Coworking","Serviços de Tradução","Despachantes",
   "Serviços de Impressão e Gráficas","Produção de Vídeos","Fotografia Profissional","Organização de Eventos","Buffets e Catering",
   "Locação de Espaços para Eventos",
-  // SAÚDE E BEM-ESTAR
   "Hospitais","Clínicas Médicas","Consultórios Odontológicos","Laboratórios de Análises Clínicas","Farmácias e Drogarias","Estúdios de Pilates",
   "Estúdios de Yoga","Academias de Ginástica","Crossfit","Clínicas de Estética","Clínicas de Emagrecimento","Clínicas de Cirurgia Plástica",
   "Clínicas de Terapias Naturais","Clínicas Veterinárias","Pet Shops","Hospitais Veterinários",
-  // EDUCAÇÃO E CULTURA
   "Escolas de Ensino Fundamental","Escolas de Ensino Médio","Faculdades","Universidades","Cursos Técnicos","Cursos Profissionalizantes",
   "Cursos de Idiomas","Escolas de Música","Escolas de Dança","Escolas de Artes","Treinamentos Corporativos","Bibliotecas","Museus",
   "Centros Culturais",
-  // ALIMENTAÇÃO E GASTRONOMIA
   "Restaurantes","Lanchonetes","Bares e Pubs","Padarias","Cafeterias","Food Trucks","Buffets","Churrascarias","Pizzarias","Docerias",
   "Confeitarias","Sorveterias","Hamburguerias","Self-Service",
-  // TURISMO, LAZER E ENTRETENIMENTO
   "Hotéis","Pousadas","Resorts","Agências de Viagem","Casas de Show","Cinemas","Teatros","Parques","Clubes","Parques Aquáticos",
   "Eventos e Feiras","Casas Noturnas","Jogos e E-Sports","Centros de Convenções",
-  // MODA E BELEZA
   "Salões de Beleza","Barbearias","Clínicas de Depilação","Lojas de Cosméticos","Estúdios de Maquiagem","Ateliês de Moda","Costureiras","Alfaiates",
-  // OUTROS
   "ONGs","Associações","Cooperativas","Órgãos Públicos","Instituições Financeiras","Bancos","Cooperativas de Crédito","Seguradoras",
   "Corretoras de Seguros","Imobiliárias","Correios","Startups","Freelancers","Influenciadores Digitais","Profissionais Autônomos","Serviços Religiosos"
 ];
@@ -160,7 +150,6 @@ const Clients = () => {
     segments: [],
     email: "",
     phone: "",
-    address: "",
     notes: "",
   };
   const [form, setForm] = useState(emptyForm);
@@ -201,7 +190,6 @@ const Clients = () => {
       segments: ensureArraySegments(row),
       email: row.email ?? "",
       phone: row.phone ?? "",
-      address: row.address ?? "",
       notes: row.notes ?? "",
     });
     setOpen(true);
@@ -224,7 +212,6 @@ const Clients = () => {
         segment: form.segments.join(", "),
         email: form.email,
         phone: form.phone,
-        address: form.address || "",
         notes: form.notes || "",
       };
 
@@ -270,7 +257,7 @@ const Clients = () => {
     if (!k) return clients;
     return clients.filter((c) => {
       const segs = ensureArraySegments(c).join(" ");
-      return [c.name, c.company, c.company_name, c.email, c.phone, c.address, segs]
+      return [c.name, c.company, c.company_name, c.email, c.phone, segs]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(k));
     });
@@ -365,10 +352,7 @@ const Clients = () => {
                         <Label>Telefone</Label>
                         <Input name="phone" value={form.phone} onChange={onChange} />
                       </div>
-                      <div className="md:col-span-2">
-                        <Label>Endereço</Label>
-                        <Input name="address" value={form.address} onChange={onChange} />
-                      </div>
+
                       <div className="md:col-span-2">
                         <Label>Observações</Label>
                         <Textarea name="notes" value={form.notes} onChange={onChange} />
