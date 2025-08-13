@@ -18,32 +18,30 @@ import { Plus, Search, Edit, Trash2, UploadCloud, X } from "lucide-react";
 import api from "@/services/api";
 import ImagePreview from "@/components/ImagePreview.jsx";
 
-/* ==================== Data utils (America/Cuiaba) ==================== */
+/* ==================== Datas (força DD/MM/AAAA) ==================== */
 const TZ = "America/Cuiaba";
 const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
 const isDMY = (s) => /^\d{2}\/\d{2}\/\d{4}$/.test(String(s || ""));
 
-// → normaliza QUALQUER entrada para 'YYYY-MM-DD' já no fuso de Cuiabá
+// normaliza para YYYY-MM-DD (sem “adiantar/atrasar” um dia)
 function toYMDInCuiaba(value) {
   if (!value) return "";
   const s = String(value).trim();
 
-  // já vem em YYYY-MM-DD
-  if (isYMD(s.slice(0, 10))) return s.slice(0, 10);
-
-  // se vier em DD/MM/AAAA (caso de seed manual), converte direto
-  if (isDMY(s)) {
+  if (isYMD(s.slice(0, 10))) return s.slice(0, 10); // já está ok
+  if (isDMY(s)) {                                   // veio em DD/MM/AAAA
     const [d, m, y] = s.split("/");
     return `${y}-${m}-${d}`;
   }
 
-  // ISO/Date: converte para Cuiabá
   const d = new Date(s);
   if (isNaN(d)) return "";
-  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
-  const basic = fmt.format(d);
-  if (isYMD(basic)) return basic;
-
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
   const parts = fmt.formatToParts(d);
   const y = parts.find((p) => p.type === "year")?.value || "0000";
   const m = parts.find((p) => p.type === "month")?.value || "01";
@@ -51,17 +49,28 @@ function toYMDInCuiaba(value) {
   return `${y}-${m}-${dd}`;
 }
 
-// → exibe DD/MM/AAAA SEM criar Date (evita timezone)
-function formatBRFromYMD(ymd) {
+function ymdToBR(ymd) {
   const s = String(ymd || "").slice(0, 10);
-  if (!isYMD(s)) return "—";
+  if (!isYMD(s)) return "";
   const [y, m, d] = s.split("-");
   return `${d}/${m}/${y}`;
 }
-/* ==================================================================== */
+function brToYMD(br) {
+  if (!isDMY(br)) return "";
+  const [d, m, y] = br.split("/");
+  return `${y}-${m}-${d}`;
+}
+// máscara amigável: “DD/MM/AAAA”
+function maskBR(v) {
+  const d = String(v || "").replace(/\D/g, "").slice(0, 8);
+  const p1 = d.slice(0, 2);
+  const p2 = d.slice(2, 4);
+  const p3 = d.slice(4, 8);
+  return [p1, p2, p3].filter(Boolean).join("/");
+}
+/* ================================================================== */
 
 const Materials = () => {
-  // listagem / busca
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
@@ -71,7 +80,7 @@ const Materials = () => {
 
   // modal (create/edit)
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState("create"); // 'create' | 'edit'
+  const [mode, setMode] = useState("create");
   const [saving, setSaving] = useState(false);
 
   // dialog excluir
@@ -79,10 +88,11 @@ const Materials = () => {
   const [deleting, setDeleting] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
 
-  // formulário
+  // formulário (guardamos a data em BR para o usuário e convertimos ao salvar)
+  const todayYMD = toYMDInCuiaba(new Date());
   const emptyForm = {
     id: null,
-    date: toYMDInCuiaba(new Date()), // já correto no fuso Cuiabá
+    dateBr: ymdToBR(todayYMD),  // mostrado no input
     quantity: "",
     clientName: "",
     responsible: "",
@@ -92,11 +102,9 @@ const Materials = () => {
   };
   const [form, setForm] = useState(emptyForm);
 
-  // estados de upload
   const [uploadingSample, setUploadingSample] = useState(false);
   const [uploadingProtocol, setUploadingProtocol] = useState(false);
 
-  // buscar materiais
   async function fetchMaterials() {
     setLoading(true);
     try {
@@ -108,12 +116,8 @@ const Materials = () => {
       setLoading(false);
     }
   }
+  useEffect(() => { fetchMaterials(); }, []);
 
-  useEffect(() => {
-    fetchMaterials();
-  }, []);
-
-  // upload genérico
   async function uploadFile(file) {
     const fd = new FormData();
     fd.append("file", file);
@@ -137,7 +141,6 @@ const Materials = () => {
       setUploadingSample(false);
     }
   }
-
   async function onProtocolChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -157,18 +160,21 @@ const Materials = () => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
   }
+  function onDateBrChange(e) {
+    setForm((f) => ({ ...f, dateBr: maskBR(e.target.value) }));
+  }
 
   function openCreate() {
     setMode("create");
     setForm(emptyForm);
     setOpen(true);
   }
-
   function openEdit(row) {
+    const ymd = toYMDInCuiaba(row?.date);
     setMode("edit");
     setForm({
       id: row.id ?? row._id ?? row.uuid ?? null,
-      date: toYMDInCuiaba(row.date), // normaliza qualquer formato
+      dateBr: ymdToBR(ymd),
       quantity: row.quantity ?? "",
       clientName: row.client_name ?? row.clientName ?? "",
       responsible: row.responsible ?? "",
@@ -178,7 +184,6 @@ const Materials = () => {
     });
     setOpen(true);
   }
-
   function confirmDelete(row) {
     setRowToDelete(row);
     setOpenDelete(true);
@@ -186,10 +191,15 @@ const Materials = () => {
 
   async function onSubmit(e) {
     e.preventDefault();
+    const ymd = brToYMD(form.dateBr);
+    if (!ymd) return alert("Informe uma data válida no formato DD/MM/AAAA.");
+    if (!form.clientName?.trim()) return alert("Informe o cliente.");
+    if (!form.responsible?.trim()) return alert("Informe o responsável.");
+
     setSaving(true);
     try {
       const payload = {
-        date: toYMDInCuiaba(form.date), // sempre YYYY-MM-DD estável
+        date: ymd, // sempre YYYY-MM-DD estável
         quantity: Number(form.quantity || 0),
         client_name: form.clientName,
         responsible: form.responsible,
@@ -235,11 +245,10 @@ const Materials = () => {
     }
   }
 
-  // filtro + ordenação (desc) por data
+  // filtro + ordenação (desc)
   const filtered = useMemo(() => {
     let list = Array.isArray(materials) ? [...materials] : [];
 
-    // busca texto
     const k = q.trim().toLowerCase();
     if (k) {
       list = list.filter((m) =>
@@ -249,17 +258,13 @@ const Materials = () => {
       );
     }
 
-    // normaliza todas as datas e remove inválidas
+    // normaliza datas
     list = list
       .map((m) => ({ ...m, _ymd: toYMDInCuiaba(m.date) }))
       .filter((m) => m._ymd);
 
-    // filtro por mês YYYY-MM
-    if (month) {
-      list = list.filter((m) => m._ymd.slice(0, 7) === month);
-    }
+    if (month) list = list.filter((m) => m._ymd.slice(0, 7) === month);
 
-    // ordena por data (mais recentes primeiro)
     list.sort((a, b) => b._ymd.localeCompare(a._ymd));
     return list;
   }, [materials, q, month]);
@@ -268,7 +273,6 @@ const Materials = () => {
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-semibold">Materiais</h1>
-        {/* Botão "+ Novo" está no container de filtros em "Registros" */}
       </div>
 
       <Card>
@@ -277,9 +281,8 @@ const Materials = () => {
           <CardDescription>Lista de materiais cadastrados</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* === Filtros + Botão "+ Novo" === */}
+          {/* Filtros + Novo */}
           <div className="flex flex-col md:flex-row md:items-center gap-2 mb-4">
-            {/* Busca texto */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
@@ -290,11 +293,8 @@ const Materials = () => {
               />
             </div>
 
-            {/* Filtro por mês (pt-BR), tamanho reduzido */}
             <div className="flex items-center gap-2">
-              <Label htmlFor="filter-month" className="text-xs md:text-sm whitespace-nowrap">
-                Mês
-              </Label>
+              <Label htmlFor="filter-month" className="text-xs md:text-sm whitespace-nowrap">Mês</Label>
               <Input
                 id="filter-month"
                 type="month"
@@ -310,7 +310,6 @@ const Materials = () => {
               )}
             </div>
 
-            {/* Botão Novo */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
@@ -319,7 +318,6 @@ const Materials = () => {
                 </Button>
               </DialogTrigger>
 
-              {/* Modal com container rolável */}
               <DialogContent className="max-w-2xl p-0">
                 <div className="max-h-[80vh] overflow-y-auto p-6">
                   <DialogHeader className="pb-2">
@@ -333,12 +331,13 @@ const Materials = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <Label>Data</Label>
+                        {/* Input com máscara DD/MM/AAAA */}
                         <Input
-                          lang="pt-BR"               // força calendário em pt-BR
-                          type="date"
-                          name="date"
-                          value={form.date}
-                          onChange={onChange}
+                          name="dateBr"
+                          placeholder="DD/MM/AAAA"
+                          inputMode="numeric"
+                          value={form.dateBr}
+                          onChange={onDateBrChange}
                           required
                         />
                       </div>
@@ -459,20 +458,16 @@ const Materials = () => {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={8}>Carregando…</TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={8}>Carregando…</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8}>Nenhum registro</TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={8}>Nenhum registro</TableCell></TableRow>
                 ) : (
                   filtered.map((m) => {
                     const id = m.id ?? m._id ?? m.uuid;
                     const ymd = m._ymd ?? toYMDInCuiaba(m.date);
                     return (
                       <TableRow key={id || `${m.client_name}-${ymd}`}>
-                        <TableCell>{formatBRFromYMD(ymd)}</TableCell>
+                        <TableCell>{ymdToBR(ymd)}</TableCell>
                         <TableCell>{(m.client_name ?? m.clientName) || "—"}</TableCell>
                         <TableCell>{m.responsible || "—"}</TableCell>
                         <TableCell>{m.quantity ?? "—"}</TableCell>
@@ -481,35 +476,21 @@ const Materials = () => {
                         </TableCell>
                         <TableCell>
                           {m.material_sample_url ? (
-                            <ImagePreview
-                              src={m.material_sample_url}
-                              alt={`Amostra - ${m.client_name || ""}`}
-                              size={48}
-                            />
-                          ) : (
-                            "—"
-                          )}
+                            <ImagePreview src={m.material_sample_url} alt={`Amostra - ${m.client_name || ""}`} size={48} />
+                          ) : "—"}
                         </TableCell>
                         <TableCell>
                           {m.protocol_url ? (
-                            <ImagePreview
-                              src={m.protocol_url}
-                              alt={`Protocolo - ${m.client_name || ""}`}
-                              size={48}
-                            />
-                          ) : (
-                            "—"
-                          )}
+                            <ImagePreview src={m.protocol_url} alt={`Protocolo - ${m.client_name || ""}`} size={48} />
+                          ) : "—"}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(m)}>
-                              <Edit className="size-4" />
-                              Editar
+                              <Edit className="size-4" /> Editar
                             </Button>
                             <Button size="sm" variant="destructive" className="gap-2" onClick={() => confirmDelete(m)}>
-                              <Trash2 className="size-4" />
-                              Excluir
+                              <Trash2 className="size-4" /> Excluir
                             </Button>
                           </div>
                         </TableCell>
@@ -523,7 +504,6 @@ const Materials = () => {
         </CardContent>
       </Card>
 
-      {/* Dialog simples de exclusão */}
       <Dialog open={openDelete} onOpenChange={setOpenDelete}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
