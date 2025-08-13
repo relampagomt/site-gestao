@@ -17,7 +17,24 @@ import { Textarea } from "@/components/ui/textarea.jsx";
 import { Plus, Search, Edit, Trash2, UploadCloud, X } from "lucide-react";
 import api from "@/services/api";
 import ImagePreview from "@/components/ImagePreview.jsx";
-import { formatDateBR } from "@/utils/dates.js"; // ← formato BR
+import { formatDateBR } from "@/utils/dates.js";
+
+/* ----------------- helpers ----------------- */
+const MESES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+const getTime = (d) => {
+  if (!d) return 0;
+  const s = String(d);
+  const t = Date.parse(s);
+  if (!Number.isNaN(t)) return t;
+  // fallback para strings parciais (yyyy-mm-dd)
+  const slice = s.slice(0, 10);
+  const t2 = Date.parse(slice);
+  return Number.isNaN(t2) ? 0 : t2;
+};
 
 const Materials = () => {
   // listagem / busca
@@ -25,12 +42,17 @@ const Materials = () => {
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
 
-  // filtro por mês (YYYY-MM)
-  const [month, setMonth] = useState("");
+  // filtros (em PT-BR)
+  const hoje = new Date();
+  const [mes, setMes] = useState("todos");   // 0..11 ou "todos"
+  const [ano, setAno] = useState("todos");   // 4 dígitos ou "todos"
+
+  // range de anos (últimos 5 + atual + próximos 2, ajuste se quiser)
+  const anosDisponiveis = Array.from({ length: 8 }, (_, i) => hoje.getFullYear() - 5 + i);
 
   // modal (create/edit)
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState("create"); // 'create' | 'edit'
+  const [mode, setMode] = useState("create");
   const [saving, setSaving] = useState(false);
 
   // dialog excluir
@@ -127,7 +149,7 @@ const Materials = () => {
     setMode("edit");
     setForm({
       id: row.id ?? row._id ?? row.uuid ?? null,
-      date: (row.date || "").slice(0, 10), // input type="date" exige yyyy-MM-dd
+      date: (row.date || "").slice(0, 10),
       quantity: row.quantity ?? "",
       clientName: row.client_name ?? row.clientName ?? "",
       responsible: row.responsible ?? "",
@@ -194,7 +216,7 @@ const Materials = () => {
     }
   }
 
-  // filtro + ordenação (desc) por data
+  /* ---------- filtro + ordenação (desc) ---------- */
   const filtered = useMemo(() => {
     let list = Array.isArray(materials) ? [...materials] : [];
 
@@ -208,27 +230,26 @@ const Materials = () => {
       );
     }
 
-    // filtro por mês YYYY-MM
-    if (month) {
-      list = list.filter((m) => String(m.date || "").slice(0, 7) === month);
-    }
-
-    // ordena por data (mais recentes primeiro)
-    list.sort((a, b) => {
-      const da = String(a.date || "").slice(0, 10);
-      const db = String(b.date || "").slice(0, 10);
-      // ISO yyyy-MM-dd permite ordenar por string
-      return db.localeCompare(da);
+    // filtro por mês/ano (PT-BR)
+    list = list.filter((m) => {
+      const t = getTime(m.date);
+      if (!t) return false; // sem data, some da lista
+      const d = new Date(t);
+      const matchMes = mes === "todos" ? true : d.getMonth() === Number(mes);
+      const matchAno = ano === "todos" ? true : d.getFullYear() === Number(ano);
+      return matchMes && matchAno;
     });
 
+    // ordena por data desc
+    list.sort((a, b) => getTime(b.date) - getTime(a.date));
+
     return list;
-  }, [materials, q, month]);
+  }, [materials, q, mes, ano]);
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-semibold">Materiais</h1>
-        {/* Botão "+ Novo" está no container de filtros em "Registros" */}
       </div>
 
       <Card>
@@ -239,7 +260,7 @@ const Materials = () => {
         <CardContent>
           {/* === Filtros + Botão "+ Novo" === */}
           <div className="flex flex-col md:flex-row md:items-center gap-2 mb-4">
-            {/* Busca texto */}
+            {/* Busca */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
@@ -250,24 +271,41 @@ const Materials = () => {
               />
             </div>
 
-            {/* Filtro por mês */}
+            {/* Mês (PT-BR) */}
             <div className="flex items-center gap-2">
-              <Label htmlFor="filter-month" className="text-xs md:text-sm whitespace-nowrap">
-                Mês
-              </Label>
-              <Input
-                id="filter-month"
-                type="month"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                className="w-[150px]"
-              />
-              {month && (
-                <Button variant="outline" onClick={() => setMonth("")}>
-                  Limpar mês
-                </Button>
-              )}
+              <Label className="text-xs md:text-sm">Mês</Label>
+              <select
+                className="border rounded-md text-sm h-9 px-2 w-[120px] bg-white"
+                value={mes}
+                onChange={(e) => setMes(e.target.value)}
+              >
+                <option value="todos">Todos</option>
+                {MESES.map((m, idx) => (
+                  <option key={m} value={idx}>{m}</option>
+                ))}
+              </select>
             </div>
+
+            {/* Ano (PT-BR) */}
+            <div className="flex items-center gap-2">
+              <Label className="text-xs md:text-sm">Ano</Label>
+              <select
+                className="border rounded-md text-sm h-9 px-2 w-[100px] bg-white"
+                value={ano}
+                onChange={(e) => setAno(e.target.value)}
+              >
+                <option value="todos">Todos</option>
+                {anosDisponiveis.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            {(mes !== "todos" || ano !== "todos") && (
+              <Button variant="outline" size="sm" onClick={() => { setMes("todos"); setAno("todos"); }}>
+                Limpar
+              </Button>
+            )}
 
             {/* Botão Novo */}
             <Dialog open={open} onOpenChange={setOpen}>
