@@ -18,59 +18,73 @@ import { Plus, Search, Edit, Trash2, UploadCloud, X } from "lucide-react";
 import api from "@/services/api";
 import ImagePreview from "@/components/ImagePreview.jsx";
 
-/* ================= helpers (Cuiabá + formato BR) ================= */
+/* ================= helpers de data (America/Cuiaba) ================= */
 const TZ = "America/Cuiaba";
 const MESES = [
   "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
   "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
 ];
+
 const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
+const isDMY = (s) => /^\d{2}\/\d{2}\/\d{4}$/.test(String(s || ""));
 
-// Converte qualquer data para 'YYYY-MM-DD' no fuso de Cuiabá
-function toCuiabaYMD(value) {
+// Converte QUALQUER valor para 'YYYY-MM-DD' no fuso America/Cuiaba
+function toYMDInCuiaba(value) {
   if (!value) return "";
-  const s = String(value);
-  const base = s.slice(0, 10);
-  if (isYMD(base)) return base;
+  const s = String(value).trim();
 
+  // Já está em YYYY-MM-DD
+  if (isYMD(s.slice(0, 10))) return s.slice(0, 10);
+
+  // Está em DD/MM/AAAA -> vira YYYY-MM-DD (sem criar Date)
+  if (isDMY(s)) {
+    const [d, m, y] = s.split("/");
+    return `${y}-${m}-${d}`;
+  }
+
+  // Tem hora/Z/ISO? Normaliza pelo fuso
   const d = new Date(s);
   if (isNaN(d)) return "";
+
+  // Usa Intl com en-CA para gerar YYYY-MM-DD no fuso de Cuiabá
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: TZ,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
-  const formatted = fmt.format(d); // geralmente já é YYYY-MM-DD
-  if (isYMD(formatted)) return formatted;
+  const basic = fmt.format(d); // geralmente já é YYYY-MM-DD
+  if (isYMD(basic)) return basic;
 
+  // Fallback por partes
   const parts = fmt.formatToParts(d);
-  const year = parts.find(p => p.type === "year")?.value || "0000";
-  const month = parts.find(p => p.type === "month")?.value || "01";
-  const day = parts.find(p => p.type === "day")?.value || "01";
+  const year = parts.find((p) => p.type === "year")?.value || "0000";
+  const month = parts.find((p) => p.type === "month")?.value || "01";
+  const day = parts.find((p) => p.type === "day")?.value || "01";
   return `${year}-${month}-${day}`;
 }
 
-// Exibe 'DD/MM/AAAA' SEM criar Date (não sofre com timezone)
-function formatDateBRLocal(ymd) {
+// Exibe 'DD/MM/AAAA' a partir de 'YYYY-MM-DD' (sem Date/TimeZone)
+function formatBRFromYMD(ymd) {
   const s = String(ymd || "").slice(0, 10);
   if (!isYMD(s)) return "—";
   const [y, m, d] = s.split("-");
   return `${d}/${m}/${y}`;
 }
 
-export default function Materials() {
+/* ================= componente ================= */
+const Materials = () => {
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
 
-  // filtros PT-BR
+  // filtros (PT-BR)
   const hoje = new Date();
   const [mes, setMes] = useState("todos"); // 0..11 ou "todos"
-  const [ano, setAno] = useState("todos"); // 4 dígitos ou "todos"
+  const [ano, setAno] = useState("todos"); // YYYY ou "todos"
   const anosDisponiveis = Array.from({ length: 8 }, (_, i) => hoje.getFullYear() - 5 + i);
 
-  // modal (create/edit)
+  // modal
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("create");
   const [saving, setSaving] = useState(false);
@@ -80,10 +94,10 @@ export default function Materials() {
   const [deleting, setDeleting] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
 
-  // form
+  // formulário
   const emptyForm = {
     id: null,
-    date: toCuiabaYMD(new Date()),
+    date: toYMDInCuiaba(new Date()), // já no fuso de Cuiabá
     quantity: "",
     clientName: "",
     responsible: "",
@@ -93,11 +107,11 @@ export default function Materials() {
   };
   const [form, setForm] = useState(emptyForm);
 
-  // upload state
+  // upload states
   const [uploadingSample, setUploadingSample] = useState(false);
   const [uploadingProtocol, setUploadingProtocol] = useState(false);
 
-  // carregar
+  /* -------- carregar -------- */
   async function fetchMaterials() {
     setLoading(true);
     try {
@@ -105,13 +119,14 @@ export default function Materials() {
       setMaterials(Array.isArray(data) ? data : data?.items ?? []);
     } catch (e) {
       console.error("Erro ao carregar materials:", e);
+      setMaterials([]);
     } finally {
       setLoading(false);
     }
   }
   useEffect(() => { fetchMaterials(); }, []);
 
-  // uploads
+  /* -------- uploads -------- */
   async function uploadFile(file) {
     const fd = new FormData();
     fd.append("file", file);
@@ -143,7 +158,7 @@ export default function Materials() {
     } finally { setUploadingProtocol(false); }
   }
 
-  // form helpers
+  /* -------- form helpers -------- */
   function onChange(e) {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
@@ -157,7 +172,8 @@ export default function Materials() {
     setMode("edit");
     setForm({
       id: row.id ?? row._id ?? row.uuid ?? null,
-      date: toCuiabaYMD(row.date), // <<< garante consistência ao editar
+      // normaliza QUEM quer que seja o formato que veio do backend:
+      date: toYMDInCuiaba(row.date),
       quantity: row.quantity ?? "",
       clientName: row.client_name ?? row.clientName ?? "",
       responsible: row.responsible ?? "",
@@ -173,8 +189,11 @@ export default function Materials() {
     e.preventDefault();
     setSaving(true);
     try {
+      // normaliza ANTES de enviar
+      const normalizedYMD = toYMDInCuiaba(form.date);
+
       const payload = {
-        date: form.date, // YYYY-MM-DD puro
+        date: normalizedYMD, // sempre YYYY-MM-DD no fuso Cuiabá
         quantity: Number(form.quantity || 0),
         client_name: form.clientName,
         responsible: form.responsible,
@@ -182,19 +201,24 @@ export default function Materials() {
         material_sample_url: form.sampleUrl || null,
         protocol_url: form.protocolUrl || null,
       };
-      if (mode === "create") await api.post("/materials", payload);
-      else {
+
+      if (mode === "create") {
+        await api.post("/materials", payload);
+      } else {
         const id = form.id;
         if (!id) throw new Error("ID do registro não encontrado para edição.");
         await api.put(`/materials/${id}`, payload);
       }
+
       setOpen(false);
       setForm(emptyForm);
       fetchMaterials();
     } catch (err) {
       console.error("Erro ao salvar material:", err);
       alert("Erro ao salvar material.");
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function onDelete() {
@@ -210,13 +234,16 @@ export default function Materials() {
     } catch (err) {
       console.error("Erro ao excluir material:", err);
       alert("Erro ao excluir material.");
-    } finally { setDeleting(false); }
+    } finally {
+      setDeleting(false);
+    }
   }
 
-  /* -------- filtro + ordenação (desc) sem timezone -------- */
+  /* -------- filtro + ordenação (desc) SEM timezone -------- */
   const filtered = useMemo(() => {
     let list = Array.isArray(materials) ? [...materials] : [];
 
+    // busca texto
     const k = q.trim().toLowerCase();
     if (k) {
       list = list.filter((m) =>
@@ -226,11 +253,12 @@ export default function Materials() {
       );
     }
 
-    // normaliza para YMD (Cuiabá)
+    // normaliza TODAS as linhas para YMD em Cuiabá
     list = list
-      .map((m) => ({ ...m, _ymd: toCuiabaYMD(m.date) }))
+      .map((m) => ({ ...m, _ymd: toYMDInCuiaba(m.date) }))
       .filter((m) => m._ymd);
 
+    // filtro mês/ano
     if (mes !== "todos" || ano !== "todos") {
       list = list.filter((m) => {
         const y = Number(m._ymd.slice(0, 4));
@@ -325,6 +353,7 @@ export default function Materials() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <Label>Data</Label>
+                        {/* input date sempre recebe YMD estável */}
                         <Input type="date" name="date" value={form.date} onChange={onChange} required />
                       </div>
                       <div>
@@ -450,11 +479,11 @@ export default function Materials() {
                 ) : (
                   filtered.map((m) => {
                     const id = m.id ?? m._id ?? m.uuid;
-                    const ymd = m._ymd ?? toCuiabaYMD(m.date);
+                    const ymd = m._ymd ?? toYMDInCuiaba(m.date);
                     return (
                       <TableRow key={id || `${m.client_name}-${ymd}`}>
-                        {/* >>> AQUI: sempre DD/MM/AAAA */}
-                        <TableCell>{formatDateBRLocal(ymd)}</TableCell>
+                        {/* Sempre DD/MM/AAAA */}
+                        <TableCell>{formatBRFromYMD(ymd)}</TableCell>
                         <TableCell>{(m.client_name ?? m.clientName) || "—"}</TableCell>
                         <TableCell>{m.responsible || "—"}</TableCell>
                         <TableCell>{m.quantity ?? "—"}</TableCell>
@@ -508,4 +537,6 @@ export default function Materials() {
       </Dialog>
     </div>
   );
-}
+};
+
+export default Materials;
