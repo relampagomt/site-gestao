@@ -20,18 +20,25 @@ import ImagePreview from "@/components/ImagePreview.jsx";
 import { formatDateBR } from "@/utils/dates.js"; // ← formato BR
 
 const Materials = () => {
+  // listagem / busca
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
 
+  // filtro por mês (YYYY-MM)
+  const [month, setMonth] = useState("");
+
+  // modal (create/edit)
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("create"); // 'create' | 'edit'
   const [saving, setSaving] = useState(false);
 
+  // dialog excluir
   const [openDelete, setOpenDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
 
+  // formulário
   const emptyForm = {
     id: null,
     date: new Date().toISOString().slice(0, 10),
@@ -44,9 +51,11 @@ const Materials = () => {
   };
   const [form, setForm] = useState(emptyForm);
 
+  // estados de upload
   const [uploadingSample, setUploadingSample] = useState(false);
   const [uploadingProtocol, setUploadingProtocol] = useState(false);
 
+  // buscar materiais
   async function fetchMaterials() {
     setLoading(true);
     try {
@@ -63,6 +72,7 @@ const Materials = () => {
     fetchMaterials();
   }, []);
 
+  // upload genérico
   async function uploadFile(file) {
     const fd = new FormData();
     fd.append("file", file);
@@ -184,21 +194,41 @@ const Materials = () => {
     }
   }
 
+  // filtro + ordenação (desc) por data
   const filtered = useMemo(() => {
+    let list = Array.isArray(materials) ? [...materials] : [];
+
+    // busca texto
     const k = q.trim().toLowerCase();
-    if (!k) return materials;
-    return materials.filter((m) =>
-      [m.client_name, m.responsible, String(m.quantity), m.notes] // ← inclui observações na busca
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(k))
-    );
-  }, [materials, q]);
+    if (k) {
+      list = list.filter((m) =>
+        [m.client_name, m.responsible, String(m.quantity), m.notes]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(k))
+      );
+    }
+
+    // filtro por mês YYYY-MM
+    if (month) {
+      list = list.filter((m) => String(m.date || "").slice(0, 7) === month);
+    }
+
+    // ordena por data (mais recentes primeiro)
+    list.sort((a, b) => {
+      const da = String(a.date || "").slice(0, 10);
+      const db = String(b.date || "").slice(0, 10);
+      // ISO yyyy-MM-dd permite ordenar por string
+      return db.localeCompare(da);
+    });
+
+    return list;
+  }, [materials, q, month]);
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-semibold">Materiais</h1>
-        {/* Botão "+ Novo" foi movido para o container de filtros em "Registros" */}
+        {/* Botão "+ Novo" está no container de filtros em "Registros" */}
       </div>
 
       <Card>
@@ -207,8 +237,9 @@ const Materials = () => {
           <CardDescription>Lista de materiais cadastrados</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* === Container de filtros + Botão "+ Novo" (agora aqui) === */}
-          <div className="flex items-center gap-2 mb-4">
+          {/* === Filtros + Botão "+ Novo" === */}
+          <div className="flex flex-col md:flex-row md:items-center gap-2 mb-4">
+            {/* Busca texto */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
@@ -219,6 +250,26 @@ const Materials = () => {
               />
             </div>
 
+            {/* Filtro por mês */}
+            <div className="flex items-center gap-2">
+              <Label htmlFor="filter-month" className="text-xs md:text-sm whitespace-nowrap">
+                Mês
+              </Label>
+              <Input
+                id="filter-month"
+                type="month"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                className="w-[150px]"
+              />
+              {month && (
+                <Button variant="outline" onClick={() => setMonth("")}>
+                  Limpar mês
+                </Button>
+              )}
+            </div>
+
+            {/* Botão Novo */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
@@ -352,7 +403,7 @@ const Materials = () => {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Responsável</TableHead>
                   <TableHead>Qtd</TableHead>
-                  <TableHead>Observações</TableHead> {/* ← NOVA COLUNA */}
+                  <TableHead>Observações</TableHead>
                   <TableHead>Amostra</TableHead>
                   <TableHead>Protocolo</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -361,11 +412,11 @@ const Materials = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8}>Carregando…</TableCell> {/* 8 colunas */}
+                    <TableCell colSpan={8}>Carregando…</TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8}>Nenhum registro</TableCell> {/* 8 colunas */}
+                    <TableCell colSpan={8}>Nenhum registro</TableCell>
                   </TableRow>
                 ) : (
                   filtered.map((m) => {
@@ -377,11 +428,7 @@ const Materials = () => {
                         <TableCell>{m.responsible || "—"}</TableCell>
                         <TableCell>{m.quantity ?? "—"}</TableCell>
                         <TableCell title={m.notes || ""}>
-                          {m.notes ? (
-                            <span className="line-clamp-2 max-w-[320px] block">{m.notes}</span>
-                          ) : (
-                            "—"
-                          )}
+                          {m.notes ? <span className="line-clamp-2 max-w-[320px] block">{m.notes}</span> : "—"}
                         </TableCell>
                         <TableCell>
                           {m.material_sample_url ? (
@@ -427,6 +474,7 @@ const Materials = () => {
         </CardContent>
       </Card>
 
+      {/* Dialog simples de exclusão */}
       <Dialog open={openDelete} onOpenChange={setOpenDelete}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
