@@ -19,7 +19,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, UploadCloud, FileText } from "lucide-react";
 import api from "@/services/api";
 
 const emptyForm = {
@@ -32,6 +32,7 @@ const emptyForm = {
   job_type: "CLT",
   status: "Aberta",
   salary: "",
+  documents_url: "", // novo: URL do PDF/PNG/JPG
 };
 
 export default function Vacancies() {
@@ -48,6 +49,9 @@ export default function Vacancies() {
   const [statusFilter, setStatusFilter] = useState("todos");
   const [departmentFilter, setDepartmentFilter] = useState("todos");
   const [jobTypeFilter, setJobTypeFilter] = useState("todos");
+
+  // upload documentos
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -110,6 +114,7 @@ export default function Vacancies() {
       job_type: v.job_type || "CLT",
       status: v.status || "Aberta",
       salary: v.salary?.toString?.() || "",
+      documents_url: v.documents_url || v.document_url || v.documentsUrl || "", // compat
     });
     setOpen(true);
   }
@@ -123,6 +128,7 @@ export default function Vacancies() {
       ...form,
       age: form.age ? Number(form.age) : null,
       salary: form.salary ? Number(form.salary) : null,
+      documents_url: form.documents_url || "",
     };
 
     try {
@@ -152,14 +158,37 @@ export default function Vacancies() {
     }
   }
 
+  // upload do campo "Documentos" (PDF/PNG/JPG)
+  async function onDocumentFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingDoc(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file); // backend espera "file"
+      const { data } = await api.post("/upload", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const url = data?.url || data?.secure_url || data?.location || "";
+      if (!url) throw new Error("URL não retornada.");
+      setForm((f) => ({ ...f, documents_url: url }));
+    } catch (err) {
+      console.error("Erro no upload de documentos:", err);
+      alert("Falha ao enviar documentos. Tente novamente.");
+    } finally {
+      setUploadingDoc(false);
+    }
+  }
+
+  const isPdf = (url) => /\.pdf(\?|$)/i.test(String(url || ""));
+
   return (
     <div className="admin-page-container admin-space-y-6">
       <div className="admin-page-header">
         <h2 className="admin-page-title">Vagas</h2>
-        {/* Botão movido para o container de filtros */}
       </div>
 
-      {/* KPIs — agora em grid 2x2 no desktop */}
+      {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="admin-card">
           <CardHeader className="admin-card-header pb-2">
@@ -218,7 +247,6 @@ export default function Vacancies() {
               />
             </div>
 
-            {/* + Nova Indicação ao lado dos filtros */}
             <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
@@ -287,43 +315,79 @@ export default function Vacancies() {
         <CardContent>
           <div className="overflow-x-auto">
             <table className="min-w-full table-auto text-sm">
-              <thead className="text-left text-muted-foreground">
+              <thead className="text-muted-foreground">
                 <tr className="border-b">
-                  <th className="py-2 pr-4">Nome</th>
-                  <th className="py-2 pr-4">Telefone</th>
-                  <th className="py-2 pr-4">Endereço</th>
-                  <th className="py-2 pr-4">Idade</th>
-                  <th className="py-2 pr-4">Sexo</th>
-                  <th className="py-2 pr-4">Departamento</th>
-                  <th className="py-2 pr-4">Tipo (Cargo)</th>
-                  <th className="py-2 pr-4">Salário</th>
-                  <th className="py-2 pr-4">Status</th>
-                  <th className="py-2 pr-2 text-right">Ações</th>
+                  <th className="py-2 px-3 text-center">Nome</th>
+                  <th className="py-2 px-3 text-center">Telefone</th>
+                  <th className="py-2 px-3 text-center">Endereço</th>
+                  <th className="py-2 px-3 text-center">Idade</th>
+                  <th className="py-2 px-3 text-center">Sexo</th>
+                  <th className="py-2 px-3 text-center">Departamento</th>
+                  <th className="py-2 px-3 text-center">Tipo (Cargo)</th>
+                  <th className="py-2 px-3 text-center">Salário</th>
+                  <th className="py-2 px-3 text-center">Documentos</th>{/* novo */}
+                  <th className="py-2 px-3 text-center">Status</th>
+                  <th className="py-2 px-3 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {!loading && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="py-6 text-center text-muted-foreground">
+                    <td colSpan={11} className="py-6 text-center text-muted-foreground">
                       Nenhum registro encontrado.
                     </td>
                   </tr>
                 )}
                 {filtered.map((v) => (
                   <tr key={v.id} className="border-b last:border-0">
-                    <td className="py-3 pr-4">{v.name}</td>
-                    <td className="py-3 pr-4">{v.phone}</td>
-                    <td className="py-3 pr-4">{v.address}</td>
-                    <td className="py-3 pr-4">{v.age ?? "—"}</td>
-                    <td className="py-3 pr-4">{v.sex}</td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 px-3">{v.name}</td>
+                    <td className="py-3 px-3">{v.phone}</td>
+                    <td className="py-3 px-3">{v.address}</td>
+                    <td className="py-3 px-3">{v.age ?? "—"}</td>
+                    <td className="py-3 px-3">{v.sex}</td>
+                    <td className="py-3 px-3">
                       <Badge variant="secondary">{v.department}</Badge>
                     </td>
-                    <td className="py-3 pr-4">{v.job_type}</td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 px-3">{v.job_type}</td>
+                    <td className="py-3 px-3">
                       {v.salary ? `R$ ${Number(v.salary).toLocaleString()}` : "—"}
                     </td>
-                    <td className="py-3 pr-4">
+
+                    {/* Documentos */}
+                    <td className="py-3 px-3">
+                      {v.documents_url ? (
+                        isPdf(v.documents_url) ? (
+                          <a
+                            href={v.documents_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 underline text-blue-600"
+                            title="Abrir PDF"
+                          >
+                            <FileText className="h-4 w-4" /> PDF
+                          </a>
+                        ) : (
+                          <a
+                            href={v.documents_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Abrir imagem"
+                            className="inline-block"
+                          >
+                            <img
+                              src={v.documents_url}
+                              alt="documento"
+                              className="h-10 w-10 object-cover rounded border"
+                              loading="lazy"
+                            />
+                          </a>
+                        )
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+
+                    <td className="py-3 px-3">
                       <Badge
                         className={
                           (v.status || "").toLowerCase() === "aberta"
@@ -336,7 +400,8 @@ export default function Vacancies() {
                         {v.status || "—"}
                       </Badge>
                     </td>
-                    <td className="py-3 pr-2 text-right whitespace-nowrap">
+
+                    <td className="py-3 px-3 text-right whitespace-nowrap">
                       <Button variant="outline" size="icon" className="mr-2" onClick={() => openEdit(v)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -485,6 +550,52 @@ export default function Vacancies() {
                   value={form.salary}
                   onChange={(e) => setForm({ ...form, salary: e.target.value })}
                 />
+              </div>
+
+              {/* Documentos (PDF/PNG/JPG) */}
+              <div className="space-y-2">
+                <Label>Documentos (PDF/PNG/JPG)</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg"
+                    onChange={onDocumentFileChange}
+                  />
+                  <Button type="button" variant="outline" disabled className="gap-2">
+                    <UploadCloud className="h-4 w-4" />
+                    {uploadingDoc ? "Enviando..." : "Upload"}
+                  </Button>
+                </div>
+
+                {form.documents_url && (
+                  <div className="mt-2">
+                    {isPdf(form.documents_url) ? (
+                      <a
+                        href={form.documents_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 underline text-blue-600"
+                        title="Abrir PDF"
+                      >
+                        <FileText className="h-4 w-4" /> Ver PDF enviado
+                      </a>
+                    ) : (
+                      <a
+                        href={form.documents_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Abrir imagem"
+                        className="inline-block"
+                      >
+                        <img
+                          src={form.documents_url}
+                          alt="documento"
+                          className="h-20 w-20 object-cover rounded border"
+                        />
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
