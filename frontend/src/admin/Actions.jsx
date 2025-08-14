@@ -117,7 +117,6 @@ const Actions = () => {
   const [editing, setEditing] = useState(null);
 
   // upload state
-  thead;
   const [uploadingMaterial, setUploadingMaterial] = useState(false);
 
   const [form, setForm] = useState({ ...initialForm });
@@ -349,7 +348,7 @@ const Actions = () => {
             </CardDescription>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 opacity-60" />
               <Input
@@ -393,7 +392,7 @@ const Actions = () => {
                         <Label>Tipo(s) de ação</Label>
                         <TypeSelector />
                         {form.types.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-2">
+                          <div className="flex flex-wrap gap-2">
                             {form.types.map((t) => (
                               <Badge key={t} variant="secondary" className="gap-1">
                                 {t}
