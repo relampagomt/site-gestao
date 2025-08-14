@@ -19,8 +19,9 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
-import { Plus, Pencil, Trash2, UploadCloud, FileText } from "lucide-react";
+import { Plus, Pencil, Trash2, UploadCloud, X } from "lucide-react";
 import api from "@/services/api";
+import ImagePreview from "@/components/ImagePreview.jsx"; // mesmo padrão dos Materiais
 
 const emptyForm = {
   name: "",
@@ -32,7 +33,7 @@ const emptyForm = {
   job_type: "CLT",
   status: "Aberta",
   salary: "",
-  documents_url: "", // URL de PDF/PNG/JPG
+  images: [], // múltiplas imagens PNG/JPG
 };
 
 export default function Vacancies() {
@@ -50,8 +51,8 @@ export default function Vacancies() {
   const [departmentFilter, setDepartmentFilter] = useState("todos");
   const [jobTypeFilter, setJobTypeFilter] = useState("todos");
 
-  // upload documentos
-  const [uploadingDoc, setUploadingDoc] = useState(false);
+  // upload imagens
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -102,6 +103,14 @@ export default function Vacancies() {
     setOpen(true);
   }
 
+  // compat: caso registros antigos tenham "documents_url" (única) ou "images_urls"
+  const extractImages = (v) => {
+    if (Array.isArray(v?.images_urls)) return v.images_urls.filter(Boolean);
+    if (Array.isArray(v?.images)) return v.images.filter(Boolean);
+    if (v?.documents_url) return [v.documents_url];
+    return [];
+  };
+
   function openEdit(v) {
     setEditingId(v.id);
     setForm({
@@ -114,7 +123,7 @@ export default function Vacancies() {
       job_type: v.job_type || "CLT",
       status: v.status || "Aberta",
       salary: v.salary?.toString?.() || "",
-      documents_url: v.documents_url || v.document_url || v.documentsUrl || "", // compat
+      images: extractImages(v),
     });
     setOpen(true);
   }
@@ -123,13 +132,13 @@ export default function Vacancies() {
     e?.preventDefault?.();
     if (!form.name?.trim()) return alert("Informe o nome.");
     if (!form.phone?.trim()) return alert("Informe o telefone.");
-    if (uploadingDoc) return alert("Aguarde concluir o upload dos documentos.");
+    if (uploadingImages) return alert("Aguarde concluir o upload das imagens.");
 
     const payload = {
       ...form,
       age: form.age ? Number(form.age) : null,
       salary: form.salary ? Number(form.salary) : null,
-      documents_url: form.documents_url || "",
+      images_urls: form.images || [], // backend pode armazenar como images_urls
     };
 
     try {
@@ -159,32 +168,49 @@ export default function Vacancies() {
     }
   }
 
-  // upload do campo "Documentos" (PDF/PNG/JPG) — usa campo 'file' e NÃO força headers
-  async function onDocumentFileChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingDoc(true);
+  // upload múltiplo somente imagens (PNG/JPG) — usa campo 'file' e NÃO força headers
+  async function onImagesChange(e) {
+    const input = e.target;
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+
+    const allowed = files.filter((f) => /image\/(png|jpeg)/i.test(f.type));
+    if (allowed.length === 0) {
+      input.value = "";
+      return alert("Selecione apenas imagens PNG ou JPG.");
+    }
+
+    setUploadingImages(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file); // backend costuma esperar 'file'
-      const { data } = await api.post("/upload", fd); // sem headers (axios define boundary)
-      const url =
-        data?.url ||
-        data?.secure_url ||
-        data?.location ||
-        data?.file?.url ||
-        "";
-      if (!url) throw new Error("URL não retornada.");
-      setForm((f) => ({ ...f, documents_url: url }));
+      const urls = [];
+      for (const file of allowed) {
+        const fd = new FormData();
+        fd.append("file", file); // backend costuma esperar 'file'
+        const { data } = await api.post("/upload", fd); // sem headers (axios define boundary)
+        const url =
+          data?.url ||
+          data?.secure_url ||
+          data?.location ||
+          data?.file?.url ||
+          "";
+        if (url) urls.push(url);
+      }
+      if (urls.length === 0) throw new Error("Nenhuma URL retornada.");
+
+      setForm((f) => ({ ...f, images: [...(f.images || []), ...urls] }));
     } catch (err) {
-      console.error("Erro no upload de documentos:", err);
-      alert("Falha ao enviar documentos. Código: " + (err?.response?.status || "desconhecido"));
+      console.error("Erro no upload de imagens:", err);
+      alert("Falha ao enviar imagens. Código: " + (err?.response?.status || "desconhecido"));
     } finally {
-      setUploadingDoc(false);
+      setUploadingImages(false);
+      // permite re-selecionar os mesmos arquivos se quiser
+      input.value = "";
     }
   }
 
-  const isPdf = (url) => /\.pdf(\?|$)/i.test(String(url || ""));
+  const removeImage = (url) => {
+    setForm((f) => ({ ...f, images: (f.images || []).filter((u) => u !== url) }));
+  };
 
   return (
     <div className="admin-page-container admin-space-y-6">
@@ -329,7 +355,7 @@ export default function Vacancies() {
                   <th className="py-2 px-3 text-center">Departamento</th>
                   <th className="py-2 px-3 text-center">Tipo (Cargo)</th>
                   <th className="py-2 px-3 text-center">Salário</th>
-                  <th className="py-2 px-3 text-center">Documentos</th>
+                  <th className="py-2 px-3 text-center">Fotos</th>
                   <th className="py-2 px-3 text-center">Status</th>
                   <th className="py-2 px-3 text-center">Ações</th>
                 </tr>
@@ -342,79 +368,64 @@ export default function Vacancies() {
                     </td>
                   </tr>
                 )}
-                {filtered.map((v) => (
-                  <tr key={v.id} className="border-b last:border-0">
-                    <td className="py-3 px-3 text-center">{v.name}</td>
-                    <td className="py-3 px-3 text-center">{v.phone}</td>
-                    <td className="py-3 px-3 text-center">{v.address}</td>
-                    <td className="py-3 px-3 text-center">{v.age ?? "—"}</td>
-                    <td className="py-3 px-3 text-center">{v.sex}</td>
-                    <td className="py-3 px-3 text-center">
-                      <Badge variant="secondary">{v.department}</Badge>
-                    </td>
-                    <td className="py-3 px-3 text-center">{v.job_type}</td>
-                    <td className="py-3 px-3 text-center">
-                      {v.salary ? `R$ ${Number(v.salary).toLocaleString()}` : "—"}
-                    </td>
+                {filtered.map((v) => {
+                  const imgs = extractImages(v);
+                  return (
+                    <tr key={v.id} className="border-b last:border-0">
+                      <td className="py-3 px-3 text-center">{v.name}</td>
+                      <td className="py-3 px-3 text-center">{v.phone}</td>
+                      <td className="py-3 px-3 text-center">{v.address}</td>
+                      <td className="py-3 px-3 text-center">{v.age ?? "—"}</td>
+                      <td className="py-3 px-3 text-center">{v.sex}</td>
+                      <td className="py-3 px-3 text-center">
+                        <Badge variant="secondary">{v.department}</Badge>
+                      </td>
+                      <td className="py-3 px-3 text-center">{v.job_type}</td>
+                      <td className="py-3 px-3 text-center">
+                        {v.salary ? `R$ ${Number(v.salary).toLocaleString()}` : "—"}
+                      </td>
 
-                    {/* Documentos */}
-                    <td className="py-3 px-3 text-center">
-                      {v.documents_url ? (
-                        isPdf(v.documents_url) ? (
-                          <a
-                            href={v.documents_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 underline text-blue-600"
-                            title="Abrir PDF"
-                          >
-                            <FileText className="h-4 w-4" /> PDF
-                          </a>
+                      {/* Fotos (miniaturas com modal via ImagePreview) */}
+                      <td className="py-3 px-3 text-center">
+                        {imgs.length ? (
+                          <div className="flex items-center justify-center gap-1 flex-wrap">
+                            {imgs.slice(0, 3).map((url) => (
+                              <ImagePreview key={url} src={url} alt="foto" size={40} />
+                            ))}
+                            {imgs.length > 3 && (
+                              <Badge variant="outline">+{imgs.length - 3}</Badge>
+                            )}
+                          </div>
                         ) : (
-                          <a
-                            href={v.documents_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Abrir imagem"
-                            className="inline-block"
-                          >
-                            <img
-                              src={v.documents_url}
-                              alt="documento"
-                              className="h-10 w-10 object-cover rounded border mx-auto"
-                              loading="lazy"
-                            />
-                          </a>
-                        )
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
 
-                    <td className="py-3 px-3 text-center">
-                      <Badge
-                        className={
-                          (v.status || "").toLowerCase() === "aberta"
-                            ? "bg-emerald-600"
-                            : (v.status || "").toLowerCase() === "fechada"
-                            ? "bg-zinc-600"
-                            : "bg-amber-600"
-                        }
-                      >
-                        {v.status || "—"}
-                      </Badge>
-                    </td>
+                      <td className="py-3 px-3 text-center">
+                        <Badge
+                          className={
+                            (v.status || "").toLowerCase() === "aberta"
+                              ? "bg-emerald-600"
+                              : (v.status || "").toLowerCase() === "fechada"
+                              ? "bg-zinc-600"
+                              : "bg-amber-600"
+                          }
+                        >
+                          {v.status || "—"}
+                        </Badge>
+                      </td>
 
-                    <td className="py-3 px-3 text-center whitespace-nowrap">
-                      <Button variant="outline" size="icon" className="mr-2" onClick={() => openEdit(v)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="destructive" size="icon" onClick={() => handleDelete(v.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <Button variant="outline" size="icon" className="mr-2" onClick={() => openEdit(v)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="destructive" size="icon" onClick={() => handleDelete(v.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -556,48 +567,38 @@ export default function Vacancies() {
                 />
               </div>
 
-              {/* Documentos (PDF/PNG/JPG) */}
+              {/* Fotos (PNG/JPG) — múltiplas, miniaturas e modal padrão Materiais */}
               <div className="space-y-2">
-                <Label>Documentos (PDF/PNG/JPG)</Label>
+                <Label>Fotos do candidato (PNG/JPG)</Label>
                 <div className="flex items-center gap-3">
                   <Input
                     type="file"
-                    accept="application/pdf,image/png,image/jpeg"
-                    onChange={onDocumentFileChange}
+                    accept="image/png,image/jpeg"
+                    multiple
+                    onChange={onImagesChange}
                   />
                   <Button type="button" variant="outline" disabled className="gap-2">
                     <UploadCloud className="h-4 w-4" />
-                    {uploadingDoc ? "Enviando..." : "Upload"}
+                    {uploadingImages ? "Enviando..." : "Upload"}
                   </Button>
                 </div>
 
-                {form.documents_url && (
-                  <div className="mt-2">
-                    {isPdf(form.documents_url) ? (
-                      <a
-                        href={form.documents_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 underline text-blue-600"
-                        title="Abrir PDF"
-                      >
-                        <FileText className="h-4 w-4" /> Ver PDF enviado
-                      </a>
-                    ) : (
-                      <a
-                        href={form.documents_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Abrir imagem"
-                        className="inline-block"
-                      >
-                        <img
-                          src={form.documents_url}
-                          alt="documento"
-                          className="h-20 w-20 object-cover rounded border"
-                        />
-                      </a>
-                    )}
+                {/* miniaturas (com modal via ImagePreview) + remover */}
+                {Array.isArray(form.images) && form.images.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {form.images.map((url) => (
+                      <div key={url} className="relative inline-flex items-center">
+                        <ImagePreview src={url} alt="foto" size={96} />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(url)}
+                          className="ml-1 bg-white border rounded-full p-1 shadow -translate-x-2 -translate-y-10"
+                          title="Remover"
+                        >
+                          <X className="size-4 text-red-600" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -606,7 +607,7 @@ export default function Vacancies() {
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={uploadingDoc}>
+                <Button type="submit" disabled={uploadingImages}>
                   {editingId ? "Salvar" : "Criar"}
                 </Button>
               </div>
