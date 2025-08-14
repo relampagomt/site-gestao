@@ -18,7 +18,7 @@ import ImagePreview from "@/components/ImagePreview.jsx";
 
 import {
   Plus, Edit, Trash2, Search, Calendar as CalendarIcon, Layers, X,
-  CheckCircle, XCircle, UploadCloud
+  CheckCircle, Loader2, Clock, UploadCloud
 } from "lucide-react";
 
 import { formatDateBR } from "@/utils/dates.js";
@@ -47,6 +47,16 @@ const ensureArrayTypes = (item) => {
   }
   return [];
 };
+
+// status <-> active (compat)
+const deriveStatusFromItem = (item) => {
+  const s = String(item?.status || "").toLowerCase();
+  if (s === "aguardando" || s === "andamento" || s === "concluída" || s === "concluida") return s === "concluida" ? "concluída" : s;
+  // fallback pelo campo antigo 'active'
+  if (typeof item?.active === "boolean") return item.active ? "andamento" : "aguardando";
+  return "aguardando";
+};
+const activeFromStatus = (status) => status === "andamento";
 
 // Datas em BR <-> ISO
 const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
@@ -87,7 +97,7 @@ const initialForm = {
   material_qty: "",
   material_photo_url: "",
   notes: "",
-  active: true,
+  status: "aguardando", // aguardando | andamento | concluída
 };
 
 const periodOptions = ["manhã", "tarde", "noite"];
@@ -132,7 +142,8 @@ const Actions = () => {
     if (!q) return actions;
     return actions.filter((a) => {
       const typesBlob = ensureArrayTypes(a).join(" ").toLowerCase();
-      const blob = `${a.client_name} ${a.company_name} ${a.notes} ${typesBlob}`.toLowerCase();
+      const statusBlob = deriveStatusFromItem(a);
+      const blob = `${a.client_name} ${a.company_name} ${a.notes} ${typesBlob} ${statusBlob}`.toLowerCase();
       return blob.includes(q);
     });
   }, [actions, query]);
@@ -177,7 +188,6 @@ const Actions = () => {
   const handleCreate = async (e) => {
     e.preventDefault();
 
-    // validações
     const startISO = brToYMD(form.startBr);
     const endISO = brToYMD(form.endBr);
     if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
@@ -195,7 +205,8 @@ const Actions = () => {
         material_qty: Number(form.material_qty || 0),
         material_photo_url: form.material_photo_url || "",
         notes: form.notes || "",
-        active: !!form.active,
+        status: form.status,                // <— novo
+        active: activeFromStatus(form.status), // compat
       };
 
       await api.post("/actions", payload);
@@ -221,7 +232,7 @@ const Actions = () => {
       material_qty: item.material_qty ?? "",
       material_photo_url: item.material_photo_url || "",
       notes: item.notes || "",
-      active: typeof item.active === "boolean" ? item.active : true,
+      status: deriveStatusFromItem(item),
     });
     setIsEditOpen(true);
   };
@@ -247,7 +258,8 @@ const Actions = () => {
         material_qty: Number(form.material_qty || 0),
         material_photo_url: form.material_photo_url || "",
         notes: form.notes || "",
-        active: !!form.active,
+        status: form.status,
+        active: activeFromStatus(form.status), // compat
       };
 
       await api.put(`/actions/${editing.id}`, payload);
@@ -342,7 +354,7 @@ const Actions = () => {
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por cliente, empresa, tipo ou observação"
+                placeholder="Buscar por cliente, empresa, tipo, status ou observação"
                 className="pl-9 w-full sm:w-[260px]"
               />
             </div>
@@ -449,9 +461,19 @@ const Actions = () => {
                         <Textarea id="notes" rows={3} value={form.notes} onChange={(e) => onChange("notes", e.target.value)} />
                       </div>
 
-                      <div className="flex items-center gap-2 md:col-span-2">
-                        <Checkbox id="active" checked={!!form.active} onCheckedChange={(v) => onChange("active", !!v)} />
-                        <Label htmlFor="active">Ativo</Label>
+                      {/* STATUS */}
+                      <div className="space-y-1.5 md:col-span-2">
+                        <Label htmlFor="status">Status</Label>
+                        <select
+                          id="status"
+                          className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                          value={form.status}
+                          onChange={(e) => onChange("status", e.target.value)}
+                        >
+                          <option value="aguardando">Aguardando</option>
+                          <option value="andamento">Andamento</option>
+                          <option value="concluída">Concluída</option>
+                        </select>
                       </div>
                     </div>
 
@@ -470,7 +492,7 @@ const Actions = () => {
         <CardContent>
           <div className="rounded-md border">
             <div className="overflow-x-auto">
-              <Table className="min-w-[1050px]">
+              <Table className="min-w-[1080px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-center">Cliente</TableHead>
@@ -494,6 +516,8 @@ const Actions = () => {
                       const range = (a.start_date || a.end_date)
                         ? `${formatDateBR(a.start_date)} — ${formatDateBR(a.end_date)}`
                         : "—";
+                      const status = deriveStatusFromItem(a);
+
                       return (
                         <TableRow key={a.id}>
                           <TableCell className="text-center font-medium">{a.client_name || "—"}</TableCell>
@@ -516,13 +540,19 @@ const Actions = () => {
                           <TableCell className="text-center">{a.material_qty ?? "—"}</TableCell>
 
                           <TableCell className="text-center">
-                            {a.active ? (
-                              <span className="inline-flex items-center gap-1 text-green-600">
-                                <CheckCircle className="size-4" /> Ativa
+                            {status === "aguardando" && (
+                              <span className="inline-flex items-center gap-1 text-amber-600">
+                                <Clock className="size-4" /> Aguardando
                               </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-red-600">
-                                <XCircle className="size-4" /> Inativa
+                            )}
+                            {status === "andamento" && (
+                              <span className="inline-flex items-center gap-1 text-blue-600">
+                                <Loader2 className="size-4 animate-spin-slow" /> Andamento
+                              </span>
+                            )}
+                            {status === "concluída" && (
+                              <span className="inline-flex items-center gap-1 text-green-600">
+                                <CheckCircle className="size-4" /> Concluída
                               </span>
                             )}
                           </TableCell>
@@ -646,9 +676,19 @@ const Actions = () => {
                   <Textarea id="e_notes" rows={3} value={form.notes} onChange={(e) => onChange("notes", e.target.value)} />
                 </div>
 
-                <div className="flex items-center gap-2 md:col-span-2">
-                  <Checkbox id="e_active" checked={!!form.active} onCheckedChange={(v) => onChange("active", !!v)} />
-                  <Label htmlFor="e_active">Ativo</Label>
+                {/* STATUS */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="e_status">Status</Label>
+                  <select
+                    id="e_status"
+                    className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                    value={form.status}
+                    onChange={(e) => onChange("status", e.target.value)}
+                  >
+                    <option value="aguardando">Aguardando</option>
+                    <option value="andamento">Andamento</option>
+                    <option value="concluída">Concluída</option>
+                  </select>
                 </div>
               </div>
 
