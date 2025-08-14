@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+
 import {
   LogOut,
   User,
@@ -15,7 +17,7 @@ import {
   Home,
   Menu,
   X,
-  Wallet,            // ✅ novo ícone
+  Wallet, // ✅ novo ícone
 } from 'lucide-react';
 
 import Dashboard from './Dashboard';
@@ -23,8 +25,8 @@ import Clients from './Clients';
 import Materials from './Materials';
 import Actions from './Actions';
 import Vacancies from './Vacancies';
-import SettingsPage from './Settings'; // ✅
-import Finance from './Finance';       // ✅ novo
+import SettingsPage from './Settings';
+import Finance from './Finance'; // ✅ novo
 
 const AdminDashboard = () => {
   const { user, logout, isAdmin } = useAuth();
@@ -38,12 +40,12 @@ const AdminDashboard = () => {
     { id: 'clients', label: 'Clientes', icon: Users, component: Clients },
     { id: 'materials', label: 'Materiais', icon: Package, component: Materials },
     { id: 'actions', label: 'Ações', icon: Activity, component: Actions },
-    { id: 'finance', label: 'Financeiro', icon: Wallet, component: Finance }, // ✅ novo item
+    { id: 'finance', label: 'Finanças', icon: Wallet, component: Finance }, // ✅ novo item
     { id: 'vacancies', label: 'Vagas', icon: Briefcase, component: Vacancies },
     { id: 'settings', label: 'Configurações', icon: Settings, component: SettingsPage },
   ];
 
-  const ActiveComponent = menuItems.find(item => item.id === activeTab)?.component || Dashboard;
+  const ActiveComponent = menuItems.find((i) => i.id === activeTab)?.component || Dashboard;
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -63,7 +65,7 @@ const AdminDashboard = () => {
         <nav className="mt-6 overflow-y-auto">
           {menuItems.map((item) => {
             const Icon = item.icon;
-            const active = activeTab === item.id;
+            const isActive = activeTab === item.id;
             return (
               <button
                 key={item.id}
@@ -72,7 +74,7 @@ const AdminDashboard = () => {
                   setSidebarOpen(false);
                 }}
                 className={`w-full flex items-center px-6 py-3 text-left hover:bg-gray-50 transition-colors ${
-                  active ? 'bg-red-50 text-red-600 border-r-2 border-red-600' : 'text-gray-700'
+                  isActive ? 'bg-red-50 text-red-600 border-r-2 border-red-600' : 'text-gray-700'
                 }`}
               >
                 <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
@@ -104,12 +106,7 @@ const AdminDashboard = () => {
                   </Badge>
                 </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleLogout}
-                  className="flex items-center space-x-1 sm:space-x-2"
-                >
+                <Button variant="outline" size="sm" onClick={handleLogout} className="flex items-center space-x-1 sm:space-x-2">
                   <LogOut className="w-4 h-4" />
                   <span className="hidden sm:inline">Sair</span>
                 </Button>
@@ -127,12 +124,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Overlay for mobile */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-transparent z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      {sidebarOpen && <div className="fixed inset-0 bg-transparent z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
     </div>
   );
 };
