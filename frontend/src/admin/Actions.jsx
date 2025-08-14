@@ -51,8 +51,8 @@ const ensureArrayTypes = (item) => {
 // status <-> active (compat)
 const deriveStatusFromItem = (item) => {
   const s = String(item?.status || "").toLowerCase();
-  if (s === "aguardando" || s === "andamento" || s === "concluída" || s === "concluida") return s === "concluida" ? "concluída" : s;
-  // fallback pelo campo antigo 'active'
+  if (s === "aguardando" || s === "andamento" || s === "concluída" || s === "concluida")
+    return s === "concluida" ? "concluída" : s;
   if (typeof item?.active === "boolean") return item.active ? "andamento" : "aguardando";
   return "aguardando";
 };
@@ -91,13 +91,13 @@ const initialForm = {
   client_name: "",
   company_name: "",
   types: [],
-  startBr: "", // DD/MM/AAAA
-  endBr: "",   // DD/MM/AAAA
+  startBr: "",
+  endBr: "",
   day_periods: [],
   material_qty: "",
   material_photo_url: "",
   notes: "",
-  status: "aguardando", // aguardando | andamento | concluída
+  status: "aguardando",
 };
 
 const periodOptions = ["manhã", "tarde", "noite"];
@@ -117,6 +117,7 @@ const Actions = () => {
   const [editing, setEditing] = useState(null);
 
   // upload state
+  thead;
   const [uploadingMaterial, setUploadingMaterial] = useState(false);
 
   const [form, setForm] = useState({ ...initialForm });
@@ -167,7 +168,7 @@ const Actions = () => {
     });
   };
 
-  // Upload imediato da amostra (padrão Materiais)
+  // Upload imediato da amostra
   const onMaterialChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -205,8 +206,8 @@ const Actions = () => {
         material_qty: Number(form.material_qty || 0),
         material_photo_url: form.material_photo_url || "",
         notes: form.notes || "",
-        status: form.status,                // <— novo
-        active: activeFromStatus(form.status), // compat
+        status: form.status,
+        active: activeFromStatus(form.status),
       };
 
       await api.post("/actions", payload);
@@ -259,7 +260,7 @@ const Actions = () => {
         material_photo_url: form.material_photo_url || "",
         notes: form.notes || "",
         status: form.status,
-        active: activeFromStatus(form.status), // compat
+        active: activeFromStatus(form.status),
       };
 
       await api.put(`/actions/${editing.id}`, payload);
@@ -507,9 +508,13 @@ const Actions = () => {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8">Carregando...</TableCell></TableRow>
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8">Carregando...</TableCell>
+                    </TableRow>
                   ) : filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Nenhuma ação encontrada.</TableCell></TableRow>
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Nenhuma ação encontrada.</TableCell>
+                    </TableRow>
                   ) : (
                     filtered.map((a) => {
                       const types = ensureArrayTypes(a);
@@ -522,6 +527,7 @@ const Actions = () => {
                         <TableRow key={a.id}>
                           <TableCell className="text-center font-medium">{a.client_name || "—"}</TableCell>
                           <TableCell className="text-center">{a.company_name || "—"}</TableCell>
+
                           <TableCell className="text-center">
                             <div className="flex justify-center flex-wrap gap-1">
                               {types.slice(0, 3).map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
@@ -533,7 +539,9 @@ const Actions = () => {
 
                           <TableCell className="text-center">
                             {a.material_photo_url ? (
-                              <ImagePreview src={a.material_photo_url} alt="Amostra do material" size={48} />
+                              <div className="flex justify-center">
+                                <ImagePreview src={a.material_photo_url} alt="Amostra do material" size={48} />
+                              </div>
                             ) : <span className="text-xs text-muted-foreground">—</span>}
                           </TableCell>
 
@@ -558,7 +566,7 @@ const Actions = () => {
                           </TableCell>
 
                           <TableCell className="text-center">
-                            <div className="inline-flex gap-2">
+                            <div className="flex justify-center gap-2 flex-wrap">
                               <Button size="sm" variant="secondary" onClick={() => openEdit(a)} className="gap-1 min-h-[36px]">
                                 <Edit className="size-4" /> Editar
                               </Button>
