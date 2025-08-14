@@ -75,7 +75,7 @@ const maskBR = (v) => {
   return [p1, p2, p3].filter(Boolean).join("/");
 };
 
-// Upload (igual Materiais): campo "file" e header multipart
+// Upload (igual Materiais)
 async function uploadFile(file) {
   if (!file) return "";
   const fd = new FormData();
@@ -86,7 +86,7 @@ async function uploadFile(file) {
   return data?.url || data?.secure_url || data?.location || "";
 }
 
-/* ========= Estado inicial do formulário ========= */
+/* ========= Estado inicial ========= */
 const initialForm = {
   client_name: "",
   company_name: "",
@@ -285,7 +285,7 @@ const Actions = () => {
     }
   };
 
-  /* -------- TypeSelector -------- */
+  /* -------- TypeSelector (com scroll fix) -------- */
   const [typesPopoverOpen, setTypesPopoverOpen] = useState(false);
   const TypeSelector = () => (
     <Popover open={typesPopoverOpen} onOpenChange={setTypesPopoverOpen}>
@@ -300,37 +300,46 @@ const Actions = () => {
           <Layers className="size-4 opacity-70" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[380px] p-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium">Tipos de ação</span>
-          {form.types.length > 0 && (
-            <Button size="sm" variant="ghost" onClick={() => onChange("types", [])}>
-              Limpar
-            </Button>
-          )}
-        </div>
-        <div className="max-h-[320px] overflow-auto pr-1 space-y-4">
-          {ACTION_OPTIONS.map((group) => (
-            <div key={group.group}>
-              <p className="text-xs font-semibold text-muted-foreground mb-2">{group.group}</p>
-              <div className="space-y-2">
-                {group.items.map((opt) => {
-                  const checked = form.types.includes(opt);
-                  return (
-                    <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <Checkbox checked={checked} onCheckedChange={() => toggleType(opt)} />
-                      <span>{opt}</span>
-                    </label>
-                  );
-                })}
+
+      {/* >>> Scroll fix: wrapper com overscroll e -webkit-overflow-scrolling */}
+      <PopoverContent
+        align="start"
+        className="p-0 w-[min(92vw,420px)] max-h-[70vh] overflow-hidden"
+      >
+        <div className="px-3 py-3 max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">Tipos de ação</span>
+            {form.types.length > 0 && (
+              <Button size="sm" variant="ghost" onClick={() => onChange("types", [])}>
+                Limpar
+              </Button>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {ACTION_OPTIONS.map((group) => (
+              <div key={group.group}>
+                <p className="text-xs font-semibold text-muted-foreground mb-2">{group.group}</p>
+                <div className="space-y-2">
+                  {group.items.map((opt) => {
+                    const checked = form.types.includes(opt);
+                    return (
+                      <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox checked={checked} onCheckedChange={() => toggleType(opt)} />
+                        <span>{opt}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <Separator className="my-3" />
               </div>
-              <Separator className="my-3" />
-            </div>
-          ))}
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={() => setTypesPopoverOpen(false)}>Fechar</Button>
-          <Button onClick={() => setTypesPopoverOpen(false)}>Aplicar</Button>
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3">
+            <Button variant="outline" onClick={() => setTypesPopoverOpen(false)}>Fechar</Button>
+            <Button onClick={() => setTypesPopoverOpen(false)}>Aplicar</Button>
+          </div>
         </div>
       </PopoverContent>
     </Popover>
@@ -348,7 +357,7 @@ const Actions = () => {
             </CardDescription>
           </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 opacity-60" />
               <Input
@@ -526,16 +535,13 @@ const Actions = () => {
                         <TableRow key={a.id}>
                           <TableCell className="text-center font-medium">{a.client_name || "—"}</TableCell>
                           <TableCell className="text-center">{a.company_name || "—"}</TableCell>
-
                           <TableCell className="text-center">
                             <div className="flex justify-center flex-wrap gap-1">
                               {types.slice(0, 3).map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
                               {types.length > 3 && <Badge variant="outline">+{types.length - 3}</Badge>}
                             </div>
                           </TableCell>
-
                           <TableCell className="text-center">{range}</TableCell>
-
                           <TableCell className="text-center">
                             {a.material_photo_url ? (
                               <div className="flex justify-center">
@@ -543,9 +549,7 @@ const Actions = () => {
                               </div>
                             ) : <span className="text-xs text-muted-foreground">—</span>}
                           </TableCell>
-
                           <TableCell className="text-center">{a.material_qty ?? "—"}</TableCell>
-
                           <TableCell className="text-center">
                             {status === "aguardando" && (
                               <span className="inline-flex items-center gap-1 text-amber-600">
@@ -563,7 +567,6 @@ const Actions = () => {
                               </span>
                             )}
                           </TableCell>
-
                           <TableCell className="text-center">
                             <div className="flex justify-center gap-2 flex-wrap">
                               <Button size="sm" variant="secondary" onClick={() => openEdit(a)} className="gap-1 min-h-[36px]">
@@ -653,7 +656,6 @@ const Actions = () => {
                   <Input id="e_material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange("material_qty", e.target.value)} />
                 </div>
 
-                {/* Upload igual Materiais */}
                 <div className="space-y-2 md:col-span-2">
                   <Label>Amostra do material (imagem)</Label>
                   <div className="flex items-center gap-3">
@@ -683,7 +685,6 @@ const Actions = () => {
                   <Textarea id="e_notes" rows={3} value={form.notes} onChange={(e) => onChange("notes", e.target.value)} />
                 </div>
 
-                {/* STATUS */}
                 <div className="space-y-1.5 md:col-span-2">
                   <Label htmlFor="e_status">Status</Label>
                   <select
