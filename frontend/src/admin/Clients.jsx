@@ -156,7 +156,7 @@ function SegmentosSelect({ value = [], onChange }) {
       >
         {/* SCROLLER: mais compacto e com gesto funcionando */}
         <div
-          className="max-h-[50vh] overflow-y-auto overscroll-contain pb-2"
+          className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2"
           style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
           onWheel={stopScrollProp}
           onTouchMove={stopScrollProp}
