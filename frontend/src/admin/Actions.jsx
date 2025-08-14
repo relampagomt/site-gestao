@@ -285,7 +285,7 @@ const Actions = () => {
     }
   };
 
-  /* -------- TypeSelector (com scroll fix) -------- */
+  /* -------- TypeSelector (scroll fix) -------- */
   const [typesPopoverOpen, setTypesPopoverOpen] = useState(false);
   const TypeSelector = () => (
     <Popover open={typesPopoverOpen} onOpenChange={setTypesPopoverOpen}>
@@ -301,12 +301,17 @@ const Actions = () => {
         </Button>
       </PopoverTrigger>
 
-      {/* >>> Scroll fix: wrapper com overscroll e -webkit-overflow-scrolling */}
       <PopoverContent
         align="start"
+        side="bottom"
+        sideOffset={8}
         className="p-0 w-[min(92vw,420px)] max-h-[70vh] overflow-hidden"
       >
-        <div className="px-3 py-3 max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+        <div
+          className="px-3 py-3 max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium">Tipos de ação</span>
             {form.types.length > 0 && (
