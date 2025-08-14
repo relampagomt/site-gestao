@@ -319,7 +319,7 @@ const Users = () => {
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por nome, usuário, e‑mail ou perfil"
+                placeholder="Buscar por nome, usuário, e-mail ou perfil"
                 className="pl-9 w-full sm:w-[260px]"
               />
             </div>
@@ -336,7 +336,7 @@ const Users = () => {
                   </Button>
                 </DialogTrigger>
 
-                {/* Casulo padrão (igual Materiais): largura/altura, header com borda e footer com borda */}
+                {/* Casulo padrão */}
                 <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
                   <div className="px-5 pt-5 pb-3 border-b">
                     <DialogHeader>
@@ -375,7 +375,7 @@ const Users = () => {
 
                         <div className="space-y-1.5">
                           <Label htmlFor="email" className="flex items-center gap-2">
-                            <Mail className="size-4" /> E‑mail (opcional)
+                            <Mail className="size-4" /> E-mail (opcional)
                           </Label>
                           <Input
                             id="email"
@@ -443,17 +443,16 @@ const Users = () => {
 
         <CardContent>
           <div className="rounded-md border">
-            {/* Mantém todas as colunas visíveis; em telas pequenas, o container permite scroll horizontal */}
             <div className="overflow-x-auto">
               <Table className="min-w-[860px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Username</TableHead>
-                    <TableHead>E‑mail</TableHead>
-                    <TableHead>Perfil</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
+                    <TableHead className="text-center">Nome</TableHead>
+                    <TableHead className="text-center">Username</TableHead>
+                    <TableHead className="text-center">E-mail</TableHead>
+                    <TableHead className="text-center">Perfil</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -473,17 +472,17 @@ const Users = () => {
                   ) : (
                     filtered.map((u) => (
                       <TableRow key={u.id}>
-                        <TableCell className="font-medium">{u.name || '-'}</TableCell>
-                        <TableCell>{u.username}</TableCell>
-                        <TableCell>{u.email || '-'}</TableCell>
-                        <TableCell>
+                        <TableCell className="text-center font-medium">{u.name || '-'}</TableCell>
+                        <TableCell className="text-center">{u.username}</TableCell>
+                        <TableCell className="text-center">{u.email || '-'}</TableCell>
+                        <TableCell className="text-center">
                           {u.role === 'admin' ? (
                             <Badge className="bg-primary/90">Admin</Badge>
                           ) : (
                             <Badge variant="secondary">Supervisor</Badge>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           {u.active ? (
                             <span className="inline-flex items-center gap-1 text-green-600">
                               <CheckCircle className="size-4" /> Ativo
@@ -494,8 +493,8 @@ const Users = () => {
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2 flex-wrap">
+                        <TableCell className="text-center">
+                          <div className="flex justify-center gap-2 flex-wrap">
                             <Button
                               size="sm"
                               variant="outline"
@@ -543,7 +542,7 @@ const Users = () => {
         </CardContent>
       </Card>
 
-      {/* EDIT MODAL — casulo padrão (igual Materiais) */}
+      {/* EDIT MODAL */}
       <Dialog
         open={isEditOpen}
         onOpenChange={(v) => {
@@ -591,7 +590,7 @@ const Users = () => {
 
                 <div className="space-y-1.5">
                   <Label htmlFor="e-email" className="flex items-center gap-2">
-                    <Mail className="size-4" /> E‑mail
+                    <Mail className="size-4" /> E-mail
                   </Label>
                   <Input
                     id="e-email"
@@ -665,4 +664,3 @@ const Users = () => {
 };
 
 export default Users;
-
