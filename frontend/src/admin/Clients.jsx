@@ -32,40 +32,89 @@ import { Checkbox } from "@/components/ui/checkbox.jsx";
 import { Plus, Search, Edit, Trash2, ChevronsUpDown, Check, X } from "lucide-react";
 
 /* =======================================================
-   SEGMENTOS
+   SEGMENTOS (nova lista agrupada + descrições)
 ======================================================= */
-export const SEGMENTOS = [
-  "Agricultura","Pecuária","Pesca e Aquicultura","Floricultura","Silvicultura e Reflorestamento","Produção de Café",
-  "Cultivo de Soja","Cultivo de Milho","Cultivo de Cana-de-Açúcar","Cultivo de Hortaliças","Fruticultura","Apicultura (Mel e derivados)",
-  "Avicultura","Suinocultura","Bovinocultura de Corte","Bovinocultura de Leite","Pesqueiros e Pesque-Pagues",
-  "Indústria Alimentícia","Indústria de Bebidas","Indústria Têxtil","Indústria de Calçados","Indústria de Embalagens","Indústria Química",
-  "Indústria Farmacêutica","Indústria de Cosméticos","Indústria de Plásticos","Indústria de Papel e Celulose","Indústria Automotiva",
-  "Indústria Metalúrgica","Indústria Moveleira","Construção Civil","Pré-moldados","Fábricas de Tijolos e Blocos","Fábricas de Cimento",
-  "Serralherias","Marcenarias","Mineração e Extração","Indústria de Vidros","Indústria de Cerâmica",
-  "Supermercados e Hipermercados","Atacados e Distribuidores","Mercearias e Minimercados","Lojas de Roupas e Acessórios",
-  "Lojas de Calçados","Lojas de Eletrodomésticos","Lojas de Eletrônicos","Lojas de Móveis e Decoração","Material de Construção",
-  "Lojas de Informática","Lojas de Telefonia e Acessórios","Lojas de Brinquedos","Livrarias e Papelarias","Joalherias e Óticas",
-  "Comércio de Veículos","Revendas de Motos","Revendas de Caminhões","Concessionárias Náuticas","Postos de Combustível",
-  "Oficinas Mecânicas","Autopeças","Loja de Pneus","Peixarias","Açougues","Sacolões e Hortifrutis",
-  "Agências de Publicidade e Marketing","Consultoria Empresarial","Assessoria Contábil","Escritórios de Advocacia","Serviços de Engenharia",
-  "Serviços de Arquitetura","Serviços de TI e Software","Manutenção e Reparos","Serviços de Limpeza","Serviços de Segurança",
-  "Serviços de Transporte","Logística e Armazenagem","Aluguel de Equipamentos","Coworking","Serviços de Tradução","Despachantes",
-  "Serviços de Impressão e Gráficas","Produção de Vídeos","Fotografia Profissional","Organização de Eventos","Buffets e Catering",
-  "Locação de Espaços para Eventos",
-  "Hospitais","Clínicas Médicas","Consultórios Odontológicos","Laboratórios de Análises Clínicas","Farmácias e Drogarias","Estúdios de Pilates",
-  "Estúdios de Yoga","Academias de Ginástica","Crossfit","Clínicas de Estética","Clínicas de Emagrecimento","Clínicas de Cirurgia Plástica",
-  "Clínicas de Terapias Naturais","Clínicas Veterinárias","Pet Shops","Hospitais Veterinários",
-  "Escolas de Ensino Fundamental","Escolas de Ensino Médio","Faculdades","Universidades","Cursos Técnicos","Cursos Profissionalizantes",
-  "Cursos de Idiomas","Escolas de Música","Escolas de Dança","Escolas de Artes","Treinamentos Corporativos","Bibliotecas","Museus",
-  "Centros Culturais",
-  "Restaurantes","Lanchonetes","Bares e Pubs","Padarias","Cafeterias","Food Trucks","Buffets","Churrascarias","Pizzarias","Docerias",
-  "Confeitarias","Sorveterias","Hamburguerias","Self-Service",
-  "Hotéis","Pousadas","Resorts","Agências de Viagem","Casas de Show","Cinemas","Teatros","Parques","Clubes","Parques Aquáticos",
-  "Eventos e Feiras","Casas Noturnas","Jogos e E-Sports","Centros de Convenções",
-  "Salões de Beleza","Barbearias","Clínicas de Depilação","Lojas de Cosméticos","Estúdios de Maquiagem","Ateliês de Moda","Costureiras","Alfaiates",
-  "ONGs","Associações","Cooperativas","Órgãos Públicos","Instituições Financeiras","Bancos","Cooperativas de Crédito","Seguradoras",
-  "Corretoras de Seguros","Imobiliárias","Correios","Startups","Freelancers","Influenciadores Digitais","Profissionais Autônomos","Serviços Religiosos"
+export const SEGMENTOS_GRUPOS = [
+  {
+    group: "Tecnologia e Informática",
+    options: [
+      { value: "Desenvolvimento de Software", desc: "Programador, Desenvolvedor Web, Engenheiro de Software." },
+      { value: "Segurança da Informação", desc: "Analista de Segurança, Hacker Ético, Engenheiro de Segurança." },
+      { value: "Ciência de Dados", desc: "Cientista de Dados, Analista de Dados, Engenheiro de ML." },
+      { value: "Infraestrutura e Redes", desc: "Administrador de Sistemas, Engenheiro de Redes, Suporte Técnico." },
+      { value: "Design Digital", desc: "UX/UI Designer, Web Designer, Designer de Jogos." },
+    ],
+  },
+  {
+    group: "Saúde e Bem-Estar",
+    options: [
+      { value: "Medicina", desc: "Clínico Geral, Cirurgião, Pediatra, Ginecologista." },
+      { value: "Enfermagem", desc: "Enfermeiro, Técnico de Enfermagem." },
+      { value: "Terapias e Reabilitação", desc: "Fisioterapeuta, Terapeuta Ocupacional, Fonoaudiólogo." },
+      { value: "Nutrição", desc: "Nutricionista Clínico, Nutricionista Esportivo." },
+      { value: "Saúde Mental", desc: "Psicólogo, Psiquiatra, Psicanalista." },
+    ],
+  },
+  {
+    group: "Engenharia e Indústria",
+    options: [
+      { value: "Engenharia Civil", desc: "Engenheiro Civil, Arquiteto, Técnico em Edificações." },
+      { value: "Engenharia Mecânica", desc: "Engenheiro Mecânico, Técnico de Manutenção Industrial." },
+      { value: "Engenharia Elétrica", desc: "Engenheiro Eletricista, Eletrotécnico." },
+      { value: "Engenharia de Produção", desc: "Eng. de Produção, Gerente de Projetos Industriais." },
+      { value: "Indústria", desc: "Operador de Máquinas, Técnico em Automação." },
+    ],
+  },
+  {
+    group: "Comunicação e Marketing",
+    options: [
+      { value: "Jornalismo", desc: "Repórter, Editor, Assessor de Imprensa." },
+      { value: "Publicidade e Propaganda", desc: "Redator, Diretor de Arte, Produtor de Conteúdo." },
+      { value: "Marketing Digital", desc: "SEO/SEM, Mídias Sociais, Analista de Marketing." },
+      { value: "Relações Públicas", desc: "Relações Públicas, Assessor de Comunicação." },
+    ],
+  },
+  {
+    group: "Negócios e Finanças",
+    options: [
+      { value: "Administração", desc: "Administrador, Gerente de Projetos." },
+      { value: "Contabilidade e Finanças", desc: "Contador, Analista Financeiro, Auditor, Economista." },
+      { value: "Recursos Humanos", desc: "Analista de RH, Recrutador, Gerente de Pessoas." },
+      { value: "Vendas e Comércio", desc: "Gerente de Vendas, Consultor Comercial, Vendedor." },
+    ],
+  },
+  {
+    group: "Educação e Cultura",
+    options: [
+      { value: "Ensino", desc: "Professor, Coordenador Pedagógico, Tutor." },
+      { value: "Pesquisa", desc: "Pesquisador Acadêmico, Cientista." },
+      { value: "Artes", desc: "Artista Plástico, Músico, Ator, Diretor de Teatro." },
+      { value: "Museologia e História", desc: "Historiador, Curador, Museólogo." },
+      { value: "Biblioteca", desc: "Bibliotecário, Arquivista." },
+    ],
+  },
+  {
+    group: "Direito e Segurança",
+    options: [
+      { value: "Direito", desc: "Advogado, Juiz, Promotor de Justiça." },
+      { value: "Segurança Pública", desc: "Policial, Bombeiro, Agente Penitenciário." },
+      { value: "Segurança Privada", desc: "Vigilante, Consultor de Segurança." },
+      { value: "Perícia", desc: "Perito Criminal, Perito Judicial." },
+    ],
+  },
+  {
+    group: "Serviços e Social",
+    options: [
+      { value: "Hotelaria e Turismo", desc: "Gerente de Hotel, Guia de Turismo, Agente de Viagens." },
+      { value: "Gastronomia", desc: "Chef de Cozinha, Confeiteiro, Bartender." },
+      { value: "Beleza e Estética", desc: "Cabeleireiro, Esteticista, Maquiador." },
+      { value: "Serviço Social", desc: "Assistente Social, Sociólogo." },
+    ],
+  },
 ];
+
+// Export plano (somente nomes) para compatibilidade com usos externos
+export const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap(g => g.options.map(o => o.value));
 
 const ensureArraySegments = (row) => {
   if (Array.isArray(row?.segments)) return row.segments;
@@ -78,12 +127,12 @@ const ensureArraySegments = (row) => {
   return [];
 };
 
-/* Combobox multi com busca para Segmentos — COM SCROLL */
+/* Combobox multi com busca para Segmentos — SCROLL corrigido */
 function SegmentosSelect({ value = [], onChange }) {
   const [open, setOpen] = useState(false);
-  const toggle = (item) => {
-    const exists = value.includes(item);
-    const next = exists ? value.filter((s) => s !== item) : [...value, item];
+  const toggle = (label) => {
+    const exists = value.includes(label);
+    const next = exists ? value.filter((s) => s !== label) : [...value, label];
     onChange(next);
   };
 
@@ -100,39 +149,44 @@ function SegmentosSelect({ value = [], onChange }) {
         </Button>
       </PopoverTrigger>
 
-      {/* Largura responsiva + limite de altura do popover */}
       <PopoverContent
         align="start"
-        className="p-0 w-[min(92vw,420px)] max-h-[70vh] overflow-hidden"
+        className="p-0 w-[min(92vw,520px)] max-h-[70vh] overflow-hidden"
       >
-        {/* Wrapper com scroll (desktop + mobile/iOS) */}
-        <div className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-          <Command>
-            <CommandInput placeholder="Buscar segmento..." />
-            <CommandEmpty>Nenhum segmento encontrado.</CommandEmpty>
+        <Command>
+          <CommandInput placeholder="Buscar segmento..." />
+          <CommandEmpty>Nenhum segmento encontrado.</CommandEmpty>
 
-            {/* Deixa o wrapper controlar a altura/scroll */}
-            <CommandList className="max-h-none">
-              <CommandGroup>
-                {SEGMENTOS.map((seg) => {
-                  const checked = value.includes(seg);
+          {/* Scroll garantido aqui (desktop + iOS) */}
+          <CommandList className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+            {SEGMENTOS_GRUPOS.map((grp) => (
+              <CommandGroup key={grp.group} heading={grp.group}>
+                {grp.options.map((opt) => {
+                  const checked = value.includes(opt.value);
                   return (
                     <CommandItem
-                      key={seg}
-                      value={seg}
-                      className="flex items-center gap-2"
-                      onSelect={() => toggle(seg)}
+                      key={`${grp.group}-${opt.value}`}
+                      value={`${opt.value} ${opt.desc}`}
+                      className="flex items-start gap-2 py-2"
+                      onSelect={() => toggle(opt.value)}
                     >
-                      <Checkbox checked={checked} onCheckedChange={() => toggle(seg)} />
-                      <span className="flex-1">{seg}</span>
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => toggle(opt.value)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">{opt.value}</div>
+                        <div className="text-xs text-muted-foreground truncate">{opt.desc}</div>
+                      </div>
                       {checked && <Check className="h-4 w-4 opacity-70" />}
                     </CommandItem>
                   );
                 })}
               </CommandGroup>
-            </CommandList>
-          </Command>
-        </div>
+            ))}
+          </CommandList>
+        </Command>
       </PopoverContent>
     </Popover>
   );
@@ -334,7 +388,7 @@ const Clients = () => {
                           onChange={(next) => setForm((f) => ({ ...f, segments: next }))}
                         />
                         {form.segments.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2 justify-start">
                             {form.segments.map((s) => (
                               <Badge key={s} variant="secondary" className="gap-1">
                                 {s}
@@ -383,6 +437,7 @@ const Clients = () => {
             </Dialog>
           </div>
 
+          {/* Tabela com TÍTULOS E DADOS CENTRALIZADOS */}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -397,9 +452,9 @@ const Clients = () => {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={6}>Carregando…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-6">Carregando…</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={6}>Nenhum registro</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-6">Nenhum registro</TableCell></TableRow>
                 ) : (
                   filtered.map((c) => {
                     const id = c.id ?? c._id ?? c.uuid;
@@ -407,10 +462,10 @@ const Clients = () => {
                     const segs = ensureArraySegments(c);
                     return (
                       <TableRow key={id || `${c.name}-${c.email}-${c.phone}`}>
-                        <TableCell className="font-medium">{c.name || "—"}</TableCell>
-                        <TableCell>{company}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
+                        <TableCell className="text-center font-medium">{c.name || "—"}</TableCell>
+                        <TableCell className="text-center">{company}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex flex-wrap gap-1 justify-center">
                             {segs.slice(0, 2).map((s) => (
                               <Badge key={s} variant="secondary">{s}</Badge>
                             ))}
@@ -418,10 +473,10 @@ const Clients = () => {
                             {segs.length === 0 && <span className="text-muted-foreground">—</span>}
                           </div>
                         </TableCell>
-                        <TableCell>{c.email || "—"}</TableCell>
-                        <TableCell>{c.phone || "—"}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                        <TableCell className="text-center">{c.email || "—"}</TableCell>
+                        <TableCell className="text-center">{c.phone || "—"}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex justify-center gap-2">
                             <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(c)}>
                               <Edit className="size-4" />
                               Editar
