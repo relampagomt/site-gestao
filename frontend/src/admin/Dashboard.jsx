@@ -8,9 +8,9 @@ import {
 } from 'recharts';
 import api from '@/services/api';
 
-const COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#2563eb', '#7c3aed'];
+const COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#2563eb', '#7c3aed', '#0ea5e9', '#22c55e', '#f97316', '#e11d48'];
 
-// -------- helpers de data --------
+/* ================= helpers de data ================= */
 function monthKey(d) {
   const y = d.getFullYear();
   const m = `${d.getMonth() + 1}`.padStart(2, '0');
@@ -33,43 +33,28 @@ function lastNMonths(n = 6) {
   }
   return out;
 }
-function ensureDateOnly(isoOrDate) {
-  if (!isoOrDate) return '';
-  try {
-    const d = new Date(isoOrDate);
-    if (isNaN(d)) return '';
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  } catch {
-    return '';
-  }
-}
 
-// -------- NORMALIZAÇÃO DE TIPOS (suporta multi) --------
+/* ================= normalizadores ================= */
+const splitComma = (s) =>
+  String(s || '')
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean);
+
 function ensureArrayTypes(item) {
-  // prioridade: array em `types`
-  if (Array.isArray(item?.types)) {
-    return item.types.filter(Boolean);
-  }
-  // fallback: string em `type` (separada por vírgula)
-  const cand =
-    item?.service_type ||
-    item?.type ||
-    item?.category ||
-    item?.action_type ||
-    '';
-  if (typeof cand === 'string' && cand.trim()) {
-    return cand
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean);
-  }
-  return []; // sem tipo
+  if (Array.isArray(item?.types)) return item.types.filter(Boolean);
+  const cand = item?.service_type || item?.type || item?.category || item?.action_type || '';
+  return typeof cand === 'string' && cand.trim() ? splitComma(cand) : [];
 }
 
-/** Fallbacks calculando a partir das ações */
+function ensureClientSegments(c) {
+  if (Array.isArray(c?.segments)) return c.segments.filter(Boolean);
+  if (typeof c?.segment === 'string') return splitComma(c.segment);
+  if (typeof c?.segmentos === 'string') return splitComma(c.segmentos);
+  return [];
+}
+
+/* ================= builders ================= */
 function buildMonthlyFromActions(actions, monthsDates) {
   const buckets = Object.fromEntries(
     monthsDates.map(d => [monthKey(d), { month: monthLabelPT(d), campanhas: 0, receita: 0 }])
@@ -88,26 +73,27 @@ function buildMonthlyFromActions(actions, monthsDates) {
   return Object.values(buckets);
 }
 
-// >>> ATUALIZADO: conta múltiplos tipos por ação <<<
-function buildDistributionFromActions(actions) {
-  const map = new Map();
-  actions.forEach(a => {
-    const types = ensureArrayTypes(a);
-    if (types.length === 0) {
-      map.set('Outro', (map.get('Outro') || 0) + 1);
-      return;
-    }
-    types.forEach(t => {
-      map.set(t, (map.get(t) || 0) + 1);
-    });
-  });
-  return Array.from(map.entries()).map(([name, value], idx) => ({
+// agrega e limita fatias (top N + “Outros”)
+function buildPieDataFromMap(map, maxSlices = 8) {
+  const entries = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  const total = entries.reduce((acc, [, v]) => acc + v, 0) || 1;
+  const top = entries.slice(0, maxSlices);
+  const rest = entries.slice(maxSlices);
+
+  const data = top.map(([name, value], idx) => ({
     name,
     value,
     color: COLORS[idx % COLORS.length],
   }));
+
+  if (rest.length) {
+    const otherVal = rest.reduce((acc, [, v]) => acc + v, 0);
+    data.push({ name: 'Outros', value: otherVal, color: COLORS[(top.length) % COLORS.length] });
+  }
+  return data;
 }
 
+/* ================= componente ================= */
 const Dashboard = () => {
   const [stats, setStats] = useState({
     totalClients: 0,
@@ -116,12 +102,15 @@ const Dashboard = () => {
     totalVacancies: 0,
     loading: true
   });
+
+  const [clientsArr, setClientsArr] = useState([]);
+  const [actionsArr, setActionsArr] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
-  const [serviceData, setServiceData] = useState([]);
 
   useEffect(() => {
     fetchDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchDashboardData = async () => {
@@ -131,23 +120,24 @@ const Dashboard = () => {
       const monthsDates = lastNMonths(6);
 
       const [
-        clientsRes, materialsRes, actionsRes, vacanciesRes,
-        distRes, monthlyRes
+        clientsRes, materialsRes, actionsRes, vacanciesRes, monthlyRes
       ] = await Promise.all([
         api.get('/clients').catch(() => ({ data: [] })),
         api.get('/materials').catch(() => ({ data: [] })),
         api.get('/actions').catch(() => ({ data: [] })),
         api.get('/job-vacancies').catch(() => ({ data: [] })),
-        api.get('/metrics/service-distribution').catch(() => ({ data: null })),
         api.get('/metrics/monthly-campaigns').catch(() => ({ data: null })),
       ]);
 
-      // aceita array direto ou objeto com chave
       const arr = d => (Array.isArray(d) ? d : (d?.items || d?.data || d?.actions || d?.results || []));
       const clients = arr(clientsRes.data);
       const materials = arr(materialsRes.data);
       const actions = arr(actionsRes.data);
       const vacancies = arr(vacanciesRes.data);
+
+      // guardar para as pizzas
+      setClientsArr(clients);
+      setActionsArr(actions);
 
       // contadores
       setStats({
@@ -166,19 +156,6 @@ const Dashboard = () => {
       if (vacancies.length > 0) activities.push({ id: 'v', action: 'Vaga publicada', client: vacancies.at(-1)?.company || 'Empresa', time: 'Recente' });
       setRecentActivities(activities);
 
-      // distribuição (API -> fallback a partir das ações)
-      if (Array.isArray(distRes.data?.distribution) && distRes.data.distribution.length) {
-        // se a API já devolver multi-tipos agregados, só normaliza
-        const dist = distRes.data.distribution.map((d, i) => ({
-          name: d.name ?? d.type ?? d.service ?? `Tipo ${i + 1}`,
-          value: Number(d.count ?? d.value ?? 0),
-          color: COLORS[i % COLORS.length]
-        })).filter(d => d.value > 0);
-        setServiceData(dist);
-      } else {
-        setServiceData(buildDistributionFromActions(actions));
-      }
-
       // campanhas por mês (API -> fallback)
       if (Array.isArray(monthlyRes.data) && monthlyRes.data.length) {
         const normalized = monthlyRes.data.map((row, i) => ({
@@ -195,11 +172,33 @@ const Dashboard = () => {
       console.error('Erro ao buscar dados do dashboard:', err);
       setStats(prev => ({ ...prev, loading: false }));
       setMonthlyData([]);
-      setServiceData([]);
     }
   };
 
-  // título do gráfico de linha muda se houver receita > 0
+  // pizzas (derivadas do estado)
+  const clientsSegmentsPie = useMemo(() => {
+    const map = new Map();
+    for (const c of clientsArr) {
+      for (const seg of ensureClientSegments(c)) {
+        map.set(seg, (map.get(seg) || 0) + 1);
+      }
+    }
+    return buildPieDataFromMap(map);
+  }, [clientsArr]);
+
+  const actionTypesPie = useMemo(() => {
+    const map = new Map();
+    for (const a of actionsArr) {
+      const types = ensureArrayTypes(a);
+      if (types.length === 0) {
+        map.set('Outro', (map.get('Outro') || 0) + 1);
+      } else {
+        for (const t of types) map.set(t, (map.get(t) || 0) + 1);
+      }
+    }
+    return buildPieDataFromMap(map);
+  }, [actionsArr]);
+
   const hasRevenue = useMemo(
     () => monthlyData.some(d => (d.receita || 0) > 0),
     [monthlyData]
@@ -264,9 +263,8 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Gráficos */}
+      {/* Linhas e Barras */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-        {/* Linha: campanhas (e receita se houver) */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">
@@ -294,7 +292,6 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Barras: campanhas */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Campanhas por Mês</CardTitle>
@@ -314,65 +311,94 @@ const Dashboard = () => {
         </Card>
       </div>
 
+      {/* ===== DUAS PIZZAS ===== */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-        {/* Pizza: distribuição de serviços (agora ciente de múltiplos tipos) */}
+        {/* Pizza 1: Segmentos (Clientes) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Distribuição de Serviços</CardTitle>
-            <CardDescription>Percentual de cada tipo de serviço</CardDescription>
+            <CardTitle className="text-base sm:text-lg">Segmentos (Clientes)</CardTitle>
+            <CardDescription>Percentual por segmento cadastrado nos clientes</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie
-                  data={serviceData}
+                  data={clientsSegmentsPie}
                   cx="50%"
                   cy="50%"
+                  outerRadius={90}
                   labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
                   dataKey="value"
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                 >
-                  {serviceData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
+                  {clientsSegmentsPie.map((entry, idx) => (
+                    <Cell key={`cseg-${idx}`} fill={entry.color || COLORS[idx % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip formatter={(v, n, p) => [v, p?.payload?.name]} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Atividades Recentes */}
+        {/* Pizza 2: Tipos de Ação */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Atividades Recentes</CardTitle>
-            <CardDescription>Últimas ações realizadas no sistema</CardDescription>
+            <CardTitle className="text-base sm:text-lg">Tipos de Ação</CardTitle>
+            <CardDescription>Percentual por tipo (com suporte a múltiplos por ação)</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentActivities.length > 0 ? (
-                recentActivities.map((activity) => (
-                  <div key={activity.id} className="flex items-center space-x-4">
-                    <Activity className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <div className="flex-1 space-y-1 min-w-0">
-                      <p className="text-sm font-medium leading-none">{activity.action}</p>
-                      <p className="text-sm text-muted-foreground truncate">{activity.client}</p>
-                    </div>
-                    <div className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">{activity.time}</div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-4">
-                  <Activity className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Nenhuma atividade recente</p>
-                  <p className="text-xs text-muted-foreground">Comece adicionando clientes, ações ou materiais</p>
-                </div>
-              )}
-            </div>
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie
+                  data={actionTypesPie}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={90}
+                  labelLine={false}
+                  dataKey="value"
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                >
+                  {actionTypesPie.map((entry, idx) => (
+                    <Cell key={`atype-${idx}`} fill={entry.color || COLORS[idx % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v, n, p) => [v, p?.payload?.name]} />
+              </PieChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
+
+      {/* Atividades Recentes */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base sm:text-lg">Atividades Recentes</CardTitle>
+          <CardDescription>Últimas ações realizadas no sistema</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {recentActivities.length > 0 ? (
+              recentActivities.map((activity) => (
+                <div key={activity.id} className="flex items-center space-x-4">
+                  <Activity className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 space-y-1 min-w-0">
+                    <p className="text-sm font-medium leading-none">{activity.action}</p>
+                    <p className="text-sm text-muted-foreground truncate">{activity.client}</p>
+                  </div>
+                  <div className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">{activity.time}</div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-4">
+                <Activity className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Nenhuma atividade recente</p>
+                <p className="text-xs text-muted-foreground">Comece adicionando clientes, ações ou materiais</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
