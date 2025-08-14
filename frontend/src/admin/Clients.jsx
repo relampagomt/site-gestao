@@ -1,5 +1,5 @@
 // frontend/src/admin/Clients.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import api from "@/services/api";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
@@ -40,8 +40,8 @@ export const SEGMENTOS_GRUPOS = [
     options: [
       { value: "Desenvolvimento de Software", desc: "Programador, Desenvolvedor Web, Engenheiro de Software." },
       { value: "Segurança da Informação", desc: "Analista de Segurança, Hacker Ético, Engenheiro de Segurança." },
-      { value: "Ciência de Dados", desc: "Cientista de Dados, Analista de Dados, Engenheiro de ML." },
-      { value: "Infraestrutura e Redes", desc: "Administrador de Sistemas, Engenheiro de Redes, Suporte Técnico." },
+      { value: "Ciência de Dados", desc: "Cientista de Dados, Analista de Dados, Eng. de ML." },
+      { value: "Infraestrutura e Redes", desc: "Adm. de Sistemas, Eng. de Redes, Suporte Técnico." },
       { value: "Design Digital", desc: "UX/UI Designer, Web Designer, Designer de Jogos." },
     ],
   },
@@ -58,11 +58,11 @@ export const SEGMENTOS_GRUPOS = [
   {
     group: "Engenharia e Indústria",
     options: [
-      { value: "Engenharia Civil", desc: "Engenheiro Civil, Arquiteto, Técnico em Edificações." },
-      { value: "Engenharia Mecânica", desc: "Engenheiro Mecânico, Técnico de Manutenção Industrial." },
-      { value: "Engenharia Elétrica", desc: "Engenheiro Eletricista, Eletrotécnico." },
-      { value: "Engenharia de Produção", desc: "Eng. de Produção, Gerente de Projetos Industriais." },
-      { value: "Indústria", desc: "Operador de Máquinas, Técnico em Automação." },
+      { value: "Engenharia Civil", desc: "Eng. Civil, Arquiteto, Téc. em Edificações." },
+      { value: "Engenharia Mecânica", desc: "Eng. Mecânico, Téc. Manutenção Industrial." },
+      { value: "Engenharia Elétrica", desc: "Eng. Eletricista, Eletrotécnico." },
+      { value: "Engenharia de Produção", desc: "Eng. de Produção, GP Industrial." },
+      { value: "Indústria", desc: "Operador de Máquinas, Téc. em Automação." },
     ],
   },
   {
@@ -113,7 +113,6 @@ export const SEGMENTOS_GRUPOS = [
   },
 ];
 
-// nomes planos (compat)
 export const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap(g => g.options.map(o => o.value));
 
 const ensureArraySegments = (row) => {
@@ -127,7 +126,7 @@ const ensureArraySegments = (row) => {
   return [];
 };
 
-/* Combobox multi — tamanho reduzido + scroll por touch/mouse */
+/* Combobox multi — menor e com scroll garantido no touch/mouse */
 function SegmentosSelect({ value = [], onChange }) {
   const [open, setOpen] = useState(false);
   const toggle = (label) => {
@@ -135,6 +134,9 @@ function SegmentosSelect({ value = [], onChange }) {
     const next = exists ? value.filter((s) => s !== label) : [...value, label];
     onChange(next);
   };
+
+  // bloqueia a propagação para o Dialog (conserta travas de scroll)
+  const stopScrollProp = useCallback((e) => e.stopPropagation(), []);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -149,51 +151,59 @@ function SegmentosSelect({ value = [], onChange }) {
         </Button>
       </PopoverTrigger>
 
-      {/* 🔧 menor, com scroll nativo por touch/mouse */}
       <PopoverContent
+        side="bottom"
         align="start"
-        sideOffset={6}
-        className="p-0 w-[min(92vw,360px)] sm:w-[420px] max-h-[56vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
-        style={{ touchAction: "pan-y" }}
+        sideOffset={8}
+        collisionPadding={10}
+        className="p-0 z-[70] w-[min(92vw,340px)] sm:w-[380px] bg-background"
       >
-        <Command className="text-sm">
-          {/* input fixado no topo para sempre visível */}
-          <div className="sticky top-0 z-10 bg-background">
-            <CommandInput placeholder="Buscar segmento..." />
-          </div>
+        {/* SCROLLER: é ELE que rola (touch/mouse) */}
+        <div
+          className="max-h-[60vh] overflow-y-auto overscroll-contain"
+          style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+          onWheel={stopScrollProp}
+          onTouchMove={stopScrollProp}
+        >
+          <Command className="text-sm">
+            <div className="sticky top-0 z-10 bg-background">
+              <CommandInput placeholder="Buscar segmento..." />
+            </div>
 
-          <CommandEmpty className="py-3">Nenhum segmento encontrado.</CommandEmpty>
+            <CommandEmpty className="py-3">Nenhum segmento encontrado.</CommandEmpty>
 
-          {/* a própria PopoverContent rola; aqui só removemos limites */}
-          <CommandList className="max-h-none">
-            {SEGMENTOS_GRUPOS.map((grp) => (
-              <CommandGroup key={grp.group} heading={grp.group}>
-                {grp.options.map((opt) => {
-                  const checked = value.includes(opt.value);
-                  return (
-                    <CommandItem
-                      key={`${grp.group}-${opt.value}`}
-                      value={`${opt.value} ${opt.desc}`}
-                      className="flex items-start gap-2 py-1.5"
-                      onSelect={() => toggle(opt.value)}
-                    >
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={() => toggle(opt.value)}
-                        className="mt-0.5"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium">{opt.value}</div>
-                        <div className="text-xs text-muted-foreground truncate">{opt.desc}</div>
-                      </div>
-                      {checked && <Check className="h-4 w-4 opacity-70" />}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            ))}
-          </CommandList>
-        </Command>
+            <CommandList className="max-h-none">
+              {SEGMENTOS_GRUPOS.map((grp) => (
+                <CommandGroup key={grp.group} heading={grp.group}>
+                  {grp.options.map((opt) => {
+                    const checked = value.includes(opt.value);
+                    return (
+                      <CommandItem
+                        key={`${grp.group}-${opt.value}`}
+                        value={`${opt.value} ${opt.desc}`}
+                        className="flex items-start gap-2 py-1.5"
+                        onSelect={() => toggle(opt.value)}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => toggle(opt.value)}
+                          className="mt-0.5"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium">{opt.value}</div>
+                          <div className="text-xs text-muted-foreground truncate">{opt.desc}</div>
+                        </div>
+                        {checked && <Check className="h-4 w-4 opacity-70" />}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              ))}
+              {/* espaçamento no fim para não “colar” no limite */}
+              <div className="h-2" />
+            </CommandList>
+          </Command>
+        </div>
       </PopoverContent>
     </Popover>
   );
