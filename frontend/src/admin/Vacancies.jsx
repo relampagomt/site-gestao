@@ -32,7 +32,7 @@ const emptyForm = {
   job_type: "CLT",
   status: "Aberta",
   salary: "",
-  documents_url: "", // novo: URL do PDF/PNG/JPG
+  documents_url: "", // URL de PDF/PNG/JPG
 };
 
 export default function Vacancies() {
@@ -123,6 +123,7 @@ export default function Vacancies() {
     e?.preventDefault?.();
     if (!form.name?.trim()) return alert("Informe o nome.");
     if (!form.phone?.trim()) return alert("Informe o telefone.");
+    if (uploadingDoc) return alert("Aguarde concluir o upload dos documentos.");
 
     const payload = {
       ...form,
@@ -158,23 +159,26 @@ export default function Vacancies() {
     }
   }
 
-  // upload do campo "Documentos" (PDF/PNG/JPG)
+  // upload do campo "Documentos" (PDF/PNG/JPG) — usa campo 'file' e NÃO força headers
   async function onDocumentFileChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingDoc(true);
     try {
       const fd = new FormData();
-      fd.append("file", file); // backend espera "file"
-      const { data } = await api.post("/upload", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      const url = data?.url || data?.secure_url || data?.location || "";
+      fd.append("file", file); // backend costuma esperar 'file'
+      const { data } = await api.post("/upload", fd); // sem headers (axios define boundary)
+      const url =
+        data?.url ||
+        data?.secure_url ||
+        data?.location ||
+        data?.file?.url ||
+        "";
       if (!url) throw new Error("URL não retornada.");
       setForm((f) => ({ ...f, documents_url: url }));
     } catch (err) {
       console.error("Erro no upload de documentos:", err);
-      alert("Falha ao enviar documentos. Tente novamente.");
+      alert("Falha ao enviar documentos. Código: " + (err?.response?.status || "desconhecido"));
     } finally {
       setUploadingDoc(false);
     }
@@ -325,7 +329,7 @@ export default function Vacancies() {
                   <th className="py-2 px-3 text-center">Departamento</th>
                   <th className="py-2 px-3 text-center">Tipo (Cargo)</th>
                   <th className="py-2 px-3 text-center">Salário</th>
-                  <th className="py-2 px-3 text-center">Documentos</th>{/* novo */}
+                  <th className="py-2 px-3 text-center">Documentos</th>
                   <th className="py-2 px-3 text-center">Status</th>
                   <th className="py-2 px-3 text-center">Ações</th>
                 </tr>
@@ -340,21 +344,21 @@ export default function Vacancies() {
                 )}
                 {filtered.map((v) => (
                   <tr key={v.id} className="border-b last:border-0">
-                    <td className="py-3 px-3">{v.name}</td>
-                    <td className="py-3 px-3">{v.phone}</td>
-                    <td className="py-3 px-3">{v.address}</td>
-                    <td className="py-3 px-3">{v.age ?? "—"}</td>
-                    <td className="py-3 px-3">{v.sex}</td>
-                    <td className="py-3 px-3">
+                    <td className="py-3 px-3 text-center">{v.name}</td>
+                    <td className="py-3 px-3 text-center">{v.phone}</td>
+                    <td className="py-3 px-3 text-center">{v.address}</td>
+                    <td className="py-3 px-3 text-center">{v.age ?? "—"}</td>
+                    <td className="py-3 px-3 text-center">{v.sex}</td>
+                    <td className="py-3 px-3 text-center">
                       <Badge variant="secondary">{v.department}</Badge>
                     </td>
-                    <td className="py-3 px-3">{v.job_type}</td>
-                    <td className="py-3 px-3">
+                    <td className="py-3 px-3 text-center">{v.job_type}</td>
+                    <td className="py-3 px-3 text-center">
                       {v.salary ? `R$ ${Number(v.salary).toLocaleString()}` : "—"}
                     </td>
 
                     {/* Documentos */}
-                    <td className="py-3 px-3">
+                    <td className="py-3 px-3 text-center">
                       {v.documents_url ? (
                         isPdf(v.documents_url) ? (
                           <a
@@ -377,7 +381,7 @@ export default function Vacancies() {
                             <img
                               src={v.documents_url}
                               alt="documento"
-                              className="h-10 w-10 object-cover rounded border"
+                              className="h-10 w-10 object-cover rounded border mx-auto"
                               loading="lazy"
                             />
                           </a>
@@ -387,7 +391,7 @@ export default function Vacancies() {
                       )}
                     </td>
 
-                    <td className="py-3 px-3">
+                    <td className="py-3 px-3 text-center">
                       <Badge
                         className={
                           (v.status || "").toLowerCase() === "aberta"
@@ -401,7 +405,7 @@ export default function Vacancies() {
                       </Badge>
                     </td>
 
-                    <td className="py-3 px-3 text-right whitespace-nowrap">
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
                       <Button variant="outline" size="icon" className="mr-2" onClick={() => openEdit(v)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -602,7 +606,9 @@ export default function Vacancies() {
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit">{editingId ? "Salvar" : "Criar"}</Button>
+                <Button type="submit" disabled={uploadingDoc}>
+                  {editingId ? "Salvar" : "Criar"}
+                </Button>
               </div>
             </form>
           </div>
