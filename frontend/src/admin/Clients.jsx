@@ -151,7 +151,7 @@ function SegmentosSelect({ value = [], onChange }) {
         side="bottom"
         align="start"
         sideOffset={6}
-        collisionPadding={24}
+        collisionPadding={32}
         className="p-0 z-[70] w-[min(92vw,320px)] sm:w-[360px] bg-background"
       >
         {/* SCROLLER: mais compacto e com gesto funcionando */}
