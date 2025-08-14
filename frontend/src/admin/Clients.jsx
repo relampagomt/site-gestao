@@ -32,7 +32,7 @@ import { Checkbox } from "@/components/ui/checkbox.jsx";
 import { Plus, Search, Edit, Trash2, ChevronsUpDown, Check, X } from "lucide-react";
 
 /* =======================================================
-   SEGMENTOS (nova lista agrupada + descrições)
+   SEGMENTOS (agrupados)
 ======================================================= */
 export const SEGMENTOS_GRUPOS = [
   {
@@ -113,7 +113,7 @@ export const SEGMENTOS_GRUPOS = [
   },
 ];
 
-// Export plano (somente nomes) para compatibilidade com usos externos
+// nomes planos (compat)
 export const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap(g => g.options.map(o => o.value));
 
 const ensureArraySegments = (row) => {
@@ -127,7 +127,7 @@ const ensureArraySegments = (row) => {
   return [];
 };
 
-/* Combobox multi com busca para Segmentos — SCROLL corrigido */
+/* Combobox multi — tamanho reduzido + scroll por touch/mouse */
 function SegmentosSelect({ value = [], onChange }) {
   const [open, setOpen] = useState(false);
   const toggle = (label) => {
@@ -149,16 +149,23 @@ function SegmentosSelect({ value = [], onChange }) {
         </Button>
       </PopoverTrigger>
 
+      {/* 🔧 menor, com scroll nativo por touch/mouse */}
       <PopoverContent
         align="start"
-        className="p-0 w-[min(92vw,520px)] max-h-[70vh] overflow-hidden"
+        sideOffset={6}
+        className="p-0 w-[min(92vw,360px)] sm:w-[420px] max-h-[56vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
+        style={{ touchAction: "pan-y" }}
       >
-        <Command>
-          <CommandInput placeholder="Buscar segmento..." />
-          <CommandEmpty>Nenhum segmento encontrado.</CommandEmpty>
+        <Command className="text-sm">
+          {/* input fixado no topo para sempre visível */}
+          <div className="sticky top-0 z-10 bg-background">
+            <CommandInput placeholder="Buscar segmento..." />
+          </div>
 
-          {/* Scroll garantido aqui (desktop + iOS) */}
-          <CommandList className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+          <CommandEmpty className="py-3">Nenhum segmento encontrado.</CommandEmpty>
+
+          {/* a própria PopoverContent rola; aqui só removemos limites */}
+          <CommandList className="max-h-none">
             {SEGMENTOS_GRUPOS.map((grp) => (
               <CommandGroup key={grp.group} heading={grp.group}>
                 {grp.options.map((opt) => {
@@ -167,7 +174,7 @@ function SegmentosSelect({ value = [], onChange }) {
                     <CommandItem
                       key={`${grp.group}-${opt.value}`}
                       value={`${opt.value} ${opt.desc}`}
-                      className="flex items-start gap-2 py-2"
+                      className="flex items-start gap-2 py-1.5"
                       onSelect={() => toggle(opt.value)}
                     >
                       <Checkbox
@@ -437,7 +444,7 @@ const Clients = () => {
             </Dialog>
           </div>
 
-          {/* Tabela com TÍTULOS E DADOS CENTRALIZADOS */}
+          {/* Tabela centralizada (títulos e dados) */}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
