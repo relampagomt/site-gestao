@@ -1,4 +1,3 @@
-// frontend/src/admin/Materials.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
@@ -23,17 +22,14 @@ const TZ = "America/Cuiaba";
 const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
 const isDMY = (s) => /^\d{2}\/\d{2}\/\d{4}$/.test(String(s || ""));
 
-// normaliza para YYYY-MM-DD (sem “adiantar/atrasar” um dia)
 function toYMDInCuiaba(value) {
   if (!value) return "";
   const s = String(value).trim();
-
-  if (isYMD(s.slice(0, 10))) return s.slice(0, 10); // já está ok
-  if (isDMY(s)) {                                   // veio em DD/MM/AAAA
+  if (isYMD(s.slice(0, 10))) return s.slice(0, 10);
+  if (isDMY(s)) {
     const [d, m, y] = s.split("/");
     return `${y}-${m}-${d}`;
   }
-
   const d = new Date(s);
   if (isNaN(d)) return "";
   const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -48,7 +44,6 @@ function toYMDInCuiaba(value) {
   const dd = parts.find((p) => p.type === "day")?.value || "01";
   return `${y}-${m}-${dd}`;
 }
-
 function ymdToBR(ymd) {
   const s = String(ymd || "").slice(0, 10);
   if (!isYMD(s)) return "";
@@ -60,7 +55,6 @@ function brToYMD(br) {
   const [d, m, y] = br.split("/");
   return `${y}-${m}-${d}`;
 }
-// máscara amigável: “DD/MM/AAAA”
 function maskBR(v) {
   const d = String(v || "").replace(/\D/g, "").slice(0, 8);
   const p1 = d.slice(0, 2);
@@ -74,8 +68,6 @@ const Materials = () => {
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
-
-  // filtro por mês (YYYY-MM)
   const [month, setMonth] = useState("");
 
   // modal (create/edit)
@@ -88,11 +80,11 @@ const Materials = () => {
   const [deleting, setDeleting] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
 
-  // formulário (guardamos a data em BR para o usuário e convertimos ao salvar)
+  // formulário
   const todayYMD = toYMDInCuiaba(new Date());
   const emptyForm = {
     id: null,
-    dateBr: ymdToBR(todayYMD),  // mostrado no input
+    dateBr: ymdToBR(todayYMD),
     quantity: "",
     clientName: "",
     responsible: "",
@@ -199,7 +191,7 @@ const Materials = () => {
     setSaving(true);
     try {
       const payload = {
-        date: ymd, // sempre YYYY-MM-DD estável
+        date: ymd,
         quantity: Number(form.quantity || 0),
         client_name: form.clientName,
         responsible: form.responsible,
@@ -245,10 +237,9 @@ const Materials = () => {
     }
   }
 
-  // filtro + ordenação (desc)
+  // filtro + ordenação
   const filtered = useMemo(() => {
     let list = Array.isArray(materials) ? [...materials] : [];
-
     const k = q.trim().toLowerCase();
     if (k) {
       list = list.filter((m) =>
@@ -257,14 +248,8 @@ const Materials = () => {
           .some((v) => String(v).toLowerCase().includes(k))
       );
     }
-
-    // normaliza datas
-    list = list
-      .map((m) => ({ ...m, _ymd: toYMDInCuiaba(m.date) }))
-      .filter((m) => m._ymd);
-
+    list = list.map((m) => ({ ...m, _ymd: toYMDInCuiaba(m.date) })).filter((m) => m._ymd);
     if (month) list = list.filter((m) => m._ymd.slice(0, 7) === month);
-
     list.sort((a, b) => b._ymd.localeCompare(a._ymd));
     return list;
   }, [materials, q, month]);
@@ -331,7 +316,6 @@ const Materials = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <Label>Data</Label>
-                        {/* Input com máscara DD/MM/AAAA */}
                         <Input
                           name="dateBr"
                           placeholder="DD/MM/AAAA"
@@ -442,6 +426,7 @@ const Materials = () => {
             </Dialog>
           </div>
 
+          {/* Tabela — TÍTULOS e DADOS centralizados */}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -456,36 +441,59 @@ const Materials = () => {
                   <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
+
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={8}>Carregando…</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-6">Carregando…</TableCell>
+                  </TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={8}>Nenhum registro</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-6">Nenhum registro</TableCell>
+                  </TableRow>
                 ) : (
                   filtered.map((m) => {
                     const id = m.id ?? m._id ?? m.uuid;
                     const ymd = m._ymd ?? toYMDInCuiaba(m.date);
                     return (
                       <TableRow key={id || `${m.client_name}-${ymd}`}>
-                        <TableCell>{ymdToBR(ymd)}</TableCell>
-                        <TableCell>{(m.client_name ?? m.clientName) || "—"}</TableCell>
-                        <TableCell>{m.responsible || "—"}</TableCell>
-                        <TableCell>{m.quantity ?? "—"}</TableCell>
-                        <TableCell title={m.notes || ""}>
-                          {m.notes ? <span className="line-clamp-2 max-w-[320px] block">{m.notes}</span> : "—"}
+                        <TableCell className="text-center">{ymdToBR(ymd)}</TableCell>
+                        <TableCell className="text-center">{(m.client_name ?? m.clientName) || "—"}</TableCell>
+                        <TableCell className="text-center">{m.responsible || "—"}</TableCell>
+                        <TableCell className="text-center">{m.quantity ?? "—"}</TableCell>
+
+                        <TableCell className="text-center" title={m.notes || ""}>
+                          {m.notes ? (
+                            <span className="line-clamp-2 max-w-[320px] mx-auto block">{m.notes}</span>
+                          ) : "—"}
                         </TableCell>
-                        <TableCell>
+
+                        <TableCell className="text-center">
                           {m.material_sample_url ? (
-                            <ImagePreview src={m.material_sample_url} alt={`Amostra - ${m.client_name || ""}`} size={48} />
+                            <div className="flex justify-center">
+                              <ImagePreview
+                                src={m.material_sample_url}
+                                alt={`Amostra - ${m.client_name || ""}`}
+                                size={48}
+                              />
+                            </div>
                           ) : "—"}
                         </TableCell>
-                        <TableCell>
+
+                        <TableCell className="text-center">
                           {m.protocol_url ? (
-                            <ImagePreview src={m.protocol_url} alt={`Protocolo - ${m.client_name || ""}`} size={48} />
+                            <div className="flex justify-center">
+                              <ImagePreview
+                                src={m.protocol_url}
+                                alt={`Protocolo - ${m.client_name || ""}`}
+                                size={48}
+                              />
+                            </div>
                           ) : "—"}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+
+                        <TableCell className="text-center">
+                          <div className="flex justify-center gap-2">
                             <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(m)}>
                               <Edit className="size-4" /> Editar
                             </Button>
