@@ -1,6 +1,5 @@
 # backend/src/routes/upload.py
-import os, json, base64, uuid, datetime, logging
-from typing import Optional
+import os, uuid, datetime, logging, mimetypes
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from google.cloud import storage
@@ -8,77 +7,75 @@ from google.cloud import storage
 log = logging.getLogger(__name__)
 upload_bp = Blueprint("upload", __name__)
 
-ALLOWED_PREFIX = "image/"
-MAX_BYTES = int(os.getenv("UPLOAD_MAX_BYTES", "10485760"))  # 10MB
+# ===== Config =====
 BUCKET_ENV = "GCS_BUCKET_NAME"
 FOLDER = os.getenv("GCS_FOLDER", "uploads")
 PUBLIC = (os.getenv("GCS_PUBLIC", "true").lower() == "true")
+MAX_BYTES = int(os.getenv("UPLOAD_MAX_BYTES", "10485760"))  # 10MB
+ALLOWED_MIME = {
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/webp",
+}
 
-def _creds_dict() -> dict:
-    """Lê credenciais do service account via env GCS_CREDENTIALS_B64 ou GCS_CREDENTIALS_JSON."""
-    b64 = os.getenv("GCS_CREDENTIALS_B64")
-    if b64:
-        return json.loads(base64.b64decode(b64).decode("utf-8"))
-    j = os.getenv("GCS_CREDENTIALS_JSON")
-    if j:
-        return json.loads(j)
-    raise RuntimeError("missing GCS_CREDENTIALS_B64 or GCS_CREDENTIALS_JSON")
+def _guess_mime(filename: str, fallback: str = "application/octet-stream") -> str:
+    mime, _ = mimetypes.guess_type(filename or "")
+    return mime or fallback
 
-def _client() -> storage.Client:
-    return storage.Client.from_service_account_info(_creds_dict())
+def _pick_file(req):
+    # aceita diversos nomes de campo para compat
+    for k in ("file", "document", "documents", "material", "image", "upload"):
+      f = req.files.get(k)
+      if f:
+        return f
+    return None
 
-def _ext(name: Optional[str]) -> str:
-    if not name: return ""
-    i = name.rfind(".")
-    return name[i:].lower() if i != -1 else ""
-
-@upload_bp.get("/upload/status")
-def status():
+@upload_bp.route("/upload", methods=["POST"])
+@jwt_required()
+def upload_file():
     try:
-        client = _client()
-        bucket_name = os.getenv(BUCKET_ENV) or ""
-        ok = bool(bucket_name and client.bucket(bucket_name))
-        return jsonify(ok=ok, bucket=bucket_name, public=PUBLIC, folder=FOLDER), 200 if ok else 500
-    except Exception as e:
-        return jsonify(ok=False, error=str(e)[:200]), 500
+        # valida arquivo
+        f = _pick_file(request)
+        if not f or not getattr(f, "filename", ""):
+            return jsonify(error="no_file", detail="Nenhum arquivo enviado."), 400
 
-@upload_bp.post("/upload")
-@jwt_required(optional=True)  # troque para @jwt_required() se quiser exigir login
-def upload():
-    # arquivo + validações
-    f = request.files.get("file")
-    if not f or not getattr(f, "filename", ""):
-        return jsonify(error="missing_file"), 400
-    if MAX_BYTES and (request.content_length or 0) > MAX_BYTES:
-        return jsonify(error="file_too_large", max_bytes=MAX_BYTES), 413
-    ctype = (f.mimetype or "").lower()
-    if not ctype.startswith(ALLOWED_PREFIX):
-        return jsonify(error="unsupported_type", mimetype=ctype), 415
+        # tamanho (se conhecido)
+        clen = request.content_length or 0
+        if clen and clen > MAX_BYTES:
+            return jsonify(error="too_large", detail="Arquivo excede o limite."), 413
 
-    bucket_name = os.getenv(BUCKET_ENV)
-    if not bucket_name:
-        return jsonify(error="missing_env", detail=BUCKET_ENV), 500
+        # tipo/mime
+        ctype = getattr(f, "mimetype", None) or _guess_mime(f.filename)
+        if ctype not in ALLOWED_MIME:
+            return jsonify(
+                error="unsupported_type",
+                detail=f"Tipo não permitido: {ctype}. Permitidos: PDF/PNG/JPG/WEBP."
+            ), 415
 
-    try:
-        client = _client()
+        bucket_name = os.getenv(BUCKET_ENV)
+        if not bucket_name:
+            return jsonify(error="misconfig", detail=f"Variável {BUCKET_ENV} ausente."), 500
+
+        client = storage.Client()
         bucket = client.bucket(bucket_name)
 
-        blob_name = f"{FOLDER}/{uuid.uuid4().hex}{_ext(f.filename)}"
-        blob = bucket.blob(blob_name)
+        # caminho: uploads/aaaa/mm/uuid-nome.ext
+        now = datetime.datetime.utcnow()
+        sub = f"{now:%Y/%m}"
+        safe_name = os.path.basename(f.filename)
+        blob_name = f"{FOLDER}/{sub}/{uuid.uuid4().hex}-{safe_name}"
 
-        # sobe mantendo o mimetype
-        blob.upload_from_file(f.stream, content_type=ctype, rewind=True)
+        blob = bucket.blob(blob_name)
+        blob.upload_from_file(f.stream, content_type=ctype)
 
         if PUBLIC:
-            # requer bucket com ACLs "Fine-grained" e sem Public Access Prevention
             blob.make_public()
             url = blob.public_url
         else:
-            # bucket privado: gera URL assinada (24h)
             url = blob.generate_signed_url(
-                version="v4",
-                expiration=datetime.timedelta(days=1),
-                method="GET",
+                expiration=datetime.timedelta(days=1), method="GET"
             )
 
         return jsonify(
