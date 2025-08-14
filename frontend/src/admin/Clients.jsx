@@ -78,7 +78,7 @@ const ensureArraySegments = (row) => {
   return [];
 };
 
-/* Combobox multi com busca para Segmentos */
+/* Combobox multi com busca para Segmentos — COM SCROLL */
 function SegmentosSelect({ value = [], onChange }) {
   const [open, setOpen] = useState(false);
   const toggle = (item) => {
@@ -99,30 +99,40 @@ function SegmentosSelect({ value = [], onChange }) {
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="p-0 w-[420px]">
-        <Command>
-          <CommandInput placeholder="Buscar segmento..." />
-          <CommandEmpty>Nenhum segmento encontrado.</CommandEmpty>
-          <CommandList className="max-h-[280px]">
-            <CommandGroup>
-              {SEGMENTOS.map((seg) => {
-                const checked = value.includes(seg);
-                return (
-                  <CommandItem
-                    key={seg}
-                    value={seg}
-                    className="flex items-center gap-2"
-                    onSelect={() => toggle(seg)}
-                  >
-                    <Checkbox checked={checked} onCheckedChange={() => toggle(seg)} />
-                    <span className="flex-1">{seg}</span>
-                    {checked && <Check className="h-4 w-4 opacity-70" />}
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+
+      {/* Largura responsiva + limite de altura do popover */}
+      <PopoverContent
+        align="start"
+        className="p-0 w-[min(92vw,420px)] max-h-[70vh] overflow-hidden"
+      >
+        {/* Wrapper com scroll (desktop + mobile/iOS) */}
+        <div className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+          <Command>
+            <CommandInput placeholder="Buscar segmento..." />
+            <CommandEmpty>Nenhum segmento encontrado.</CommandEmpty>
+
+            {/* Deixa o wrapper controlar a altura/scroll */}
+            <CommandList className="max-h-none">
+              <CommandGroup>
+                {SEGMENTOS.map((seg) => {
+                  const checked = value.includes(seg);
+                  return (
+                    <CommandItem
+                      key={seg}
+                      value={seg}
+                      className="flex items-center gap-2"
+                      onSelect={() => toggle(seg)}
+                    >
+                      <Checkbox checked={checked} onCheckedChange={() => toggle(seg)} />
+                      <span className="flex-1">{seg}</span>
+                      {checked && <Check className="h-4 w-4 opacity-70" />}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </div>
       </PopoverContent>
     </Popover>
   );
@@ -377,12 +387,12 @@ const Clients = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Empresa</TableHead>
-                  <TableHead>Segmentos</TableHead>
-                  <TableHead>E-mail</TableHead>
-                  <TableHead>Telefone</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead className="text-center">Nome</TableHead>
+                  <TableHead className="text-center">Empresa</TableHead>
+                  <TableHead className="text-center">Segmentos</TableHead>
+                  <TableHead className="text-center">E-mail</TableHead>
+                  <TableHead className="text-center">Telefone</TableHead>
+                  <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
