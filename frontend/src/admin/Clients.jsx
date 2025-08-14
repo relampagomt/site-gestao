@@ -1,4 +1,3 @@
-// frontend/src/admin/Clients.jsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import api from "@/services/api";
 
@@ -28,87 +27,84 @@ import {
 } from "@/components/ui/command.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
 import { Checkbox } from "@/components/ui/checkbox.jsx";
-
 import { Plus, Search, Edit, Trash2, ChevronsUpDown, Check, X } from "lucide-react";
 
-/* =======================================================
-   SEGMENTOS (agrupados)
-======================================================= */
+/* ====== SEGMENTOS AGRUPADOS (compactos) ================================== */
 export const SEGMENTOS_GRUPOS = [
   {
     group: "Tecnologia e Informática",
     options: [
-      { value: "Desenvolvimento de Software", desc: "Programador, Desenvolvedor Web, Engenheiro de Software." },
-      { value: "Segurança da Informação", desc: "Analista de Segurança, Hacker Ético, Engenheiro de Segurança." },
-      { value: "Ciência de Dados", desc: "Cientista de Dados, Analista de Dados, Eng. de ML." },
-      { value: "Infraestrutura e Redes", desc: "Adm. de Sistemas, Eng. de Redes, Suporte Técnico." },
-      { value: "Design Digital", desc: "UX/UI Designer, Web Designer, Designer de Jogos." },
+      { value: "Desenvolvimento de Software", desc: "Programador, Dev Web, Eng. Software" },
+      { value: "Segurança da Informação", desc: "Analista/Eng. Segurança, Hacker Ético" },
+      { value: "Ciência de Dados", desc: "Cientista/Analista de Dados, Eng. ML" },
+      { value: "Infraestrutura e Redes", desc: "Adm. Sistemas, Eng. Redes, Suporte" },
+      { value: "Design Digital", desc: "UX/UI, Web, Jogos" },
     ],
   },
   {
     group: "Saúde e Bem-Estar",
     options: [
-      { value: "Medicina", desc: "Clínico Geral, Cirurgião, Pediatra, Ginecologista." },
-      { value: "Enfermagem", desc: "Enfermeiro, Técnico de Enfermagem." },
-      { value: "Terapias e Reabilitação", desc: "Fisioterapeuta, Terapeuta Ocupacional, Fonoaudiólogo." },
-      { value: "Nutrição", desc: "Nutricionista Clínico, Nutricionista Esportivo." },
-      { value: "Saúde Mental", desc: "Psicólogo, Psiquiatra, Psicanalista." },
+      { value: "Medicina", desc: "Clínico, Cirurgião, Pediatra, Gineco" },
+      { value: "Enfermagem", desc: "Enfermeiro, Téc. Enfermagem" },
+      { value: "Terapias e Reabilitação", desc: "Fisio, TO, Fono" },
+      { value: "Nutrição", desc: "Clínico, Esportivo" },
+      { value: "Saúde Mental", desc: "Psicólogo, Psiquiatra, Psicanalista" },
     ],
   },
   {
     group: "Engenharia e Indústria",
     options: [
-      { value: "Engenharia Civil", desc: "Eng. Civil, Arquiteto, Téc. em Edificações." },
-      { value: "Engenharia Mecânica", desc: "Eng. Mecânico, Téc. Manutenção Industrial." },
-      { value: "Engenharia Elétrica", desc: "Eng. Eletricista, Eletrotécnico." },
-      { value: "Engenharia de Produção", desc: "Eng. de Produção, GP Industrial." },
-      { value: "Indústria", desc: "Operador de Máquinas, Téc. em Automação." },
+      { value: "Engenharia Civil", desc: "Eng. Civil, Arquiteto, Téc. Edificações" },
+      { value: "Engenharia Mecânica", desc: "Eng. Mecânico, Manutenção" },
+      { value: "Engenharia Elétrica", desc: "Eng. Eletricista, Eletrotécnico" },
+      { value: "Engenharia de Produção", desc: "Eng. Produção, GP Industrial" },
+      { value: "Indústria", desc: "Operador de Máquinas, Automação" },
     ],
   },
   {
     group: "Comunicação e Marketing",
     options: [
-      { value: "Jornalismo", desc: "Repórter, Editor, Assessor de Imprensa." },
-      { value: "Publicidade e Propaganda", desc: "Redator, Diretor de Arte, Produtor de Conteúdo." },
-      { value: "Marketing Digital", desc: "SEO/SEM, Mídias Sociais, Analista de Marketing." },
-      { value: "Relações Públicas", desc: "Relações Públicas, Assessor de Comunicação." },
+      { value: "Jornalismo", desc: "Repórter, Editor, Assessor" },
+      { value: "Publicidade e Propaganda", desc: "Redator, Direção de Arte, Conteúdo" },
+      { value: "Marketing Digital", desc: "SEO/SEM, Social, Analista" },
+      { value: "Relações Públicas", desc: "RP, Assessoria" },
     ],
   },
   {
     group: "Negócios e Finanças",
     options: [
-      { value: "Administração", desc: "Administrador, Gerente de Projetos." },
-      { value: "Contabilidade e Finanças", desc: "Contador, Analista Financeiro, Auditor, Economista." },
-      { value: "Recursos Humanos", desc: "Analista de RH, Recrutador, Gerente de Pessoas." },
-      { value: "Vendas e Comércio", desc: "Gerente de Vendas, Consultor Comercial, Vendedor." },
+      { value: "Administração", desc: "Administrador, GP" },
+      { value: "Contabilidade e Finanças", desc: "Contador, Analista, Auditor, Economista" },
+      { value: "Recursos Humanos", desc: "Analista de RH, Recrutador, GPessoas" },
+      { value: "Vendas e Comércio", desc: "Gerente de Vendas, Consultor, Vendedor" },
     ],
   },
   {
     group: "Educação e Cultura",
     options: [
-      { value: "Ensino", desc: "Professor, Coordenador Pedagógico, Tutor." },
-      { value: "Pesquisa", desc: "Pesquisador Acadêmico, Cientista." },
-      { value: "Artes", desc: "Artista Plástico, Músico, Ator, Diretor de Teatro." },
-      { value: "Museologia e História", desc: "Historiador, Curador, Museólogo." },
-      { value: "Biblioteca", desc: "Bibliotecário, Arquivista." },
+      { value: "Ensino", desc: "Professor, Coord. Pedagógico, Tutor" },
+      { value: "Pesquisa", desc: "Pesquisador, Cientista" },
+      { value: "Artes", desc: "Artista, Músico, Ator, Diretor" },
+      { value: "Museologia e História", desc: "Historiador, Curador, Museólogo" },
+      { value: "Biblioteca", desc: "Bibliotecário, Arquivista" },
     ],
   },
   {
     group: "Direito e Segurança",
     options: [
-      { value: "Direito", desc: "Advogado, Juiz, Promotor de Justiça." },
-      { value: "Segurança Pública", desc: "Policial, Bombeiro, Agente Penitenciário." },
-      { value: "Segurança Privada", desc: "Vigilante, Consultor de Segurança." },
-      { value: "Perícia", desc: "Perito Criminal, Perito Judicial." },
+      { value: "Direito", desc: "Advogado, Juiz, Promotor" },
+      { value: "Segurança Pública", desc: "Policial, Bombeiro, Agente Penitenciário" },
+      { value: "Segurança Privada", desc: "Vigilante, Consultor" },
+      { value: "Perícia", desc: "Perito Criminal/Judicial" },
     ],
   },
   {
     group: "Serviços e Social",
     options: [
-      { value: "Hotelaria e Turismo", desc: "Gerente de Hotel, Guia de Turismo, Agente de Viagens." },
-      { value: "Gastronomia", desc: "Chef de Cozinha, Confeiteiro, Bartender." },
-      { value: "Beleza e Estética", desc: "Cabeleireiro, Esteticista, Maquiador." },
-      { value: "Serviço Social", desc: "Assistente Social, Sociólogo." },
+      { value: "Hotelaria e Turismo", desc: "Hotel, Guia, Viagens" },
+      { value: "Gastronomia", desc: "Chef, Confeiteiro, Bartender" },
+      { value: "Beleza e Estética", desc: "Cabeleireiro, Esteticista, Maquiador" },
+      { value: "Serviço Social", desc: "Assistente Social, Sociólogo" },
     ],
   },
 ];
@@ -126,7 +122,7 @@ const ensureArraySegments = (row) => {
   return [];
 };
 
-/* Combobox multi — menor e com scroll garantido no touch/mouse */
+/* ====== Combobox multi — COMPACTO e com scroll garantido =================== */
 function SegmentosSelect({ value = [], onChange }) {
   const [open, setOpen] = useState(false);
   const toggle = (label) => {
@@ -135,7 +131,7 @@ function SegmentosSelect({ value = [], onChange }) {
     onChange(next);
   };
 
-  // bloqueia a propagação para o Dialog (conserta travas de scroll)
+  // evita que o scroll "vaze" para o Dialog
   const stopScrollProp = useCallback((e) => e.stopPropagation(), []);
 
   return (
@@ -154,34 +150,38 @@ function SegmentosSelect({ value = [], onChange }) {
       <PopoverContent
         side="bottom"
         align="start"
-        sideOffset={8}
-        collisionPadding={10}
-        className="p-0 z-[70] w-[min(92vw,340px)] sm:w-[380px] bg-background"
+        sideOffset={6}
+        collisionPadding={24}
+        className="p-0 z-[70] w-[min(92vw,320px)] sm:w-[360px] bg-background"
       >
-        {/* SCROLLER: é ELE que rola (touch/mouse) */}
+        {/* SCROLLER: mais compacto e com gesto funcionando */}
         <div
-          className="max-h-[60vh] overflow-y-auto overscroll-contain"
+          className="max-h-[50vh] overflow-y-auto overscroll-contain pb-2"
           style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
           onWheel={stopScrollProp}
           onTouchMove={stopScrollProp}
         >
-          <Command className="text-sm">
+          <Command className="text-[13px] leading-tight">
             <div className="sticky top-0 z-10 bg-background">
               <CommandInput placeholder="Buscar segmento..." />
             </div>
 
-            <CommandEmpty className="py-3">Nenhum segmento encontrado.</CommandEmpty>
+            <CommandEmpty className="py-2">Nenhum segmento encontrado.</CommandEmpty>
 
             <CommandList className="max-h-none">
               {SEGMENTOS_GRUPOS.map((grp) => (
-                <CommandGroup key={grp.group} heading={grp.group}>
+                <CommandGroup
+                  key={grp.group}
+                  heading={<span className="text-[11px] font-semibold text-muted-foreground">{grp.group}</span>}
+                  className="px-1 py-1"
+                >
                   {grp.options.map((opt) => {
                     const checked = value.includes(opt.value);
                     return (
                       <CommandItem
                         key={`${grp.group}-${opt.value}`}
                         value={`${opt.value} ${opt.desc}`}
-                        className="flex items-start gap-2 py-1.5"
+                        className="flex items-start gap-2 py-1 px-2"
                         onSelect={() => toggle(opt.value)}
                       >
                         <Checkbox
@@ -191,7 +191,9 @@ function SegmentosSelect({ value = [], onChange }) {
                         />
                         <div className="flex-1 min-w-0">
                           <div className="font-medium">{opt.value}</div>
-                          <div className="text-xs text-muted-foreground truncate">{opt.desc}</div>
+                          <div className="text-[11px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
+                            {opt.desc}
+                          </div>
                         </div>
                         {checked && <Check className="h-4 w-4 opacity-70" />}
                       </CommandItem>
@@ -199,8 +201,7 @@ function SegmentosSelect({ value = [], onChange }) {
                   })}
                 </CommandGroup>
               ))}
-              {/* espaçamento no fim para não “colar” no limite */}
-              <div className="h-2" />
+              <div className="h-1" />
             </CommandList>
           </Command>
         </div>
@@ -209,6 +210,7 @@ function SegmentosSelect({ value = [], onChange }) {
   );
 }
 
+/* ====== Página ============================================================= */
 const Clients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -376,7 +378,8 @@ const Clients = () => {
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="max-w-2xl p-0">
+              {/* Modal mais estreito e centralizado */}
+              <DialogContent className="p-0 sm:max-w-[560px] md:max-w-[600px]">
                 <div className="max-h-[80vh] overflow-y-auto p-6">
                   <DialogHeader className="pb-2">
                     <DialogTitle>{mode === "create" ? "Novo Cliente" : "Editar Cliente"}</DialogTitle>
@@ -454,7 +457,7 @@ const Clients = () => {
             </Dialog>
           </div>
 
-          {/* Tabela centralizada (títulos e dados) */}
+          {/* Tabela centralizada (títulos + dados) */}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -495,12 +498,10 @@ const Clients = () => {
                         <TableCell className="text-center">
                           <div className="flex justify-center gap-2">
                             <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(c)}>
-                              <Edit className="size-4" />
-                              Editar
+                              <Edit className="size-4" /> Editar
                             </Button>
                             <Button size="sm" variant="destructive" className="gap-2" onClick={() => confirmDelete(c)}>
-                              <Trash2 className="size-4" />
-                              Excluir
+                              <Trash2 className="size-4" /> Excluir
                             </Button>
                           </div>
                         </TableCell>
@@ -514,7 +515,7 @@ const Clients = () => {
         </CardContent>
       </Card>
 
-      {/* Dialog simples de exclusão */}
+      {/* Dialog de exclusão */}
       <Dialog open={openDelete} onOpenChange={setOpenDelete}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
