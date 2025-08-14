@@ -446,14 +446,14 @@ const Materials = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Responsável</TableHead>
-                  <TableHead>Qtd</TableHead>
-                  <TableHead>Observações</TableHead>
-                  <TableHead>Amostra</TableHead>
-                  <TableHead>Protocolo</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead className="text-center">Data</TableHead>
+                  <TableHead className="text-center">Cliente</TableHead>
+                  <TableHead className="text-center">Responsável</TableHead>
+                  <TableHead className="text-center">Qtd</TableHead>
+                  <TableHead className="text-center">Observações</TableHead>
+                  <TableHead className="text-center">Amostra</TableHead>
+                  <TableHead className="text-center">Protocolo</TableHead>
+                  <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
