@@ -1,145 +1,125 @@
 // frontend/src/admin/Actions.jsx
-import React, { useEffect, useMemo, useState } from 'react';
-import api from '@/services/api';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useEffect, useMemo, useState } from "react";
+import api from "@/services/api";
+import { useAuth } from "../contexts/AuthContext";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
-import { Button } from '@/components/ui/button.jsx';
-import { Input } from '@/components/ui/input.jsx';
-import { Label } from '@/components/ui/label.jsx';
-import { Badge } from '@/components/ui/badge.jsx';
-import { Checkbox } from '@/components/ui/checkbox.jsx';
-import { Textarea } from '@/components/ui/textarea.jsx';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog.jsx';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
-import { Separator } from '@/components/ui/separator.jsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
+import { Button } from "@/components/ui/button.jsx";
+import { Input } from "@/components/ui/input.jsx";
+import { Label } from "@/components/ui/label.jsx";
+import { Badge } from "@/components/ui/badge.jsx";
+import { Checkbox } from "@/components/ui/checkbox.jsx";
+import { Textarea } from "@/components/ui/textarea.jsx";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog.jsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
+import { Separator } from "@/components/ui/separator.jsx";
+import ImagePreview from "@/components/ImagePreview.jsx";
 
 import {
   Plus, Edit, Trash2, Search, Calendar as CalendarIcon, Layers, X,
-  CheckCircle, XCircle, Upload, ImageIcon
-} from 'lucide-react';
+  CheckCircle, XCircle, UploadCloud
+} from "lucide-react";
 
-import { formatDateBR } from '@/utils/dates.js';
+import { formatDateBR } from "@/utils/dates.js";
 
-/* ===================== Opções ===================== */
+/* ========= Tipos de ação ========= */
 const ACTION_OPTIONS = [
-  { group: 'Serviços de Panfletagem e Distribuição', items: [
-    'PAP (Porta a Porta)','Arrastão','Semáforos','Ponto fixo','Distribuição em eventos','Carro de Som','Entrega personalizada',
-  ]},
-  { group: 'Serviços de Ações Promocionais e Interação', items: [
-    'Distribuição de Amostras (Sampling)','Degustação','Demonstração','Blitz promocional','Captação de cadastros','Distribuição de Brindes',
-  ]},
-  { group: 'Serviços Complementares', items: [
-    'Criação e design','Confecção e produção','Impressão','Logística (Coleta e Entrega)','Planejamento estratégico','Relatório e monitoramento',
-  ]},
-];
-
-/* ===================== Datas (DD/MM/AAAA) ===================== */
-const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s||''));
-const isDMY = (s) => /^\d{2}\/\d{2}\/\d{4}$/.test(String(s||''));
-const ymdToBR = (ymd) => {
-  const s = String(ymd||'').slice(0,10);
-  if (!isYMD(s)) return '';
-  const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`;
-};
-const brToYMD = (br) => {
-  const s = String(br||'').trim();
-  if (!isDMY(s)) return '';
-  const [d,m,y] = s.split('/'); return `${y}-${m}-${d}`;
-};
-const maskBR = (v) => {
-  const d = String(v||'').replace(/\D/g,'').slice(0,8);
-  const p1 = d.slice(0,2), p2 = d.slice(2,4), p3 = d.slice(4,8);
-  return [p1,p2,p3].filter(Boolean).join('/');
-};
-
-/* ===================== Mock DEV ===================== */
-const mockActions = [
   {
-    id: 'a1',
-    client_name: 'Cliente Exemplo',
-    company_name: 'Empresa XYZ',
-    types: ['PAP (Porta a Porta)', 'Semáforos'],
-    type: 'PAP (Porta a Porta), Semáforos',
-    start_date: '2025-08-01',
-    end_date: '2025-08-10',
-    day_periods: ['manhã', 'tarde'],
-    material_qty: 1200,
-    material_photo_url: 'https://via.placeholder.com/800x500.png?text=Material',
-    notes: 'Campanha bairro central.',
-    active: true,
+    group: "Serviços de Panfletagem e Distribuição",
+    items: ["PAP (Porta a Porta)", "Arrastão", "Semáforos", "Ponto fixo", "Distribuição em eventos", "Carro de Som", "Entrega personalizada"],
+  },
+  {
+    group: "Serviços de Ações Promocionais e Interação",
+    items: ["Distribuição de Amostras (Sampling)", "Degustação", "Demonstração", "Blitz promocional", "Captação de cadastros", "Distribuição de Brindes"],
+  },
+  {
+    group: "Serviços Complementares",
+    items: ["Criação e design", "Confecção e produção", "Impressão", "Logística (Coleta e Entrega)", "Planejamento estratégico", "Relatório e monitoramento"],
   },
 ];
 
-/* ===================== Estado inicial ===================== */
-const initialForm = {
-  client_name: '',
-  company_name: '',
-  types: [],
-  start_date_br: '', // DD/MM/AAAA
-  end_date_br: '',   // DD/MM/AAAA
-  day_periods: [],
-  material_qty: '',
-  notes: '',
-  active: true,
-  material_photo_file: null,
-  material_photo_url: '',
-};
-
-const periodOptions = ['manhã', 'tarde', 'noite'];
-
+/* ========= Helpers ========= */
 const ensureArrayTypes = (item) => {
   if (Array.isArray(item?.types)) return item.types;
-  if (typeof item?.type === 'string' && item.type.trim()) {
-    return item.type.split(',').map((s) => s.trim()).filter(Boolean);
+  if (typeof item?.type === "string" && item.type.trim()) {
+    return item.type.split(",").map((s) => s.trim()).filter(Boolean);
   }
   return [];
 };
 
-// Upload sempre com chave "file"
+// Datas em BR <-> ISO
+const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
+const isDMY = (s) => /^\d{2}\/\d{2}\/\d{4}$/.test(String(s || ""));
+const ymdToBR = (ymd) => (isYMD(ymd) ? `${ymd.slice(8,10)}/${ymd.slice(5,7)}/${ymd.slice(0,4)}` : "");
+const brToYMD = (br) => {
+  if (!isDMY(br)) return "";
+  const [d, m, y] = br.split("/");
+  return `${y}-${m}-${d}`;
+};
+const maskBR = (v) => {
+  const d = String(v || "").replace(/\D/g, "").slice(0, 8);
+  const p1 = d.slice(0, 2);
+  const p2 = d.slice(2, 4);
+  const p3 = d.slice(4, 8);
+  return [p1, p2, p3].filter(Boolean).join("/");
+};
+
+// Upload (igual Materiais): campo "file" e header multipart
 async function uploadFile(file) {
-  if (!file) return '';
+  if (!file) return "";
   const fd = new FormData();
-  fd.append('file', file);
-  const resp = await api.post('/upload', fd, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  fd.append("file", file);
+  const { data } = await api.post("/upload", fd, {
+    headers: { "Content-Type": "multipart/form-data" },
   });
-  return resp?.data?.url || resp?.data?.secure_url || resp?.data?.location || '';
+  return data?.url || data?.secure_url || data?.location || "";
 }
 
+/* ========= Estado inicial do formulário ========= */
+const initialForm = {
+  client_name: "",
+  company_name: "",
+  types: [],
+  startBr: "", // DD/MM/AAAA
+  endBr: "",   // DD/MM/AAAA
+  day_periods: [],
+  material_qty: "",
+  material_photo_url: "",
+  notes: "",
+  active: true,
+};
+
+const periodOptions = ["manhã", "tarde", "noite"];
+
+/* ========= Componente ========= */
 const Actions = () => {
   const { user } = useAuth();
-  const isAdmin = String(user?.role || user?.claims?.role || '').toLowerCase() === 'admin';
+  const isAdmin = String(user?.role || user?.claims?.role || "").toLowerCase() === "admin";
 
   const [loading, setLoading] = useState(false);
   const [actions, setActions] = useState([]);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
 
+  // dialogs
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ ...initialForm });
-  const [typesPopoverOpen, setTypesPopoverOpen] = useState(false);
 
-  const [previewItem, setPreviewItem] = useState(null);
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  // upload state
+  const [uploadingMaterial, setUploadingMaterial] = useState(false);
+
+  const [form, setForm] = useState({ ...initialForm });
 
   /* -------- Load -------- */
   const loadActions = async () => {
     try {
       setLoading(true);
-      if (import.meta.env.DEV) {
-        await new Promise((r) => setTimeout(r, 250));
-        setActions(mockActions);
-        return;
-      }
-      const { data } = await api.get('/actions');
-      const list = Array.isArray(data) ? data : (data?.actions || []);
+      const { data } = await api.get("/actions");
+      const list = Array.isArray(data) ? data : data?.actions || [];
       setActions(list);
     } catch (err) {
-      console.error('Erro ao carregar ações:', err);
-      if (import.meta.env.DEV) setActions(mockActions);
+      console.error("Erro ao carregar ações:", err);
     } finally {
       setLoading(false);
     }
@@ -151,7 +131,7 @@ const Actions = () => {
     const q = query.trim().toLowerCase();
     if (!q) return actions;
     return actions.filter((a) => {
-      const typesBlob = ensureArrayTypes(a).join(' ').toLowerCase();
+      const typesBlob = ensureArrayTypes(a).join(" ").toLowerCase();
       const blob = `${a.client_name} ${a.company_name} ${a.notes} ${typesBlob}`.toLowerCase();
       return blob.includes(q);
     });
@@ -160,8 +140,7 @@ const Actions = () => {
   /* -------- Form helpers -------- */
   const resetForm = () => setForm({ ...initialForm });
   const onChange = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
-  const onChangeDateBR = (k) => (e) => onChange(k, maskBR(e.target.value));
-
+  const onDateChange = (k) => (e) => onChange(k, maskBR(e.target.value));
   const toggleType = (type) => {
     setForm((prev) => {
       const exists = prev.types.includes(type);
@@ -177,48 +156,55 @@ const Actions = () => {
     });
   };
 
+  // Upload imediato da amostra (padrão Materiais)
+  const onMaterialChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingMaterial(true);
+    try {
+      const url = await uploadFile(file);
+      if (!url) throw new Error("Falha no upload da imagem.");
+      setForm((f) => ({ ...f, material_photo_url: url }));
+    } catch (err) {
+      console.error("Erro no upload do material:", err);
+      alert("Erro ao enviar a imagem. Tente novamente.");
+    } finally {
+      setUploadingMaterial(false);
+    }
+  };
+
   /* -------- Create -------- */
   const handleCreate = async (e) => {
     e.preventDefault();
-    const startYMD = brToYMD(form.start_date_br) || null;
-    const endYMD   = brToYMD(form.end_date_br)   || null;
-    if (form.types.length === 0) return alert('Selecione ao menos um tipo de ação.');
-    if (startYMD && endYMD && startYMD > endYMD) return alert('Data de término não pode ser anterior à data de início.');
+
+    // validações
+    const startISO = brToYMD(form.startBr);
+    const endISO = brToYMD(form.endBr);
+    if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
+    if (startISO && endISO && startISO > endISO) return alert("Data de término não pode ser anterior à data de início.");
 
     try {
-      let materialUrl = '';
-      if (import.meta.env.DEV) {
-        materialUrl = form.material_photo_file ? URL.createObjectURL(form.material_photo_file) : '';
-      } else if (form.material_photo_file) {
-        materialUrl = await uploadFile(form.material_photo_file);
-      }
-
       const payload = {
         client_name: form.client_name,
         company_name: form.company_name,
         types: form.types,
-        type: form.types.join(', '),
-        start_date: startYMD,
-        end_date: endYMD,
+        type: form.types.join(", "),
+        start_date: startISO || null,
+        end_date: endISO || null,
         day_periods: form.day_periods,
         material_qty: Number(form.material_qty || 0),
-        material_photo_url: materialUrl,
-        notes: form.notes || '',
+        material_photo_url: form.material_photo_url || "",
+        notes: form.notes || "",
         active: !!form.active,
       };
 
-      if (import.meta.env.DEV) {
-        setActions((prev) => [...prev, { id: `dev-${Date.now()}`, ...payload }]);
-      } else {
-        await api.post('/actions', payload);
-        await loadActions();
-      }
-
+      await api.post("/actions", payload);
+      await loadActions();
       setIsCreateOpen(false);
       resetForm();
     } catch (err) {
-      console.error('Erro ao criar ação:', err);
-      alert('Erro ao criar ação: ' + (err?.response?.data?.message || err.message));
+      console.error("Erro ao criar ação:", err);
+      alert("Erro ao criar ação: " + (err?.response?.data?.message || err.message));
     }
   };
 
@@ -226,17 +212,16 @@ const Actions = () => {
   const openEdit = (item) => {
     setEditing(item);
     setForm({
-      client_name: item.client_name || '',
-      company_name: item.company_name || '',
+      client_name: item.client_name || "",
+      company_name: item.company_name || "",
       types: ensureArrayTypes(item),
-      start_date_br: ymdToBR((item.start_date || '').slice(0,10)),
-      end_date_br:   ymdToBR((item.end_date   || '').slice(0,10)),
+      startBr: ymdToBR(item.start_date || ""),
+      endBr: ymdToBR(item.end_date || ""),
       day_periods: Array.isArray(item.day_periods) ? item.day_periods : [],
-      material_qty: item.material_qty ?? '',
-      material_photo_file: null,
-      material_photo_url: item.material_photo_url || '',
-      notes: item.notes || '',
-      active: typeof item.active === 'boolean' ? item.active : true,
+      material_qty: item.material_qty ?? "",
+      material_photo_url: item.material_photo_url || "",
+      notes: item.notes || "",
+      active: typeof item.active === "boolean" ? item.active : true,
     });
     setIsEditOpen(true);
   };
@@ -245,75 +230,58 @@ const Actions = () => {
     e.preventDefault();
     if (!editing) return;
 
-    const startYMD = brToYMD(form.start_date_br) || null;
-    const endYMD   = brToYMD(form.end_date_br)   || null;
-    if (form.types.length === 0) return alert('Selecione ao menos um tipo de ação.');
-    if (startYMD && endYMD && startYMD > endYMD) return alert('Data de término não pode ser anterior à data de início.');
+    const startISO = brToYMD(form.startBr);
+    const endISO = brToYMD(form.endBr);
+    if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
+    if (startISO && endISO && startISO > endISO) return alert("Data de término não pode ser anterior à data de início.");
 
     try {
-      let materialUrl = form.material_photo_url || '';
-      if (import.meta.env.DEV) {
-        if (form.material_photo_file) materialUrl = URL.createObjectURL(form.material_photo_file);
-      } else if (form.material_photo_file) {
-        materialUrl = await uploadFile(form.material_photo_file);
-      }
-
       const payload = {
         client_name: form.client_name,
         company_name: form.company_name,
         types: form.types,
-        type: form.types.join(', '),
-        start_date: startYMD,
-        end_date: endYMD,
+        type: form.types.join(", "),
+        start_date: startISO || null,
+        end_date: endISO || null,
         day_periods: form.day_periods,
         material_qty: Number(form.material_qty || 0),
-        material_photo_url: materialUrl,
-        notes: form.notes || '',
+        material_photo_url: form.material_photo_url || "",
+        notes: form.notes || "",
         active: !!form.active,
       };
 
-      if (import.meta.env.DEV) {
-        setActions((prev) => prev.map((a) => (a.id === editing.id ? { ...a, ...payload } : a)));
-      } else {
-        await api.put(`/actions/${editing.id}`, payload);
-        await loadActions();
-      }
-
+      await api.put(`/actions/${editing.id}`, payload);
+      await loadActions();
       setIsEditOpen(false);
       setEditing(null);
       resetForm();
     } catch (err) {
-      console.error('Erro ao atualizar ação:', err);
-      alert('Erro ao atualizar ação: ' + (err?.response?.data?.message || err.message));
+      console.error("Erro ao atualizar ação:", err);
+      alert("Erro ao atualizar ação: " + (err?.response?.data?.message || err.message));
     }
   };
 
   /* -------- Delete -------- */
   const handleDelete = async (id) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta ação?')) return;
+    if (!window.confirm("Tem certeza que deseja excluir esta ação?")) return;
     try {
-      if (import.meta.env.DEV) {
-        setActions((prev) => prev.filter((a) => a.id !== id));
-      } else {
-        await api.delete(`/actions/${id}`);
-        await loadActions();
-      }
+      await api.delete(`/actions/${id}`);
+      await loadActions();
     } catch (err) {
-      console.error('Erro ao excluir ação:', err);
-      alert('Erro ao excluir ação: ' + (err?.response?.data?.message || err.message));
+      console.error("Erro ao excluir ação:", err);
+      alert("Erro ao excluir ação: " + (err?.response?.data?.message || err.message));
     }
   };
 
-  /* -------- UI helpers -------- */
+  /* -------- TypeSelector -------- */
+  const [typesPopoverOpen, setTypesPopoverOpen] = useState(false);
   const TypeSelector = () => (
     <Popover open={typesPopoverOpen} onOpenChange={setTypesPopoverOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-between">
           <span className="inline-flex flex-wrap gap-2">
-            {form.types.length === 0 ? 'Selecionar tipos' : (
-              form.types.slice(0, 2).map((t) => (
-                <Badge key={t} variant="secondary" className="mr-1">{t}</Badge>
-              ))
+            {form.types.length === 0 ? "Selecionar tipos" : (
+              form.types.slice(0, 2).map((t) => <Badge key={t} variant="secondary" className="mr-1">{t}</Badge>)
             )}
             {form.types.length > 2 && <Badge variant="outline">+{form.types.length - 2}</Badge>}
           </span>
@@ -324,7 +292,7 @@ const Actions = () => {
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium">Tipos de ação</span>
           {form.types.length > 0 && (
-            <Button size="sm" variant="ghost" onClick={() => onChange('types', [])}>
+            <Button size="sm" variant="ghost" onClick={() => onChange("types", [])}>
               Limpar
             </Button>
           )}
@@ -356,41 +324,7 @@ const Actions = () => {
     </Popover>
   );
 
-  const FileInput = ({ id, label, onFile, hint, existingUrl }) => {
-    const [name, setName] = useState('');
-    return (
-      <div className="space-y-1.5">
-        <Label htmlFor={id} className="flex items-center gap-2">
-          <Upload className="size-4" /> {label}
-        </Label>
-        <Input
-          id={id}
-          type="file"
-          accept="image/*"
-          onChange={(e) => {
-            const file = e.target.files?.[0] || null;
-            setName(file ? file.name : '');
-            onFile(file);
-          }}
-        />
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] text-muted-foreground">{hint}</p>
-          {name && <span className="text-[11px] text-muted-foreground italic truncate max-w-[50%]">{name}</span>}
-        </div>
-        {existingUrl ? (
-          <button
-            type="button"
-            onClick={() => { setPreviewItem({ material_photo_url: existingUrl }); setIsPreviewOpen(true); }}
-            className="inline-flex items-center gap-2 text-xs underline text-blue-600"
-          >
-            <ImageIcon className="size-4" /> Ver imagem atual
-          </button>
-        ) : null}
-      </div>
-    );
-  };
-
-  /* ===================== Render ===================== */
+  /* ===================== RENDER ===================== */
   return (
     <div className="admin-page-container admin-space-y-6">
       <Card className="admin-card">
@@ -413,7 +347,7 @@ const Actions = () => {
               />
             </div>
 
-            {/* Criar */}
+            {/* Modal CRIAR */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
                 <Button className="admin-btn-primary">
@@ -435,11 +369,11 @@ const Actions = () => {
                     <div className="grid md:grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label htmlFor="client_name">Nome do cliente</Label>
-                        <Input id="client_name" value={form.client_name} onChange={(e) => onChange('client_name', e.target.value)} />
+                        <Input id="client_name" value={form.client_name} onChange={(e) => onChange("client_name", e.target.value)} />
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="company_name">Nome da empresa</Label>
-                        <Input id="company_name" value={form.company_name} onChange={(e) => onChange('company_name', e.target.value)} />
+                        <Input id="company_name" value={form.company_name} onChange={(e) => onChange("company_name", e.target.value)} />
                       </div>
 
                       <div className="space-y-1.5 md:col-span-2">
@@ -460,28 +394,12 @@ const Actions = () => {
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label htmlFor="start_date" className="flex items-center gap-2">
-                          <CalendarIcon className="size-4" /> Início
-                        </Label>
-                        <Input
-                          id="start_date"
-                          placeholder="DD/MM/AAAA"
-                          inputMode="numeric"
-                          value={form.start_date_br}
-                          onChange={onChangeDateBR('start_date_br')}
-                        />
+                        <Label htmlFor="startBr" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
+                        <Input id="startBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.startBr} onChange={onDateChange("startBr")} />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="end_date" className="flex items-center gap-2">
-                          <CalendarIcon className="size-4" /> Término
-                        </Label>
-                        <Input
-                          id="end_date"
-                          placeholder="DD/MM/AAAA"
-                          inputMode="numeric"
-                          value={form.end_date_br}
-                          onChange={onChangeDateBR('end_date_br')}
-                        />
+                        <Label htmlFor="endBr" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
+                        <Input id="endBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.endBr} onChange={onDateChange("endBr")} />
                       </div>
 
                       <div className="space-y-1.5 md:col-span-2">
@@ -498,31 +416,48 @@ const Actions = () => {
 
                       <div className="space-y-1.5">
                         <Label htmlFor="material_qty">Quantidade de material</Label>
-                        <Input id="material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
+                        <Input id="material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange("material_qty", e.target.value)} />
                       </div>
 
-                      <FileInput
-                        id="material_photo_file"
-                        label="Amostra do material (imagem)"
-                        onFile={(f) => onChange('material_photo_file', f)}
-                        hint="Envie uma imagem (jpg, png...)."
-                        existingUrl={null}
-                      />
+                      {/* Upload igual Materiais */}
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Amostra do material (imagem)</Label>
+                        <div className="flex items-center gap-3">
+                          <Input type="file" accept="image/*" onChange={onMaterialChange} />
+                          <Button type="button" variant="outline" disabled className="gap-2">
+                            <UploadCloud className="size-4" />
+                            {uploadingMaterial ? "Enviando..." : "Upload"}
+                          </Button>
+                        </div>
+                        {form.material_photo_url && (
+                          <div className="relative inline-flex items-center gap-2 mt-2">
+                            <ImagePreview src={form.material_photo_url} alt="Amostra do material" size={96} />
+                            <button
+                              type="button"
+                              onClick={() => onChange("material_photo_url", "")}
+                              className="bg-white border rounded-full p-1 shadow"
+                              title="Remover"
+                            >
+                              <X className="size-4 text-red-600" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
 
                       <div className="space-y-1.5 md:col-span-2">
                         <Label htmlFor="notes">Observações</Label>
-                        <Textarea id="notes" rows={3} value={form.notes} onChange={(e) => onChange('notes', e.target.value)} />
+                        <Textarea id="notes" rows={3} value={form.notes} onChange={(e) => onChange("notes", e.target.value)} />
                       </div>
 
                       <div className="flex items-center gap-2 md:col-span-2">
-                        <Checkbox id="active" checked={!!form.active} onCheckedChange={(v) => onChange('active', !!v)} />
+                        <Checkbox id="active" checked={!!form.active} onCheckedChange={(v) => onChange("active", !!v)} />
                         <Label htmlFor="active">Ativo</Label>
                       </div>
                     </div>
 
                     <div className="pt-2 mt-4 border-t flex justify-end gap-2">
                       <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-                      <Button type="submit">Salvar</Button>
+                      <Button type="submit" disabled={uploadingMaterial}>Salvar</Button>
                     </div>
                   </form>
                 </div>
@@ -535,15 +470,15 @@ const Actions = () => {
         <CardContent>
           <div className="rounded-md border">
             <div className="overflow-x-auto">
-              <Table className="min-w-[1040px]">
+              <Table className="min-w-[1050px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-center">Cliente</TableHead>
                     <TableHead className="text-center">Empresa</TableHead>
                     <TableHead className="text-center">Tipos</TableHead>
                     <TableHead className="text-center">Validade</TableHead>
-                    <TableHead className="text-center">Qtd</TableHead>
                     <TableHead className="text-center">Material</TableHead>
+                    <TableHead className="text-center">Quantidade</TableHead>
                     <TableHead className="text-center">Status</TableHead>
                     <TableHead className="text-center">Ações</TableHead>
                   </TableRow>
@@ -558,37 +493,29 @@ const Actions = () => {
                       const types = ensureArrayTypes(a);
                       const range = (a.start_date || a.end_date)
                         ? `${formatDateBR(a.start_date)} — ${formatDateBR(a.end_date)}`
-                        : '—';
-                      const hasMaterialImage = !!a.material_photo_url;
+                        : "—";
                       return (
                         <TableRow key={a.id}>
-                          <TableCell className="font-medium">{a.client_name || '-'}</TableCell>
-                          <TableCell>{a.company_name || '-'}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
+                          <TableCell className="text-center font-medium">{a.client_name || "—"}</TableCell>
+                          <TableCell className="text-center">{a.company_name || "—"}</TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex justify-center flex-wrap gap-1">
                               {types.slice(0, 3).map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
                               {types.length > 3 && <Badge variant="outline">+{types.length - 3}</Badge>}
                             </div>
                           </TableCell>
-                          <TableCell>{range}</TableCell>
+
+                          <TableCell className="text-center">{range}</TableCell>
+
                           <TableCell className="text-center">
-                            {typeof a.material_qty === 'number' ? a.material_qty.toLocaleString('pt-BR') : (a.material_qty || '—')}
-                          </TableCell>
-                          <TableCell>
-                            {hasMaterialImage ? (
-                              <button
-                                type="button"
-                                onClick={() => { setPreviewItem(a); setIsPreviewOpen(true); }}
-                                className="inline-block"
-                                title="Ver amostra do material"
-                              >
-                                <div className="w-10 h-10 rounded-md overflow-hidden border">
-                                  <img src={a.material_photo_url} alt="thumb material" className="w-full h-full object-cover" loading="lazy" />
-                                </div>
-                              </button>
+                            {a.material_photo_url ? (
+                              <ImagePreview src={a.material_photo_url} alt="Amostra do material" size={48} />
                             ) : <span className="text-xs text-muted-foreground">—</span>}
                           </TableCell>
-                          <TableCell>
+
+                          <TableCell className="text-center">{a.material_qty ?? "—"}</TableCell>
+
+                          <TableCell className="text-center">
                             {a.active ? (
                               <span className="inline-flex items-center gap-1 text-green-600">
                                 <CheckCircle className="size-4" /> Ativa
@@ -599,8 +526,9 @@ const Actions = () => {
                               </span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2 flex-wrap">
+
+                          <TableCell className="text-center">
+                            <div className="inline-flex gap-2">
                               <Button size="sm" variant="secondary" onClick={() => openEdit(a)} className="gap-1 min-h-[36px]">
                                 <Edit className="size-4" /> Editar
                               </Button>
@@ -623,7 +551,7 @@ const Actions = () => {
         </CardContent>
       </Card>
 
-      {/* Editar */}
+      {/* Modal EDITAR */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) { setEditing(null); resetForm(); } }}>
         <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
           <div className="px-5 pt-5 pb-3 border-b">
@@ -638,11 +566,11 @@ const Actions = () => {
               <div className="grid md:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="e_client_name">Nome do cliente</Label>
-                  <Input id="e_client_name" value={form.client_name} onChange={(e) => onChange('client_name', e.target.value)} />
+                  <Input id="e_client_name" value={form.client_name} onChange={(e) => onChange("client_name", e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="e_company_name">Nome da empresa</Label>
-                  <Input id="e_company_name" value={form.company_name} onChange={(e) => onChange('company_name', e.target.value)} />
+                  <Input id="e_company_name" value={form.company_name} onChange={(e) => onChange("company_name", e.target.value)} />
                 </div>
 
                 <div className="space-y-1.5 md:col-span-2">
@@ -663,28 +591,12 @@ const Actions = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="e_start_date" className="flex items-center gap-2">
-                    <CalendarIcon className="size-4" /> Início
-                  </Label>
-                  <Input
-                    id="e_start_date"
-                    placeholder="DD/MM/AAAA"
-                    inputMode="numeric"
-                    value={form.start_date_br}
-                    onChange={onChangeDateBR('start_date_br')}
-                  />
+                  <Label htmlFor="e_startBr" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
+                  <Input id="e_startBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.startBr} onChange={onDateChange("startBr")} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="e_end_date" className="flex items-center gap-2">
-                    <CalendarIcon className="size-4" /> Término
-                  </Label>
-                  <Input
-                    id="e_end_date"
-                    placeholder="DD/MM/AAAA"
-                    inputMode="numeric"
-                    value={form.end_date_br}
-                    onChange={onChangeDateBR('end_date_br')}
-                  />
+                  <Label htmlFor="e_endBr" className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
+                  <Input id="e_endBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.endBr} onChange={onDateChange("endBr")} />
                 </div>
 
                 <div className="space-y-1.5 md:col-span-2">
@@ -701,53 +613,50 @@ const Actions = () => {
 
                 <div className="space-y-1.5">
                   <Label htmlFor="e_material_qty">Quantidade de material</Label>
-                  <Input id="e_material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange('material_qty', e.target.value)} />
+                  <Input id="e_material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange("material_qty", e.target.value)} />
                 </div>
 
-                <FileInput
-                  id="e_material_photo_file"
-                  label="Amostra do material (imagem)"
-                  onFile={(f) => onChange('material_photo_file', f)}
-                  hint="Envie uma imagem (jpg, png...)."
-                  existingUrl={form.material_photo_url}
-                />
+                {/* Upload igual Materiais */}
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Amostra do material (imagem)</Label>
+                  <div className="flex items-center gap-3">
+                    <Input type="file" accept="image/*" onChange={onMaterialChange} />
+                    <Button type="button" variant="outline" disabled className="gap-2">
+                      <UploadCloud className="size-4" />
+                      {uploadingMaterial ? "Enviando..." : "Upload"}
+                    </Button>
+                  </div>
+                  {form.material_photo_url && (
+                    <div className="relative inline-flex items-center gap-2 mt-2">
+                      <ImagePreview src={form.material_photo_url} alt="Amostra do material" size={96} />
+                      <button
+                        type="button"
+                        onClick={() => onChange("material_photo_url", "")}
+                        className="bg-white border rounded-full p-1 shadow"
+                        title="Remover"
+                      >
+                        <X className="size-4 text-red-600" />
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 <div className="space-y-1.5 md:col-span-2">
                   <Label htmlFor="e_notes">Observações</Label>
-                  <Textarea id="e_notes" rows={3} value={form.notes} onChange={(e) => onChange('notes', e.target.value)} />
+                  <Textarea id="e_notes" rows={3} value={form.notes} onChange={(e) => onChange("notes", e.target.value)} />
                 </div>
 
                 <div className="flex items-center gap-2 md:col-span-2">
-                  <Checkbox id="e_active" checked={!!form.active} onCheckedChange={(v) => onChange('active', !!v)} />
+                  <Checkbox id="e_active" checked={!!form.active} onCheckedChange={(v) => onChange("active", !!v)} />
                   <Label htmlFor="e_active">Ativo</Label>
                 </div>
               </div>
 
               <div className="pt-2 mt-4 border-t flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => { setIsEditOpen(false); setEditing(null); resetForm(); }}>Cancelar</Button>
-                <Button type="submit">Salvar</Button>
+                <Button type="submit" disabled={uploadingMaterial}>Salvar</Button>
               </div>
             </form>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Preview Material */}
-      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Amostra do material</DialogTitle>
-            <DialogDescription>Visualização da imagem anexada.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4">
-            {previewItem?.material_photo_url ? (
-              <div className="border rounded-md overflow-hidden">
-                <img src={previewItem.material_photo_url} alt="Material" className="w-full h-auto object-contain" />
-                <div className="p-2 text-sm text-center">Amostra do material</div>
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">Sem imagem para exibir.</div>
-            )}
           </div>
         </DialogContent>
       </Dialog>
