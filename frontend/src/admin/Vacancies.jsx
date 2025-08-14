@@ -19,10 +19,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
-import { Plus, Pencil, Trash2, UploadCloud, X } from "lucide-react";
+import { Plus, Pencil, Trash2, UploadCloud, X, ChevronLeft, ChevronRight } from "lucide-react";
 import api from "@/services/api";
-import ImagePreview from "@/components/ImagePreview.jsx"; // mesmo padrão dos Materiais
 
+/* ===================== Helpers ===================== */
 const emptyForm = {
   name: "",
   phone: "",
@@ -33,14 +33,40 @@ const emptyForm = {
   job_type: "CLT",
   status: "Aberta",
   salary: "",
-  images: [], // múltiplas imagens PNG/JPG
+  photos: [], // array de URLs de imagens
 };
+
+// checagem simples por extensão
+const isImageUrl = (url) => /\.(png|jpe?g)(\?|#|$)/i.test(String(url || ""));
+
+// normaliza para um array de fotos a partir do item vindo da API
+function getPhotosFromItem(v) {
+  // caminhos comuns
+  const a =
+    v?.photos ||
+    v?.images ||
+    v?.photos_urls ||
+    v?.images_urls ||
+    v?.pictures ||
+    null;
+
+  if (Array.isArray(a) && a.length) {
+    return a.filter(Boolean).filter(isImageUrl);
+  }
+
+  // compat: se houver documents_url e for imagem
+  if (isImageUrl(v?.documents_url || v?.document_url || v?.documentsUrl)) {
+    return [v.documents_url || v.document_url || v.documentsUrl].filter(Boolean);
+  }
+
+  return [];
+}
 
 export default function Vacancies() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // modal
+  // modal create/edit
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -51,16 +77,30 @@ export default function Vacancies() {
   const [departmentFilter, setDepartmentFilter] = useState("todos");
   const [jobTypeFilter, setJobTypeFilter] = useState("todos");
 
-  // upload imagens
-  const [uploadingImages, setUploadingImages] = useState(false);
+  // upload
+  const [uploading, setUploading] = useState(false);
 
-  useEffect(() => { load(); }, []);
+  // preview (padrão materiais: modal interno com imagem grande)
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewList, setPreviewList] = useState([]); // array de URLs
+  const [previewIndex, setPreviewIndex] = useState(0);
+
+  useEffect(() => {
+    load();
+  }, []);
 
   async function load() {
     try {
       setLoading(true);
       const { data } = await api.get("/job-vacancies");
-      setItems(Array.isArray(data) ? data : []);
+      const arr = Array.isArray(data) ? data : [];
+      // anexa campo _photos normalizado para exibir na tabela
+      setItems(
+        arr.map((v) => ({
+          ...v,
+          _photos: getPhotosFromItem(v),
+        }))
+      );
     } catch (e) {
       console.error("Erro ao carregar vagas:", e);
       setItems([]);
@@ -103,14 +143,6 @@ export default function Vacancies() {
     setOpen(true);
   }
 
-  // compat: caso registros antigos tenham "documents_url" (única) ou "images_urls"
-  const extractImages = (v) => {
-    if (Array.isArray(v?.images_urls)) return v.images_urls.filter(Boolean);
-    if (Array.isArray(v?.images)) return v.images.filter(Boolean);
-    if (v?.documents_url) return [v.documents_url];
-    return [];
-  };
-
   function openEdit(v) {
     setEditingId(v.id);
     setForm({
@@ -123,7 +155,7 @@ export default function Vacancies() {
       job_type: v.job_type || "CLT",
       status: v.status || "Aberta",
       salary: v.salary?.toString?.() || "",
-      images: extractImages(v),
+      photos: getPhotosFromItem(v),
     });
     setOpen(true);
   }
@@ -132,13 +164,15 @@ export default function Vacancies() {
     e?.preventDefault?.();
     if (!form.name?.trim()) return alert("Informe o nome.");
     if (!form.phone?.trim()) return alert("Informe o telefone.");
-    if (uploadingImages) return alert("Aguarde concluir o upload das imagens.");
+    if (uploading) return alert("Aguarde concluir o upload das imagens.");
 
     const payload = {
       ...form,
       age: form.age ? Number(form.age) : null,
       salary: form.salary ? Number(form.salary) : null,
-      images_urls: form.images || [], // backend pode armazenar como images_urls
+      photos: Array.isArray(form.photos) ? form.photos : [],
+      // compat: mantém documents_url como a 1ª foto (se o backend antigo usar esse campo)
+      documents_url: Array.isArray(form.photos) && form.photos[0] ? form.photos[0] : "",
     };
 
     try {
@@ -168,97 +202,111 @@ export default function Vacancies() {
     }
   }
 
-  // upload múltiplo somente imagens (PNG/JPG) — usa campo 'file' e NÃO força headers
+  // upload múltiplo de imagens (PNG/JPG) — envia uma a uma, sem forçar headers
   async function onImagesChange(e) {
-    const input = e.target;
-    const files = Array.from(input.files || []);
+    const files = Array.from(e.target.files || []).filter(Boolean);
     if (!files.length) return;
 
-    const allowed = files.filter((f) => /image\/(png|jpeg)/i.test(f.type));
-    if (allowed.length === 0) {
-      input.value = "";
-      return alert("Selecione apenas imagens PNG ou JPG.");
-    }
-
-    setUploadingImages(true);
+    setUploading(true);
     try {
-      const urls = [];
-      for (const file of allowed) {
+      const uploaded = [];
+      for (const file of files) {
+        // garante apenas imagem
+        if (!/^image\/(png|jpe?g)$/i.test(file.type)) continue;
         const fd = new FormData();
-        fd.append("file", file); // backend costuma esperar 'file'
-        const { data } = await api.post("/upload", fd); // sem headers (axios define boundary)
+        fd.append("file", file); // backend espera 'file'
+        const { data } = await api.post("/upload", fd); // axios define boundary automaticamente
         const url =
           data?.url ||
           data?.secure_url ||
           data?.location ||
           data?.file?.url ||
           "";
-        if (url) urls.push(url);
+        if (url) uploaded.push(url);
       }
-      if (urls.length === 0) throw new Error("Nenhuma URL retornada.");
-
-      setForm((f) => ({ ...f, images: [...(f.images || []), ...urls] }));
+      if (uploaded.length === 0) {
+        alert("Nenhuma imagem válida enviada.");
+        return;
+      }
+      setForm((f) => ({ ...f, photos: [...(f.photos || []), ...uploaded] }));
+      // limpa o input para permitir reenviar os mesmos arquivos depois, se quiser
+      e.target.value = "";
     } catch (err) {
       console.error("Erro no upload de imagens:", err);
       alert("Falha ao enviar imagens. Código: " + (err?.response?.status || "desconhecido"));
     } finally {
-      setUploadingImages(false);
-      // permite re-selecionar os mesmos arquivos se quiser
-      input.value = "";
+      setUploading(false);
     }
   }
 
-  const removeImage = (url) => {
-    setForm((f) => ({ ...f, images: (f.images || []).filter((u) => u !== url) }));
-  };
+  function removePhotoAt(idx) {
+    setForm((f) => {
+      const next = [...(f.photos || [])];
+      next.splice(idx, 1);
+      return { ...f, photos: next };
+    });
+  }
 
+  function openPreview(list, idx = 0) {
+    setPreviewList(list || []);
+    setPreviewIndex(idx);
+    setPreviewOpen(true);
+  }
+  function prevImage() {
+    setPreviewIndex((i) => (i - 1 + previewList.length) % previewList.length);
+  }
+  function nextImage() {
+    setPreviewIndex((i) => (i + 1) % previewList.length);
+  }
+
+  /* ===================== RENDER ===================== */
   return (
     <div className="admin-page-container admin-space-y-6">
       <div className="admin-page-header">
         <h2 className="admin-page-title">Vagas</h2>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="admin-card">
-          <CardHeader className="admin-card-header pb-2">
-            <CardTitle className="admin-card-title text-sm font-medium">Total de Vagas</CardTitle>
-            <CardDescription className="admin-card-description">Registros cadastrados</CardDescription>
+      {/* KPIs (compacto no desktop) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <Card className="md:p-0">
+          <CardHeader className="p-3 pb-1">
+            <CardTitle className="text-xs font-medium">Total de Vagas</CardTitle>
+            <CardDescription className="text-[11px]">Registros cadastrados</CardDescription>
           </CardHeader>
-          <CardContent className="admin-card-content">
-            <div className="text-2xl font-bold">{loading ? "—" : total}</div>
+          <CardContent className="p-3 pt-0">
+            <div className="text-xl font-semibold leading-tight">{loading ? "—" : total}</div>
           </CardContent>
         </Card>
 
-        <Card className="admin-card">
-          <CardHeader className="admin-card-header pb-2">
-            <CardTitle className="admin-card-title text-sm font-medium">Vagas Abertas</CardTitle>
-            <CardDescription className="admin-card-description">Disponíveis</CardDescription>
+        <Card className="md:p-0">
+          <CardHeader className="p-3 pb-1">
+            <CardTitle className="text-xs font-medium">Vagas Abertas</CardTitle>
+            <CardDescription className="text-[11px]">Disponíveis</CardDescription>
           </CardHeader>
-          <CardContent className="admin-card-content">
-            <div className="text-2xl font-bold">{loading ? "—" : openCount}</div>
+          <CardContent className="p-3 pt-0">
+            <div className="text-xl font-semibold leading-tight">{loading ? "—" : openCount}</div>
           </CardContent>
         </Card>
 
-        <Card className="admin-card">
-          <CardHeader className="admin-card-header pb-2">
-            <CardTitle className="admin-card-title text-sm font-medium">Em Processo</CardTitle>
-            <CardDescription className="admin-card-description">Triagem/Contato</CardDescription>
+        <Card className="md:p-0">
+          <CardHeader className="p-3 pb-1">
+            <CardTitle className="text-xs font-medium">Em Processo</CardTitle>
+            <CardDescription className="text-[11px]">Triagem/Contato</CardDescription>
           </CardHeader>
-          <CardContent className="admin-card-content">
-            <div className="text-2xl font-bold">
+          <CardContent className="p-3 pt-0">
+            <div className="text-xl font-semibold leading-tight">
               {loading ? "—" : items.filter((v) => (v.status || "").toLowerCase() === "em processo").length}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="admin-card">
-          <CardHeader className="admin-card-header pb-2">
-            <CardTitle className="admin-card-title text-sm font-medium">Fechadas</CardTitle>
-            <CardDescription className="admin-card-description">Encerradas</CardDescription>
+        <Card className="md:p-0">
+          <CardHeader className="p-3 pb-1">
+            <CardTitle className="text-xs font-medium">Fechadas</CardTitle>
+            <CardDescription className="text-[11px]">Encerradas</CardDescription>
           </CardHeader>
-          <CardContent className="admin-card-content">
-            <div className="text-2xl font-bold">
+          <CardContent className="p-3 pt-0">
+            <div className="text-xl font-semibold leading-tight">
               {loading ? "—" : items.filter((v) => (v.status || "").toLowerCase() === "fechada").length}
             </div>
           </CardContent>
@@ -369,7 +417,7 @@ export default function Vacancies() {
                   </tr>
                 )}
                 {filtered.map((v) => {
-                  const imgs = extractImages(v);
+                  const photos = Array.isArray(v._photos) ? v._photos : [];
                   return (
                     <tr key={v.id} className="border-b last:border-0">
                       <td className="py-3 px-3 text-center">{v.name}</td>
@@ -385,15 +433,34 @@ export default function Vacancies() {
                         {v.salary ? `R$ ${Number(v.salary).toLocaleString()}` : "—"}
                       </td>
 
-                      {/* Fotos (miniaturas com modal via ImagePreview) */}
+                      {/* Fotos (miniaturas como em "materiais", com modal) */}
                       <td className="py-3 px-3 text-center">
-                        {imgs.length ? (
-                          <div className="flex items-center justify-center gap-1 flex-wrap">
-                            {imgs.slice(0, 3).map((url) => (
-                              <ImagePreview key={url} src={url} alt="foto" size={40} />
+                        {photos.length > 0 ? (
+                          <div className="inline-flex items-center gap-1">
+                            {photos.slice(0, 3).map((src, idx) => (
+                              <button
+                                key={src}
+                                type="button"
+                                onClick={() => openPreview(photos, idx)}
+                                title="Ver imagem"
+                                className="w-10 h-10 rounded-md overflow-hidden border"
+                              >
+                                <img
+                                  src={src}
+                                  alt="foto"
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                />
+                              </button>
                             ))}
-                            {imgs.length > 3 && (
-                              <Badge variant="outline">+{imgs.length - 3}</Badge>
+                            {photos.length > 3 && (
+                              <Badge
+                                variant="outline"
+                                className="cursor-pointer"
+                                onClick={() => openPreview(photos, 3)}
+                              >
+                                +{photos.length - 3}
+                              </Badge>
                             )}
                           </div>
                         ) : (
@@ -432,7 +499,7 @@ export default function Vacancies() {
         </CardContent>
       </Card>
 
-      {/* Modal */}
+      {/* Modal Create/Edit */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[720px] p-0">
           <div className="max-h-[80vh] overflow-y-auto p-6">
@@ -567,7 +634,7 @@ export default function Vacancies() {
                 />
               </div>
 
-              {/* Fotos (PNG/JPG) — múltiplas, miniaturas e modal padrão Materiais */}
+              {/* Upload de imagens (múltiplas) */}
               <div className="space-y-2">
                 <Label>Fotos do candidato (PNG/JPG)</Label>
                 <div className="flex items-center gap-3">
@@ -579,23 +646,30 @@ export default function Vacancies() {
                   />
                   <Button type="button" variant="outline" disabled className="gap-2">
                     <UploadCloud className="h-4 w-4" />
-                    {uploadingImages ? "Enviando..." : "Upload"}
+                    {uploading ? "Enviando..." : "Upload"}
                   </Button>
                 </div>
 
-                {/* miniaturas (com modal via ImagePreview) + remover */}
-                {Array.isArray(form.images) && form.images.length > 0 && (
+                {/* Miniaturas das fotos já anexadas, com remover */}
+                {Array.isArray(form.photos) && form.photos.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {form.images.map((url) => (
-                      <div key={url} className="relative inline-flex items-center">
-                        <ImagePreview src={url} alt="foto" size={96} />
+                    {form.photos.map((src, idx) => (
+                      <div key={src} className="relative inline-block">
                         <button
                           type="button"
-                          onClick={() => removeImage(url)}
-                          className="ml-1 bg-white border rounded-full p-1 shadow -translate-x-2 -translate-y-10"
-                          title="Remover"
+                          className="w-16 h-16 rounded-md overflow-hidden border"
+                          title="Ver imagem"
+                          onClick={() => openPreview(form.photos, idx)}
                         >
-                          <X className="size-4 text-red-600" />
+                          <img src={src} alt={`foto-${idx + 1}`} className="w-full h-full object-cover" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Remover"
+                          onClick={() => removePhotoAt(idx)}
+                          className="absolute -top-2 -right-2 bg-white border rounded-full p-1 shadow"
+                        >
+                          <X className="h-3.5 w-3.5 text-red-600" />
                         </button>
                       </div>
                     ))}
@@ -607,12 +681,72 @@ export default function Vacancies() {
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={uploadingImages}>
+                <Button type="submit" disabled={uploading}>
                   {editingId ? "Salvar" : "Criar"}
                 </Button>
               </div>
             </form>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de visualização de imagens (padrão materiais) */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Fotos do candidato</DialogTitle>
+            <DialogDescription>Visualização das imagens anexadas.</DialogDescription>
+          </DialogHeader>
+
+          {previewList.length > 0 ? (
+            <div className="space-y-3">
+              <div className="relative border rounded-md overflow-hidden">
+                <img
+                  src={previewList[previewIndex]}
+                  alt="visualização"
+                  className="w-full h-auto object-contain max-h-[60vh]"
+                />
+                {previewList.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={prevImage}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 rounded-full p-2 border shadow"
+                      title="Anterior"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={nextImage}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 rounded-full p-2 border shadow"
+                      title="Próxima"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {previewList.length > 1 && (
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {previewList.map((src, i) => (
+                    <button
+                      key={src}
+                      type="button"
+                      onClick={() => setPreviewIndex(i)}
+                      className={`w-14 h-14 rounded-md overflow-hidden border ${i === previewIndex ? "ring-2 ring-blue-500" : ""}`}
+                      title={`Imagem ${i + 1}`}
+                    >
+                      <img src={src} alt={`thumb-${i + 1}`} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">Sem imagem para exibir.</div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
