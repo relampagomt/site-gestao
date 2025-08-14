@@ -539,13 +539,13 @@ const Actions = () => {
               <Table className="min-w-[980px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Empresa</TableHead>
-                    <TableHead>Tipos</TableHead>
-                    <TableHead>Validade</TableHead>
-                    <TableHead>Material</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
+                    <TableHead className="text-center">Cliente</TableHead>
+                    <TableHead className="text-center">Empresa</TableHead>
+                    <TableHead className="text-center">Tipos</TableHead>
+                    <TableHead className="text-center">Validade</TableHead>
+                    <TableHead className="text-center">Material</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
