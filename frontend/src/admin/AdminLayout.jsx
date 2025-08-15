@@ -88,12 +88,18 @@ export default function AdminLayout() {
             collapsed ? "w-20" : "w-64"
           )}
         >
-          {/* Cabeçalho da Sidebar com Título e Botão */}
+          {/* Cabeçalho da Sidebar com Título/Logo e Botão */}
           <div className={cn(
             "h-16 flex items-center",
-            collapsed ? "justify-center" : "justify-between px-4" // Ajusta o alinhamento
+            collapsed ? "justify-center" : "justify-between px-4"
           )}>
-            {!collapsed && (
+            {collapsed ? (
+              // LOGO QUANDO RECOLHIDO
+              <div className="flex items-center justify-center w-8 h-8 bg-white border-2 border-red-600 rounded-md">
+                <span className="text-lg font-bold text-red-600">R</span>
+              </div>
+            ) : (
+              // TÍTULO QUANDO EXPANDIDO
               <span className="font-bold text-red-600 text-xl">
                 Relâmpago
               </span>
@@ -110,7 +116,7 @@ export default function AdminLayout() {
 
           {/* Navegação Principal */}
           <nav className={cn("py-2 space-y-1 flex-1", collapsed ? "px-2" : "px-3")}>
-            {menu.map((item) => <SideItem key={item.to} {...item} collapsed={collapsed} />)}
+            {menu.map((item) => <SideItem key={item.to} {...item} collapsed={collapsed} />}
           </nav>
 
           {/* Rodapé da Sidebar (apenas botão Sair) */}
@@ -125,6 +131,8 @@ export default function AdminLayout() {
             </Button>
           </div>
         </aside>
+
+        {/* ... (Restante do código permanece idêntico) ... */}
 
         {/* Sidebar Mobile (Menu Hamburguer - Sem alterações) */}
         <div
