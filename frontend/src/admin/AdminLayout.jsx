@@ -46,9 +46,9 @@ function SideItem({ to, icon: Icon, label, end = false, collapsed = false, onCli
 
 /**
  * Layout principal do painel Admin
- * - Sidebar com itens (retrátil no desktop, drawer no mobile)
- * - Header fixo com toggle
- * - Conteúdo centralizado por container ÚNICO aqui (sem mudar páginas)
+ * - Sidebar retrátil (desktop) + Drawer (mobile)
+ * - Header fixo
+ * - Conteúdo CENTRALIZADO aqui (único ponto), sem mexer nas páginas
  */
 export default function AdminLayout() {
   const location = useLocation();
@@ -67,7 +67,7 @@ export default function AdminLayout() {
     localStorage.setItem("admin.sidebarCollapsed", collapsed ? "1" : "0");
   }, [collapsed]);
 
-  // Mapa de navegação
+  // Mapa de navegação (rotas mantidas)
   const menu = useMemo(
     () => [
       { to: "/admin", label: "Dashboard", icon: Home, end: true },
@@ -228,7 +228,7 @@ export default function AdminLayout() {
 
           {/* ===== CONTEÚDO CENTRALIZADO AQUI ===== */}
           <div className="p-4 sm:p-6 pb-20 md:pb-8">
-            <div className="mx-auto w-full max-w-[720px] sm:max-w-[860px]">
+            <div className="mx-auto w-full max-w-[720px] sm:max-w-[860px] px-3 sm:px-4">
               <Outlet />
             </div>
           </div>
