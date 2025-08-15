@@ -46,17 +46,16 @@ function SideItem({ to, icon: Icon, label, end = false, collapsed = false, onCli
 
 /**
  * Layout principal do painel Admin
- * - Sidebar com itens (agora retrátil no desktop)
- * - Drawer no mobile
- * - Header fixo com botões de toggle
- * - <Outlet/> com o MESMO wrapper (p-4 sm:p-6)
+ * - Sidebar (retrátil no desktop) + Drawer (mobile)
+ * - Header fixo com hambúrguer
+ * - Conteúdo CENTRALIZADO via wrapper único
  */
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, user } = useAuth(); // precisa estar dentro de <AuthProvider>
 
-  // === NOVO: retrátil (desktop) + persistência e drawer (mobile)
+  // Retrátil (desktop) + persistência e drawer (mobile)
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -67,9 +66,8 @@ export default function AdminLayout() {
   useEffect(() => {
     localStorage.setItem("admin.sidebarCollapsed", collapsed ? "1" : "0");
   }, [collapsed]);
-  // === FIM NOVO
 
-  // Mapa de navegação — Configurações REMOVIDO, Usuários RESTAURADO
+  // Mapa de navegação — rotas mantidas
   const menu = useMemo(
     () => [
       { to: "/admin", label: "Dashboard", icon: Home, end: true },
@@ -78,8 +76,7 @@ export default function AdminLayout() {
       { to: "/admin/actions", label: "Ações", icon: ClipboardList },
       { to: "/admin/finance", label: "Finanças", icon: Wallet },
       { to: "/admin/vacancies", label: "Vagas", icon: Briefcase },
-      { to: "/admin/users", label: "Usuários", icon: Users }, // ✅ restaurado
-      // { to: "/admin/settings", label: "Configurações", icon: Settings }, // ❌ removido
+      { to: "/admin/users", label: "Usuários", icon: Users },
     ],
     []
   );
@@ -181,7 +178,7 @@ export default function AdminLayout() {
           {/* Header */}
           <header className="h-16 border-b flex items-center justify-between px-4 sm:px-6 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="flex items-center gap-2">
-              {/* Botão menu (MOBILE) */}
+              {/* Hambúrguer (MOBILE) */}
               <Button
                 variant="outline"
                 size="sm"
@@ -192,7 +189,7 @@ export default function AdminLayout() {
                 <MenuIcon className="w-4 h-4" />
               </Button>
 
-              {/* Botão retrátil (DESKTOP) */}
+              {/* Toggle retrátil (DESKTOP) */}
               <Button
                 variant="outline"
                 size="sm"
@@ -227,39 +224,16 @@ export default function AdminLayout() {
             </div>
           </header>
 
-          {/* Conteúdo das rotas filhas — MANTIDO IGUAL */}
+          {/* CONTEÚDO CENTRALIZADO */}
           <div className="p-4 sm:p-6">
-            <Outlet />
+            <div className="mx-auto w-full max-w-[720px] sm:max-w-[860px] px-4">
+              <Outlet />
+            </div>
           </div>
         </main>
       </div>
 
-      {/* Sidebar mobile simples (footer nav) */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 border-t bg-background/95 backdrop-blur">
-        <div className="grid grid-cols-4">
-          {[
-            { to: "/admin", icon: Home, label: "Início", end: true },
-            { to: "/admin/actions", icon: ClipboardList, label: "Ações" },
-            { to: "/admin/finance", icon: Wallet, label: "Finanças" },
-            { to: "/admin/users", icon: Users, label: "Usuários" },
-          ].map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                cn(
-                  "flex flex-col items-center justify-center py-2 text-xs",
-                  isActive ? "text-red-600" : "text-muted-foreground hover:text-foreground"
-                )
-              }
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="mt-1">{item.label}</span>
-            </NavLink>
-          ))}
-        </div>
-      </nav>
+      {/* Footer nav REMOVIDO a pedido */}
     </div>
   );
 }
