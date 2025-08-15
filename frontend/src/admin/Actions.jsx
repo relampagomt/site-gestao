@@ -455,13 +455,23 @@ const Actions = () => {
                 </Button>
               </PopoverTrigger>
 
-              <PopoverContent align="end" className="w-[min(92vw,560px)] p-0">
+              <PopoverContent
+                align="end"
+                side="bottom"
+                sideOffset={8}
+                className="w-[min(92vw,560px)] p-0 max-h-[80vh] overflow-hidden"
+              >
                 <div className="px-4 py-3 border-b">
                   <p className="text-sm font-medium">Filtrar ações</p>
                   <p className="text-xs text-muted-foreground">Refine os resultados com seletores.</p>
                 </div>
 
-                <div className="p-4 grid md:grid-cols-2 gap-4">
+                {/* Wrapper rolável */}
+                <div
+                  className="p-4 grid md:grid-cols-2 gap-4 max-h-[65vh] overflow-y-auto overscroll-contain touch-pan-y pr-2 [-webkit-overflow-scrolling:touch]"
+                  onWheel={(e) => e.stopPropagation()}
+                  onTouchMove={(e) => e.stopPropagation()}
+                >
                   {/* Status */}
                   <div className="space-y-2">
                     <Label>Status</Label>
@@ -493,9 +503,9 @@ const Actions = () => {
                   {/* Tipos */}
                   <div className="space-y-2 md:col-span-2">
                     <Label>Tipo(s) de ação</Label>
-                    <div className="max-h-[36vh] overflow-y-auto pr-2">
+                    <div className="grid sm:grid-cols-2 gap-2">
                       {ACTION_OPTIONS.map((group) => (
-                        <div key={group.group} className="mb-3">
+                        <div key={group.group} className="sm:col-span-2">
                           <p className="text-xs font-semibold text-muted-foreground mb-2">{group.group}</p>
                           <div className="grid sm:grid-cols-2 gap-2">
                             {group.items.map((opt) => (
