@@ -5,16 +5,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# -----------------------
+# Import path
+# -----------------------
 # Garante que a pasta "src" (dentro de backend) seja importável.
-# Adiciona o próprio diretório "backend" ao sys.path.
 backend_dir = os.path.dirname(os.path.abspath(__file__))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
+src_dir = os.path.join(backend_dir, "src")
+for p in (backend_dir, src_dir):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from werkzeug.exceptions import RequestEntityTooLarge
+
 
 def create_app():
     app = Flask(__name__)
@@ -60,7 +65,8 @@ def create_app():
     from src.routes.job_vacancy import job_vacancy_bp
     from src.routes.metrics import metrics_bp
     from src.routes.upload import upload_bp  # rota de upload
-    from src.routes.user import user_bp # rota de gerenciamento de usuários
+    from src.routes.user import user_bp      # rota de gerenciamento de usuários
+    from src.routes.finance import finance_bp  # <<< NOVO: módulo de finanças
     from src.services.user_service import ensure_admin_seed
 
     # -----------------------
@@ -72,8 +78,9 @@ def create_app():
     app.register_blueprint(action_bp, url_prefix="/api")
     app.register_blueprint(job_vacancy_bp, url_prefix="/api")
     app.register_blueprint(metrics_bp, url_prefix="/api/metrics")
-    app.register_blueprint(upload_bp, url_prefix="/api")  # POST /api/upload
-    app.register_blueprint(user_bp, url_prefix="/api") # Rotas de usuário
+    app.register_blueprint(upload_bp, url_prefix="/api")   # POST /api/upload
+    app.register_blueprint(user_bp, url_prefix="/api")     # Rotas de usuário
+    app.register_blueprint(finance_bp, url_prefix="/api")  # <<< registra /api/finance/...
 
     # -----------------------
     # Healthcheck
@@ -81,6 +88,14 @@ def create_app():
     @app.get("/healthcheck")
     def healthcheck():
         return jsonify({"status": "ok"}), 200
+
+    # -----------------------
+    # Preflight genérico para /api/*
+    # (Garante 204 no OPTIONS mesmo que a rota específica não tenha sido criada)
+    # -----------------------
+    @app.route("/api/<path:any_path>", methods=["OPTIONS"])
+    def api_preflight(any_path):
+        return ("", 204)
 
     # -----------------------
     # Error Handlers úteis

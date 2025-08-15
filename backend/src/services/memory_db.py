@@ -8,7 +8,8 @@ class MemoryDB:
             'clients': {},
             'materials': {},
             'actions': {},
-            'job_vacancies': {}
+            'job_vacancies': {},
+            'finance_transactions': {}
         }
     
     def collection(self, name):
