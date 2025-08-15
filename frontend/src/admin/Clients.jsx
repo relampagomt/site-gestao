@@ -27,7 +27,8 @@ import {
 } from "@/components/ui/command.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
 import { Checkbox } from "@/components/ui/checkbox.jsx";
-import { Plus, Search, Edit, Trash2, ChevronsUpDown, Check, X } from "lucide-react";
+import { Separator } from "@/components/ui/separator.jsx";
+import { Plus, Search, Edit, Trash2, ChevronsUpDown, Check, X, Filter as FilterIcon } from "lucide-react";
 
 /* ====== SEGMENTOS AGRUPADOS (compactos) ================================== */
 export const SEGMENTOS_GRUPOS = [
@@ -335,16 +336,76 @@ const Clients = () => {
     }
   }
 
-  const filtered = useMemo(() => {
-    const k = q.trim().toLowerCase();
-    if (!k) return clients;
-    return clients.filter((c) => {
-      const segs = ensureArraySegments(c).join(" ");
-      return [c.name, c.company, c.company_name, c.email, c.phone, segs]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(k));
+  /* ===================== FILTROS (NOVO) ===================== */
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [fCompanies, setFCompanies] = useState([]);     // múltipla
+  const [fSegments, setFSegments] = useState([]);      // múltipla
+  const [fHasEmail, setFHasEmail] = useState("");      // '', 'sim', 'nao'
+  const [fHasPhone, setFHasPhone] = useState("");      // '', 'sim', 'nao'
+
+  const uniqueCompanies = useMemo(() => {
+    const s = new Set();
+    clients.forEach((c) => {
+      const v = (c.company ?? c.company_name ?? c.companyName ?? "").trim();
+      if (v) s.add(v);
     });
-  }, [clients, q]);
+    return Array.from(s).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [clients]);
+
+  const toggle = (setter, value) =>
+    setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
+
+  const clearFilters = () => {
+    setFCompanies([]);
+    setFSegments([]);
+    setFHasEmail("");
+    setFHasPhone("");
+  };
+
+  const filtersCount =
+    (fCompanies.length ? 1 : 0) +
+    (fSegments.length ? 1 : 0) +
+    (fHasEmail ? 1 : 0) +
+    (fHasPhone ? 1 : 0);
+
+  /* --------- Lista filtrada --------- */
+  const filtered = useMemo(() => {
+    let list = Array.isArray(clients) ? [...clients] : [];
+
+    // busca por digitação (mantida)
+    const k = q.trim().toLowerCase();
+    if (k) {
+      list = list.filter((c) => {
+        const segs = ensureArraySegments(c).join(" ");
+        return [c.name, c.company, c.company_name, c.email, c.phone, segs]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(k));
+      });
+    }
+
+    // filtros avançados
+    if (fCompanies.length > 0) {
+      const set = new Set(fCompanies);
+      list = list.filter((c) => set.has((c.company ?? c.company_name ?? c.companyName ?? "").trim()));
+    }
+
+    if (fSegments.length > 0) {
+      const set = new Set(fSegments);
+      list = list.filter((c) => ensureArraySegments(c).some((s) => set.has(s)));
+    }
+
+    if (fHasEmail) {
+      const want = fHasEmail === "sim";
+      list = list.filter((c) => Boolean((c.email || "").trim()) === want);
+    }
+
+    if (fHasPhone) {
+      const want = fHasPhone === "sim";
+      list = list.filter((c) => Boolean((c.phone || "").trim()) === want);
+    }
+
+    return list;
+  }, [clients, q, fCompanies, fSegments, fHasEmail, fHasPhone]);
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
@@ -369,6 +430,134 @@ const Clients = () => {
                 onChange={(e) => setQ(e.target.value)}
               />
             </div>
+
+            {/* ====== FILTROS AVANÇADOS ====== */}
+            <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <FilterIcon className="size-4" />
+                  Filtros
+                  {filtersCount > 0 && <Badge variant="secondary">{filtersCount}</Badge>}
+                </Button>
+              </PopoverTrigger>
+
+              <PopoverContent
+                align="end"
+                side="bottom"
+                sideOffset={8}
+                collisionPadding={12}
+                className="w-[min(92vw,620px)] p-0"
+              >
+                {/* flex column: header fixo, body rolável, footer fixo */}
+                <div className="flex flex-col max-h-[calc(100vh-120px)]">
+                  <div className="px-4 py-3 border-b">
+                    <p className="text-sm font-medium">Filtrar clientes</p>
+                    <p className="text-xs text-muted-foreground">Refine os resultados com seletores.</p>
+                  </div>
+
+                  {/* BODY */}
+                  <div
+                    className="p-4 grid md:grid-cols-2 gap-4 flex-1 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+                    onWheel={(e) => e.stopPropagation()}
+                    onTouchMove={(e) => e.stopPropagation()}
+                  >
+                    {/* Empresas */}
+                    <div className="space-y-2">
+                      <Label>Empresas</Label>
+                      <div className="max-h-[32vh] overflow-y-auto pr-1">
+                        {uniqueCompanies.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">—</p>
+                        ) : uniqueCompanies.map((comp) => (
+                          <label key={comp} className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox checked={fCompanies.includes(comp)} onCheckedChange={() => toggle(setFCompanies, comp)} />
+                            <span className="truncate">{comp}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {fCompanies.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {fCompanies.map((c) => (
+                            <Badge key={c} variant="secondary" className="gap-1">
+                              {c}
+                              <button type="button" onClick={() => toggle(setFCompanies, c)} className="ml-1 opacity-70 hover:opacity-100">
+                                <X className="size-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Segmentos (agrupados) */}
+                    <div className="space-y-2 md:col-span-1">
+                      <Label>Segmentos</Label>
+                      <div className="grid sm:grid-cols-1 gap-2 max-h-[48vh] overflow-y-auto pr-1">
+                        {SEGMENTOS_GRUPOS.map((grp) => (
+                          <div key={grp.group}>
+                            <p className="text-xs font-semibold text-muted-foreground mb-2">{grp.group}</p>
+                            <div className="space-y-1.5">
+                              {grp.options.map((opt) => (
+                                <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <Checkbox checked={fSegments.includes(opt.value)} onCheckedChange={() => toggle(setFSegments, opt.value)} />
+                                  <span className="truncate">{opt.value}</span>
+                                </label>
+                              ))}
+                            </div>
+                            <Separator className="my-3" />
+                          </div>
+                        ))}
+                      </div>
+                      {fSegments.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {fSegments.map((s) => (
+                            <Badge key={s} variant="secondary" className="gap-1">
+                              {s}
+                              <button type="button" onClick={() => toggle(setFSegments, s)} className="ml-1 opacity-70 hover:opacity-100">
+                                <X className="size-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* E-mail / Telefone */}
+                    <div className="space-y-2">
+                      <Label>E-mail</Label>
+                      <select
+                        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                        value={fHasEmail}
+                        onChange={(e) => setFHasEmail(e.target.value)}
+                      >
+                        <option value="">Todos</option>
+                        <option value="sim">Com e-mail</option>
+                        <option value="nao">Sem e-mail</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Telefone</Label>
+                      <select
+                        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                        value={fHasPhone}
+                        onChange={(e) => setFHasPhone(e.target.value)}
+                      >
+                        <option value="">Todos</option>
+                        <option value="sim">Com telefone</option>
+                        <option value="nao">Sem telefone</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="px-4 py-3 border-t flex justify-between">
+                    <Button variant="ghost" onClick={clearFilters}>Limpar filtros</Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => setFiltersOpen(false)}>Fechar</Button>
+                      <Button onClick={() => setFiltersOpen(false)}>Aplicar</Button>
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
