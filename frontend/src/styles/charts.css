@@ -1,0 +1,42 @@
+/* Tamanho de fonte padrão dos gráficos (ajuste aqui) */
+:root{
+  --chart-font-size: 11px;   /* texto geral (eixos, labels) */
+  --chart-legend-size: 12px; /* legenda */
+  --chart-tooltip-size: 12px;/* tooltip */
+}
+
+/* Texto dentro de qualquer gráfico Recharts */
+.recharts-wrapper text,
+.recharts-wrapper tspan{
+  font-size: var(--chart-font-size);
+}
+
+/* Labels de Pizza/Donut */
+.recharts-pie-label-text{
+  font-size: var(--chart-font-size);
+}
+
+/* Valores dos ticks dos eixos (Line/Bar/Area) */
+.recharts-cartesian-axis-tick-value tspan{
+  font-size: var(--chart-font-size);
+}
+
+/* Legenda */
+.recharts-legend-wrapper,
+.recharts-default-legend{
+  font-size: var(--chart-legend-size);
+}
+
+/* Tooltip */
+.recharts-tooltip-wrapper .recharts-default-tooltip{
+  font-size: var(--chart-tooltip-size);
+}
+
+/* (Opcional) diminuir um pouco em telas pequenas */
+@media (max-width: 768px){
+  :root{
+    --chart-font-size: 10px;
+    --chart-legend-size: 11px;
+    --chart-tooltip-size: 11px;
+  }
+}
