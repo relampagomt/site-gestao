@@ -43,12 +43,16 @@ function SideItem({ to, icon: Icon, label, end = false, collapsed = false }) {
 
 /**
  * Layout principal do painel Admin
+ * - Sidebar com itens (agora retrátil no desktop)
+ * - Header fixo com botão de toggle
+ * - <Outlet/> para as rotas filhas
  */
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, user } = useAuth();
+  const { signOut, user } = useAuth(); // precisa estar dentro de <AuthProvider>
 
+  // Estado do menu retrátil (desktop) + persistência
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     const saved = localStorage.getItem("admin.sidebarCollapsed");
@@ -58,6 +62,7 @@ export default function AdminLayout() {
     localStorage.setItem("admin.sidebarCollapsed", collapsed ? "1" : "0");
   }, [collapsed]);
 
+  // Mapa de navegação — Mantido exatamente como no seu código original.
   const menu = useMemo(
     () => [
       { to: "/admin", label: "Dashboard", icon: Home, end: true },
@@ -124,10 +129,11 @@ export default function AdminLayout() {
         </aside>
 
         {/* Conteúdo */}
-        <main className="flex-1 flex flex-col"> {/* <-- ALTERAÇÃO 1: Adicionado flex e flex-col */}
+        <main className="flex-1 w-full overflow-x-hidden"> {/* <-- MUDANÇA AQUI */}
           {/* Header */}
-          <header className="h-16 border-b flex items-center justify-between px-4 sm:px-6 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0"> {/* <-- ALTERAÇÃO 2: Adicionado shrink-0 */}
+          <header className="h-16 border-b flex items-center justify-between px-4 sm:px-6 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="flex items-center gap-3">
+              {/* Botão de toggle do sidebar (desktop somente) */}
               <Button
                 variant="outline"
                 size="sm"
@@ -142,6 +148,7 @@ export default function AdminLayout() {
                 )}
               </Button>
 
+              {/* Breadcrumb simples */}
               <div className="flex items-center gap-2">
                 <h1 className="text-base sm:text-lg font-semibold">
                   {location.pathname.startsWith("/admin") ? "Administrador" : "Painel"}
@@ -164,15 +171,13 @@ export default function AdminLayout() {
           </header>
 
           {/* Conteúdo das rotas filhas */}
-          <div className="flex-1 p-4 sm:p-6 pb-16 md:pb-6"> {/* <-- ALTERAÇÃO 3: Adicionado flex-1 */}
-            <div className="max-w-7xl w-full mx-auto"> {/* <-- ALTERAÇÃO 4: Wrapper para centralização */}
-              <Outlet />
-            </div>
+          <div className="p-4 sm:p-6 pb-16 md:pb-6 max-w-7xl mx-auto w-full">
+            <Outlet />
           </div>
         </main>
       </div>
 
-      {/* Sidebar mobile */}
+      {/* Sidebar mobile simples (mantido exatamente como no seu código original) */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 border-t bg-background/95 backdrop-blur z-20">
         <div className="grid grid-cols-4">
           {[
