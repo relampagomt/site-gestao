@@ -1,4 +1,3 @@
-// frontend/src/admin/Finance.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '@/services/api';
 
@@ -12,17 +11,22 @@ import { Textarea } from '@/components/ui/textarea.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog.jsx';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
-import {
-  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
-} from '@/components/ui/command.jsx';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command.jsx';
+
+import { TrendingUp, ArrowDownCircle, ArrowUpCircle, Layers, Plus, Search } from 'lucide-react';
 
 import {
-  TrendingUp, ArrowDownCircle, ArrowUpCircle, Layers, Plus, Search,
-} from 'lucide-react';
-
-import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell,
+  ResponsiveContainer,
+  CartesianGrid,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Legend,
 } from 'recharts';
 
 /* =============== Helpers =============== */
@@ -37,13 +41,38 @@ const COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#2563eb', '#7c3aed'
 const monthLabel = (ym) => {
   const [y, m] = ym.split('-').map(Number);
   const d = new Date(y, (m || 1) - 1, 1);
-  return d.toLocaleString('pt-BR', { month: 'short' })
+  return d
+    .toLocaleString('pt-BR', { month: 'short' })
     .replace('.', '')
     .replace(/^\w/, (c) => c.toUpperCase());
 };
 
-/* ======== IMPORTANTE: use o endpoint que não quebra o preflight ======== */
-const TX_PATH = '/transactions'; // use este; o /finance/transactions no seu back está retornando 404 no OPTIONS
+/* ======== Datas BR ↔ ISO ======== */
+const isDMY = (s) => /^\d{2}\/\d{2}\/\d{4}$/.test(String(s || ''));
+const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+
+const isoToBR = (iso) => {
+  if (!isYMD(iso)) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+};
+
+const brToISO = (br) => {
+  if (!isDMY(br)) return '';
+  const [d, m, y] = br.split('/');
+  return `${y}-${m}-${d}`;
+};
+
+const maskBR = (v) => {
+  const d = String(v || '').replace(/\D/g, '').slice(0, 8);
+  const p1 = d.slice(0, 2);
+  const p2 = d.slice(2, 4);
+  const p3 = d.slice(4, 8);
+  return [p1, p2, p3].filter(Boolean).join('/');
+};
+
+/* ======== IMPORTANTE: endpoint que você habilitou ======== */
+const TX_PATH = '/transactions';
 
 /* =============== Página =============== */
 const Finance = () => {
@@ -59,10 +88,14 @@ const Finance = () => {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Data BR (para cadastro/edição)
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayBR = isoToBR(todayISO);
+
   const emptyForm = {
     id: null,
     type: 'entrada', // entrada | saida | despesa
-    date: new Date().toISOString().slice(0, 10),
+    dateBr: todayBR, // <<— armazenamos BR no formulário
     amount: '',
     category: '',
     notes: '',
@@ -88,17 +121,20 @@ const Finance = () => {
       setLoading(false);
     }
   };
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => {
+    loadAll();
+  }, []);
 
   /* -------- Filtered -------- */
   const filtered = useMemo(() => {
     let list = Array.isArray(transactions) ? [...transactions] : [];
     if (selectedActions.length) list = list.filter((t) => selectedActions.includes(t.action_id));
     const k = q.trim().toLowerCase();
-    if (k) list = list.filter((t) =>
-      [t.category, t.type, t.notes, t.amount].filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(k)),
-    );
+    if (k)
+      list = list.filter((t) =>
+        [t.category, t.type, t.notes, t.amount].filter(Boolean).some((v) => String(v).toLowerCase().includes(k)),
+      );
+    // ordena por data desc (ISO)
     list.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
     return list;
   }, [transactions, selectedActions, q]);
@@ -108,14 +144,17 @@ const Finance = () => {
     const buckets = new Map(); // yyyy-mm => {month, entrada, saida}
     filtered.forEach((t) => {
       const ymd = String(t.date || '').slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return;
+      if (!isYMD(ymd)) return;
       const key = ymd.slice(0, 7);
       if (!buckets.has(key)) buckets.set(key, { month: monthLabel(key), entrada: 0, saida: 0 });
       const row = buckets.get(key);
       const amt = Number(t.amount || 0);
-      if (t.type === 'entrada') row.entrada += amt; else row.saida += amt;
+      if (t.type === 'entrada') row.entrada += amt;
+      else row.saida += amt;
     });
-    return Array.from(buckets.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v);
+    return Array.from(buckets.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([, v]) => v);
   }, [filtered]);
 
   const actionsStatusChart = useMemo(() => {
@@ -132,7 +171,7 @@ const Finance = () => {
       { name: 'Andamento', value: counts.andamento, color: '#2563eb' },
       { name: 'Concluída', value: counts.concluída, color: '#16a34a' },
       { name: 'Cancelada', value: counts.cancelada, color: '#dc2626' },
-    ].filter(d => d.value > 0); // <— não mostra categorias 0
+    ].filter((d) => d.value > 0); // não mostra categorias 0
   }, [actions]);
 
   /* -------- Create -------- */
@@ -141,20 +180,31 @@ const Finance = () => {
     setForm((f) => ({ ...f, [name]: value }));
   };
 
+  const onDateBRChange = (e) => {
+    const v = maskBR(e.target.value);
+    setForm((f) => ({ ...f, dateBr: v }));
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
+      const dateISO = brToISO(form.dateBr);
+      if (!isYMD(dateISO)) {
+        alert('Data inválida. Use o formato DD/MM/AAAA.');
+        setSaving(false);
+        return;
+      }
       const payload = {
         type: form.type,
-        date: form.date,
+        date: dateISO, // envia ISO para o backend
         amount: Number(form.amount || 0),
         category: form.category || '',
         notes: form.notes || '',
         action_id: form.action_id || null,
         actionId: form.action_id || null, // compat
       };
-      await api.post(TX_PATH, payload); // <— usa o endpoint sem preflight quebrado
+      await api.post(TX_PATH, payload);
       setOpen(false);
       setForm(emptyForm);
       loadAll();
@@ -166,7 +216,7 @@ const Finance = () => {
     }
   };
 
-  /* -------- Popover: selecionar ações (scroll mobile/touchpad OK) -------- */
+  /* -------- Popover: selecionar ações -------- */
   const [actionsOpen, setActionsOpen] = useState(false);
   const toggleAction = (id) =>
     setSelectedActions((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -175,9 +225,7 @@ const Finance = () => {
     <Popover open={actionsOpen} onOpenChange={setActionsOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-between">
-          {selectedActions.length === 0 ? 'Filtrar por ações' : (
-            <span className="truncate">{selectedActions.length} selecionada(s)</span>
-          )}
+          {selectedActions.length === 0 ? 'Filtrar por ações' : <span className="truncate">{selectedActions.length} selecionada(s)</span>}
           <Layers className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
@@ -192,12 +240,7 @@ const Finance = () => {
                   const checked = selectedActions.includes(a.id);
                   const label = a.client_name || a.company_name || `Ação ${a.id}`;
                   return (
-                    <CommandItem
-                      key={a.id}
-                      value={label}
-                      className="flex items-center gap-2"
-                      onSelect={() => toggleAction(a.id)}
-                    >
+                    <CommandItem key={a.id} value={label} className="flex items-center gap-2" onSelect={() => toggleAction(a.id)}>
                       <Checkbox checked={checked} onCheckedChange={() => toggleAction(a.id)} />
                       <span className="flex-1">{label}</span>
                       {checked && <span className="text-xs text-muted-foreground">selecionada</span>}
@@ -213,10 +256,8 @@ const Finance = () => {
   );
 
   /* -------- Totais -------- */
-  const totalEntrada = filtered.filter((t) => t.type === 'entrada')
-    .reduce((s, t) => s + Number(t.amount || 0), 0);
-  const totalSaida = filtered.filter((t) => t.type !== 'entrada')
-    .reduce((s, t) => s + Number(t.amount || 0), 0);
+  const totalEntrada = filtered.filter((t) => t.type === 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const totalSaida = filtered.filter((t) => t.type !== 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
   const saldo = totalEntrada - totalSaida;
 
   /* -------- Render -------- */
@@ -254,9 +295,7 @@ const Finance = () => {
             <TrendingUp className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className={`text-xl sm:text-2xl font-bold ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {BRL(saldo)}
-            </div>
+            <div className={`text-xl sm:text-2xl font-bold ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>{BRL(saldo)}</div>
             <p className="text-xs text-muted-foreground">Entradas - Saídas</p>
           </CardContent>
         </Card>
@@ -272,12 +311,7 @@ const Finance = () => {
           <div className="flex flex-col md:flex-row gap-2 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                placeholder="Buscar por categoria, valor, observação..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
+              <Input className="pl-9" placeholder="Buscar por categoria, valor, observação..." value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
             <div className="w-full md:w-[340px]">
               <ActionsSelector />
@@ -302,12 +336,7 @@ const Finance = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <Label>Tipo</Label>
-                        <select
-                          name="type"
-                          value={form.type}
-                          onChange={onChange}
-                          className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                        >
+                        <select name="type" value={form.type} onChange={onChange} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                           <option value="entrada">Entrada</option>
                           <option value="saida">Saída</option>
                           <option value="despesa">Despesa</option>
@@ -316,7 +345,14 @@ const Finance = () => {
 
                       <div>
                         <Label>Data</Label>
-                        <Input type="date" name="date" value={form.date} onChange={onChange} required />
+                        <Input
+                          name="dateBr"
+                          placeholder="DD/MM/AAAA"
+                          inputMode="numeric"
+                          value={form.dateBr}
+                          onChange={onDateBRChange}
+                          required
+                        />
                       </div>
 
                       <div>
@@ -381,16 +417,24 @@ const Finance = () => {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8">Carregando…</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8">
+                      Carregando…
+                    </TableCell>
+                  </TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum lançamento encontrado</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      Nenhum lançamento encontrado
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   filtered.map((t) => {
                     const ac = actions.find((a) => a.id === t.action_id);
                     const label = ac ? ac.client_name || ac.company_name || `Ação ${ac.id}` : '—';
                     return (
                       <TableRow key={t.id || `${t.date}-${t.amount}-${t.category}`}>
-                        <TableCell className="text-center">{String(t.date || '').slice(0, 10)}</TableCell>
+                        <TableCell className="text-center">{isoToBR(String(t.date || '').slice(0, 10)) || '—'}</TableCell>
                         <TableCell className="text-center">
                           <Badge variant={t.type === 'entrada' ? 'secondary' : 'outline'} className="capitalize">
                             {t.type}
@@ -399,7 +443,9 @@ const Finance = () => {
                         <TableCell className="text-center">{t.category || '—'}</TableCell>
                         <TableCell className="text-center">{label}</TableCell>
                         <TableCell className="text-center">{BRL(t.amount)}</TableCell>
-                        <TableCell className="text-center">{t.notes ? <span className="line-clamp-1 max-w-[260px] inline-block">{t.notes}</span> : '—'}</TableCell>
+                        <TableCell className="text-center">
+                          {t.notes ? <span className="line-clamp-1 max-w-[260px] inline-block">{t.notes}</span> : '—'}
+                        </TableCell>
                       </TableRow>
                     );
                   })
@@ -412,6 +458,7 @@ const Finance = () => {
 
       {/* Gráficos */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {/* Fluxo de Caixa: barras agrupadas (melhor visível mesmo com 1 mês) */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Fluxo de Caixa por Mês</CardTitle>
@@ -419,18 +466,20 @@ const Finance = () => {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={monthly}>
+              <BarChart data={monthly}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
                 <Tooltip formatter={(v, k) => [BRL(v), k === 'entrada' ? 'Entradas' : 'Saídas']} />
-                <Line type="monotone" dataKey="entrada" stroke="#16a34a" strokeWidth={2} />
-                <Line type="monotone" dataKey="saida" stroke="#dc2626" strokeWidth={2} />
-              </LineChart>
+                <Legend />
+                <Bar dataKey="entrada" name="Entradas" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="saida" name="Saídas" fill="#dc2626" radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
+        {/* Status das Ações */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Status das Ações</CardTitle>
@@ -441,7 +490,8 @@ const Finance = () => {
               <PieChart>
                 <Pie
                   data={actionsStatusChart}
-                  cx="50%" cy="50%"
+                  cx="50%"
+                  cy="50%"
                   dataKey="value"
                   outerRadius={90}
                   labelLine={false}
