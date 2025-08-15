@@ -71,6 +71,7 @@ def _json_save(items: List[Dict[str, Any]]):
 _VALID_TYPES = {"entrada", "saida", "despesa"}
 
 def _iso_date_only(val) -> str:
+    """Normaliza para YYYY-MM-DD (string); retorna '' se inválida."""
     s = str(val or "")[:10]
     try:
         d = datetime.strptime(s, "%Y-%m-%d")
@@ -105,14 +106,15 @@ def _safe_get_collection(name: str):
 
 # ================================= ROTAS =====================================
 
-# LISTAR
+# LISTAR (com filtros ?type=entrada|saida|despesa, ?action_id=..., ?month=YYYY-MM)
 @finance_bp.route("/finance/transactions", methods=["GET"])
 @finance_bp.route("/transactions", methods=["GET"])  # alias
 @jwt_required(optional=True)
 def list_transactions():
     try:
-        ttype = request.args.get("type")
-        action_id = request.args.get("action_id")
+        ttype = (request.args.get("type") or "").strip().lower()
+        action_id = (request.args.get("action_id") or "").strip()
+        month = (request.args.get("month") or "").strip()  # YYYY-MM
 
         col = _safe_get_collection("transactions")
         if col:
@@ -121,6 +123,9 @@ def list_transactions():
                 query["type"] = ttype
             if action_id:
                 query["action_id"] = action_id
+            if len(month) == 7:
+                # string date em ISO, filtra prefixo YYYY-MM
+                query["date"] = {"$regex": f"^{month}"}
 
             items: List[Dict[str, Any]] = []
             try:
@@ -135,11 +140,15 @@ def list_transactions():
             except Exception as e:
                 log.warning("[finance][GET] driver falhou (%s), usando JSON fallback", e)
 
+        # JSON fallback
         items = _json_load()
         if ttype in _VALID_TYPES:
-            items = [x for x in items if x.get("type") == ttype]
+            items = [x for x in items if (x.get("type") or "") == ttype]
         if action_id:
-            items = [x for x in items if str(x.get("action_id") or "") == str(action_id)]
+            items = [x for x in items if str(x.get("action_id") or "") == action_id]
+        if len(month) == 7:
+            items = [x for x in items if str(x.get("date") or "").startswith(month)]
+
         items.sort(key=lambda x: (x.get("date") or "", x.get("id") or ""), reverse=True)
         return jsonify(items), 200
     except Exception as e:
@@ -166,7 +175,7 @@ def create_transaction():
             "amount": abs(_to_number(data.get("amount", 0))),
             "category": (data.get("category") or "").strip(),
             "notes": (data.get("notes") or "").strip(),
-            "action_id": data.get("action_id") or None,
+            "action_id": (data.get("action_id") or "").strip() or None,
             "created_by": get_jwt_identity(),
             "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
@@ -228,7 +237,7 @@ def update_transaction(txid):
             upd["amount"] = abs(_to_number(data["amount"]))
         for k in ("category", "notes", "action_id"):
             if k in data:
-                upd[k] = data[k]
+                upd[k] = (data[k] or "").strip() if isinstance(data[k], str) else data[k]
 
         if not upd:
             return jsonify({"message": "Nada para atualizar"}), 400
@@ -236,7 +245,7 @@ def update_transaction(txid):
         col = _safe_get_collection("transactions")
         if col:
             try:
-                from bson import ObjectId  # opcional
+                from bson import ObjectId  # opcional; se não existir, cai no except
                 _id = ObjectId(txid)
                 col.update_one({"_id": _id}, {"$set": upd})
                 saved = col.find_one({"_id": _id})

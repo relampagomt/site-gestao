@@ -13,7 +13,16 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command.jsx';
 
-import { TrendingUp, ArrowDownCircle, ArrowUpCircle, Layers, Plus, Search } from 'lucide-react';
+import {
+  TrendingUp,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Layers,
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+} from 'lucide-react';
 
 import {
   ResponsiveContainer,
@@ -46,6 +55,15 @@ const monthLabel = (ym) => {
     .replace('.', '')
     .replace(/^\w/, (c) => c.toUpperCase());
 };
+const monthLabelFull = (ym) => {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, (m || 1) - 1, 1);
+  const mon = d
+    .toLocaleString('pt-BR', { month: 'short' })
+    .replace('.', '')
+    .replace(/^\w/, (c) => c.toUpperCase());
+  return `${mon}/${y}`;
+};
 
 /* ======== Datas BR ↔ ISO ======== */
 const isDMY = (s) => /^\d{2}\/\d{2}\/\d{4}$/.test(String(s || ''));
@@ -71,7 +89,7 @@ const maskBR = (v) => {
   return [p1, p2, p3].filter(Boolean).join('/');
 };
 
-/* ======== IMPORTANTE: endpoint que você habilitou ======== */
+/* ======== Endpoint ======== */
 const TX_PATH = '/transactions';
 
 /* =============== Página =============== */
@@ -83,23 +101,23 @@ const Finance = () => {
   // filtros
   const [q, setQ] = useState('');
   const [selectedActions, setSelectedActions] = useState([]); // ids
+  const [monthFilter, setMonthFilter] = useState(''); // '' = todos, senão 'YYYY-MM'
 
-  // modal
+  // modal criar/editar
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(null); // objeto da transação sendo editada ou null
 
-  // Data BR (para cadastro/edição)
   const todayISO = new Date().toISOString().slice(0, 10);
   const todayBR = isoToBR(todayISO);
 
   const emptyForm = {
-    id: null,
     type: 'entrada', // entrada | saida | despesa
-    dateBr: todayBR, // <<— armazenamos BR no formulário
+    dateBr: todayBR,
     amount: '',
     category: '',
     notes: '',
-    action_id: null,
+    action_id: '',
   };
   const [form, setForm] = useState(emptyForm);
 
@@ -111,7 +129,6 @@ const Finance = () => {
         api.get('/actions').catch(() => ({ data: [] })),
         api.get(TX_PATH).catch(() => ({ data: [] })),
       ]);
-
       const arr = (d) => (Array.isArray(d) ? d : d?.items || d?.data || d?.results || []);
       setActions(arr(aRes.data));
       setTransactions(arr(tRes.data));
@@ -125,19 +142,39 @@ const Finance = () => {
     loadAll();
   }, []);
 
+  /* -------- Month options (puxa dos lançamentos) -------- */
+  const monthOptions = useMemo(() => {
+    const set = new Set();
+    transactions.forEach((t) => {
+      const ymd = String(t.date || '').slice(0, 10);
+      if (isYMD(ymd)) set.add(ymd.slice(0, 7));
+    });
+    const arr = Array.from(set.values()).sort((a, b) => b.localeCompare(a)); // desc
+    return arr.map((k) => ({ key: k, label: monthLabelFull(k) }));
+  }, [transactions]);
+
   /* -------- Filtered -------- */
   const filtered = useMemo(() => {
     let list = Array.isArray(transactions) ? [...transactions] : [];
+
+    if (monthFilter) {
+      list = list.filter((t) => {
+        const ymd = String(t.date || '').slice(0, 10);
+        return isYMD(ymd) && ymd.startsWith(monthFilter);
+      });
+    }
+
     if (selectedActions.length) list = list.filter((t) => selectedActions.includes(t.action_id));
+
     const k = q.trim().toLowerCase();
     if (k)
       list = list.filter((t) =>
         [t.category, t.type, t.notes, t.amount].filter(Boolean).some((v) => String(v).toLowerCase().includes(k)),
       );
-    // ordena por data desc (ISO)
+
     list.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
     return list;
-  }, [transactions, selectedActions, q]);
+  }, [transactions, selectedActions, q, monthFilter]);
 
   /* -------- Charts data -------- */
   const monthly = useMemo(() => {
@@ -171,10 +208,10 @@ const Finance = () => {
       { name: 'Andamento', value: counts.andamento, color: '#2563eb' },
       { name: 'Concluída', value: counts.concluída, color: '#16a34a' },
       { name: 'Cancelada', value: counts.cancelada, color: '#dc2626' },
-    ].filter((d) => d.value > 0); // não mostra categorias 0
+    ].filter((d) => d.value > 0);
   }, [actions]);
 
-  /* -------- Create -------- */
+  /* -------- Form handlers -------- */
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
@@ -183,6 +220,25 @@ const Finance = () => {
   const onDateBRChange = (e) => {
     const v = maskBR(e.target.value);
     setForm((f) => ({ ...f, dateBr: v }));
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm(emptyForm);
+    setOpen(true);
+  };
+
+  const openEdit = (tx) => {
+    setEditing(tx);
+    setForm({
+      type: tx.type || 'entrada',
+      dateBr: isoToBR(String(tx.date || '').slice(0, 10)) || '',
+      amount: String(tx.amount ?? ''),
+      category: tx.category || '',
+      notes: tx.notes || '',
+      action_id: tx.action_id || '',
+    });
+    setOpen(true);
   };
 
   const submit = async (e) => {
@@ -197,15 +253,22 @@ const Finance = () => {
       }
       const payload = {
         type: form.type,
-        date: dateISO, // envia ISO para o backend
+        date: dateISO,
         amount: Number(form.amount || 0),
         category: form.category || '',
         notes: form.notes || '',
         action_id: form.action_id || null,
         actionId: form.action_id || null, // compat
       };
-      await api.post(TX_PATH, payload);
+
+      if (editing?.id) {
+        await api.put(`${TX_PATH}/${editing.id}`, payload);
+      } else {
+        await api.post(TX_PATH, payload);
+      }
+
       setOpen(false);
+      setEditing(null);
       setForm(emptyForm);
       loadAll();
     } catch (err) {
@@ -213,6 +276,17 @@ const Finance = () => {
       alert('Não foi possível salvar. Verifique o backend de transações.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Tem certeza que deseja excluir este lançamento?')) return;
+    try {
+      await api.delete(`${TX_PATH}/${id}`);
+      loadAll();
+    } catch (err) {
+      console.error('Erro ao excluir transação:', err);
+      alert('Não foi possível excluir. Verifique o backend.');
     }
   };
 
@@ -311,32 +385,61 @@ const Finance = () => {
           <div className="flex flex-col md:flex-row gap-2 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Buscar por categoria, valor, observação..." value={q} onChange={(e) => setQ(e.target.value)} />
+              <Input
+                className="pl-9"
+                placeholder="Buscar por categoria, valor, observação..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
             </div>
+
+            {/* Filtro por mês */}
+            <div className="w-full md:w-[220px]">
+              <select
+                className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+              >
+                <option value="">Todos os meses</option>
+                {monthOptions.map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filtro por ações */}
             <div className="w-full md:w-[340px]">
               <ActionsSelector />
             </div>
 
-            <Dialog open={open} onOpenChange={setOpen}>
+            {/* Criar */}
+            <Dialog open={open} onOpenChange={(v) => { if (!v) { setEditing(null); setForm(emptyForm); } setOpen(v); }}>
               <DialogTrigger asChild>
-                <Button className="admin-btn-primary gap-2 min-h-[36px]">
+                <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
                   <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
-                  <span className="whitespace-nowrap">Novo Lançamento</span>
+                  <span className="whitespace-nowrap">{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</span>
                 </Button>
               </DialogTrigger>
 
               <DialogContent className="max-w-lg p-0">
                 <div className="max-h-[80vh] overflow-y-auto p-6">
                   <DialogHeader className="pb-2">
-                    <DialogTitle>Novo Lançamento</DialogTitle>
-                    <DialogDescription>Registre uma entrada, saída ou despesa.</DialogDescription>
+                    <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+                    <DialogDescription>Registre ou atualize uma entrada, saída ou despesa.</DialogDescription>
                   </DialogHeader>
 
                   <form onSubmit={submit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <Label>Tipo</Label>
-                        <select name="type" value={form.type} onChange={onChange} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                        <select
+                          name="type"
+                          value={form.type}
+                          onChange={onChange}
+                          className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                        >
                           <option value="entrada">Entrada</option>
                           <option value="saida">Saída</option>
                           <option value="despesa">Despesa</option>
@@ -389,7 +492,7 @@ const Finance = () => {
                     </div>
 
                     <div className="flex justify-end gap-2 pt-2">
-                      <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                      <Button type="button" variant="outline" onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm); }}>
                         Cancelar
                       </Button>
                       <Button type="submit" disabled={saving}>
@@ -413,18 +516,19 @@ const Finance = () => {
                   <TableHead className="text-center">Ação</TableHead>
                   <TableHead className="text-center">Valor</TableHead>
                   <TableHead className="text-center">Obs.</TableHead>
+                  <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       Carregando…
                     </TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Nenhum lançamento encontrado
                     </TableCell>
                   </TableRow>
@@ -446,6 +550,18 @@ const Finance = () => {
                         <TableCell className="text-center">
                           {t.notes ? <span className="line-clamp-1 max-w-[260px] inline-block">{t.notes}</span> : '—'}
                         </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex justify-center gap-2">
+                            <Button size="sm" variant="secondary" className="min-h-[32px] gap-1" onClick={() => openEdit(t)}>
+                              <Edit className="h-4 w-4" />
+                              Editar
+                            </Button>
+                            <Button size="sm" variant="destructive" className="min-h-[32px] gap-1" onClick={() => handleDelete(t.id)}>
+                              <Trash2 className="h-4 w-4" />
+                              Excluir
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     );
                   })
@@ -458,7 +574,7 @@ const Finance = () => {
 
       {/* Gráficos */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {/* Fluxo de Caixa: barras agrupadas (melhor visível mesmo com 1 mês) */}
+        {/* Fluxo de Caixa: barras agrupadas */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Fluxo de Caixa por Mês</CardTitle>
