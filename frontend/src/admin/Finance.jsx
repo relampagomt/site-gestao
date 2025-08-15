@@ -336,10 +336,8 @@ const Finance = () => {
 
   /* -------- Render -------- */
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl md:text-2xl font-semibold">Finanças</h1>
-      </div>
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold tracking-tight mb-4">Finanças</h2>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -380,12 +378,11 @@ const Finance = () => {
       {/* Filtros + Novo lançamento */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Registros</CardTitle>
-          <CardDescription>Lista de lançamentos financeiros</CardDescription>
+          <CardTitle className="text-base">Lançamentos</CardTitle>
+          <CardDescription>Controle de entradas, saídas e despesas</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Controles padronizados */}
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex flex-col md:flex-row gap-2 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
@@ -397,28 +394,32 @@ const Finance = () => {
             </div>
 
             {/* Filtro por mês */}
-            <select
-              className="border rounded-md px-3 py-2 text-sm bg-background w-[160px]"
-              value={monthFilter}
-              onChange={(e) => setMonthFilter(e.target.value)}
-            >
-              <option value="">Todos os meses</option>
-              {monthOptions.map((m) => (
-                <option key={m.key} value={m.key}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+            <div className="w-full md:w-[220px]">
+              <select
+                className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+              >
+                <option value="">Todos os meses</option>
+                {monthOptions.map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             {/* Filtro por ações */}
-            <ActionsSelector />
+            <div className="w-full md:w-[340px]">
+              <ActionsSelector />
+            </div>
 
-            {/* Botão Novo Lançamento */}
+            {/* Criar */}
             <Dialog open={open} onOpenChange={(v) => { if (!v) { setEditing(null); setForm(emptyForm); } setOpen(v); }}>
               <DialogTrigger asChild>
-                <Button className="gap-2" onClick={openCreate}>
-                  <Plus className="h-4 w-4" />
-                  <span className="whitespace-nowrap">Novo Lançamento</span>
+                <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
+                  <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+                  <span className="whitespace-nowrap">{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</span>
                 </Button>
               </DialogTrigger>
 
