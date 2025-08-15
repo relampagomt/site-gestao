@@ -9,43 +9,20 @@ import { Label } from '@/components/ui/label.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Checkbox } from '@/components/ui/checkbox.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
-
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog.jsx';
-
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from '@/components/ui/command.jsx';
 
 import {
-  TrendingUp,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  Layers,
-  Plus,
-  X,
-  Search,
+  TrendingUp, ArrowDownCircle, ArrowUpCircle, Layers, Plus, Search,
 } from 'lucide-react';
 
 import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  PieChart, Pie, Cell,
 } from 'recharts';
 
 /* =============== Helpers =============== */
@@ -58,45 +35,15 @@ const BRL = (n) =>
 const COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#2563eb', '#7c3aed'];
 
 const monthLabel = (ym) => {
-  // ym = '2025-08'
   const [y, m] = ym.split('-').map(Number);
   const d = new Date(y, (m || 1) - 1, 1);
-  return d
-    .toLocaleString('pt-BR', { month: 'short' })
+  return d.toLocaleString('pt-BR', { month: 'short' })
     .replace('.', '')
     .replace(/^\w/, (c) => c.toUpperCase());
 };
 
-const ensureArrayTypes = (item) => {
-  if (Array.isArray(item?.types)) return item.types;
-  const s = item?.type || item?.service_type || '';
-  if (typeof s === 'string' && s.trim()) {
-    return s.split(',').map((x) => x.trim()).filter(Boolean);
-  }
-  return [];
-};
-
-// ---- Fallback de rotas (/finance/transactions -> /transactions) ----
-async function getWithFallback(path, altPath) {
-  try {
-    return await api.get(path);
-  } catch (err) {
-    if (err?.response?.status === 404 && altPath) {
-      return await api.get(altPath);
-    }
-    throw err;
-  }
-}
-async function postWithFallback(path, payload, altPath) {
-  try {
-    return await api.post(path, payload);
-  } catch (err) {
-    if (err?.response?.status === 404 && altPath) {
-      return await api.post(altPath, payload);
-    }
-    throw err;
-  }
-}
+/* ======== IMPORTANTE: use o endpoint que não quebra o preflight ======== */
+const TX_PATH = '/transactions'; // use este; o /finance/transactions no seu back está retornando 404 no OPTIONS
 
 /* =============== Página =============== */
 const Finance = () => {
@@ -108,9 +55,10 @@ const Finance = () => {
   const [q, setQ] = useState('');
   const [selectedActions, setSelectedActions] = useState([]); // ids
 
-  // criação/edição simples (ex.: registrar receita/despesa)
+  // modal
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+
   const emptyForm = {
     id: null,
     type: 'entrada', // entrada | saida | despesa
@@ -127,9 +75,8 @@ const Finance = () => {
     setLoading(true);
     try {
       const [aRes, tRes] = await Promise.all([
-        api.get('/actions').catch(() => ({ data: [] })), // ações já funcionam
-        // tenta /finance/transactions; se 404, cai para /transactions
-        getWithFallback('/finance/transactions', '/transactions').catch(() => ({ data: [] })),
+        api.get('/actions').catch(() => ({ data: [] })),
+        api.get(TX_PATH).catch(() => ({ data: [] })),
       ]);
 
       const arr = (d) => (Array.isArray(d) ? d : d?.items || d?.data || d?.results || []);
@@ -137,39 +84,28 @@ const Finance = () => {
       setTransactions(arr(tRes.data));
     } catch (err) {
       console.error('Erro ao carregar finanças:', err);
-      setActions((prev) => prev || []);
-      setTransactions((prev) => prev || []);
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadAll();
-  }, []);
+  useEffect(() => { loadAll(); }, []);
 
   /* -------- Filtered -------- */
   const filtered = useMemo(() => {
     let list = Array.isArray(transactions) ? [...transactions] : [];
-    if (selectedActions.length) {
-      list = list.filter((t) => selectedActions.includes(t.action_id));
-    }
+    if (selectedActions.length) list = list.filter((t) => selectedActions.includes(t.action_id));
     const k = q.trim().toLowerCase();
-    if (k) {
-      list = list.filter((t) =>
-        [t.category, t.type, t.notes, t.amount]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(k))
-      );
-    }
+    if (k) list = list.filter((t) =>
+      [t.category, t.type, t.notes, t.amount].filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(k)),
+    );
     list.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
     return list;
   }, [transactions, selectedActions, q]);
 
   /* -------- Charts data -------- */
-  // Fluxo de caixa por mês
   const monthly = useMemo(() => {
-    const buckets = new Map(); // key yyyy-mm => {label, entrada, saida}
+    const buckets = new Map(); // yyyy-mm => {month, entrada, saida}
     filtered.forEach((t) => {
       const ymd = String(t.date || '').slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return;
@@ -177,15 +113,11 @@ const Finance = () => {
       if (!buckets.has(key)) buckets.set(key, { month: monthLabel(key), entrada: 0, saida: 0 });
       const row = buckets.get(key);
       const amt = Number(t.amount || 0);
-      if (t.type === 'entrada') row.entrada += amt;
-      else row.saida += amt;
+      if (t.type === 'entrada') row.entrada += amt; else row.saida += amt;
     });
-    return Array.from(buckets.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([, v]) => v);
+    return Array.from(buckets.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v);
   }, [filtered]);
 
-  // Status das ações (filtrando zeros)
   const actionsStatusChart = useMemo(() => {
     const counts = { aguardando: 0, andamento: 0, concluída: 0, cancelada: 0 };
     actions.forEach((a) => {
@@ -195,17 +127,15 @@ const Finance = () => {
       else if (s.includes('andam') || a.active) counts.andamento += 1;
       else counts.aguardando += 1;
     });
-    const data = [
+    return [
       { name: 'Aguardando', value: counts.aguardando, color: '#f59e0b' },
       { name: 'Andamento', value: counts.andamento, color: '#2563eb' },
       { name: 'Concluída', value: counts.concluída, color: '#16a34a' },
       { name: 'Cancelada', value: counts.cancelada, color: '#dc2626' },
-    ];
-    // não renderiza categorias com 0
-    return data.filter((d) => d.value > 0);
+    ].filter(d => d.value > 0); // <— não mostra categorias 0
   }, [actions]);
 
-  /* -------- Create (simples) -------- */
+  /* -------- Create -------- */
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
@@ -222,22 +152,21 @@ const Finance = () => {
         category: form.category || '',
         notes: form.notes || '',
         action_id: form.action_id || null,
-        // chaves alternativas, caso o backend espere outros nomes
-        actionId: form.action_id || null,
+        actionId: form.action_id || null, // compat
       };
-      await postWithFallback('/finance/transactions', payload, '/transactions');
+      await api.post(TX_PATH, payload); // <— usa o endpoint sem preflight quebrado
       setOpen(false);
       setForm(emptyForm);
       loadAll();
     } catch (err) {
       console.error('Erro ao salvar transação:', err);
-      alert('Erro ao salvar transação.');
+      alert('Não foi possível salvar. Verifique o backend de transações.');
     } finally {
       setSaving(false);
     }
   };
 
-  /* -------- Popover: selecionar ações (com SCROLL corrigido) -------- */
+  /* -------- Popover: selecionar ações (scroll mobile/touchpad OK) -------- */
   const [actionsOpen, setActionsOpen] = useState(false);
   const toggleAction = (id) =>
     setSelectedActions((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -246,16 +175,12 @@ const Finance = () => {
     <Popover open={actionsOpen} onOpenChange={setActionsOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-between">
-          {selectedActions.length === 0 ? (
-            'Filtrar por ações'
-          ) : (
+          {selectedActions.length === 0 ? 'Filtrar por ações' : (
             <span className="truncate">{selectedActions.length} selecionada(s)</span>
           )}
           <Layers className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
-
-      {/* largura responsiva + altura máxima, SCROLL funcional em touchpad/mobile */}
       <PopoverContent align="start" className="p-0 w-[min(92vw,560px)] max-h-[70vh] overflow-hidden">
         <div className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
           <Command>
@@ -287,15 +212,14 @@ const Finance = () => {
     </Popover>
   );
 
-  /* -------- RENDER -------- */
-  const totalEntrada = filtered
-    .filter((t) => t.type === 'entrada')
+  /* -------- Totais -------- */
+  const totalEntrada = filtered.filter((t) => t.type === 'entrada')
     .reduce((s, t) => s + Number(t.amount || 0), 0);
-  const totalSaida = filtered
-    .filter((t) => t.type !== 'entrada')
+  const totalSaida = filtered.filter((t) => t.type !== 'entrada')
     .reduce((s, t) => s + Number(t.amount || 0), 0);
   const saldo = totalEntrada - totalSaida;
 
+  /* -------- Render -------- */
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold tracking-tight mb-4">Finanças</h2>
@@ -312,6 +236,7 @@ const Finance = () => {
             <p className="text-xs text-muted-foreground">Receitas registradas</p>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Saídas/Despesas</CardTitle>
@@ -322,6 +247,7 @@ const Finance = () => {
             <p className="text-xs text-muted-foreground">Pagamentos e custos</p>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Saldo</CardTitle>
@@ -455,17 +381,9 @@ const Finance = () => {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
-                      Carregando…
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8">Carregando…</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      Nenhum lançamento encontrado
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum lançamento encontrado</TableCell></TableRow>
                 ) : (
                   filtered.map((t) => {
                     const ac = actions.find((a) => a.id === t.action_id);
@@ -481,9 +399,7 @@ const Finance = () => {
                         <TableCell className="text-center">{t.category || '—'}</TableCell>
                         <TableCell className="text-center">{label}</TableCell>
                         <TableCell className="text-center">{BRL(t.amount)}</TableCell>
-                        <TableCell className="text-center">
-                          {t.notes ? <span className="line-clamp-1 max-w-[260px] inline-block">{t.notes}</span> : '—'}
-                        </TableCell>
+                        <TableCell className="text-center">{t.notes ? <span className="line-clamp-1 max-w-[260px] inline-block">{t.notes}</span> : '—'}</TableCell>
                       </TableRow>
                     );
                   })
@@ -494,9 +410,8 @@ const Finance = () => {
         </CardContent>
       </Card>
 
-      {/* Gráficos (separados do Dashboard) */}
+      {/* Gráficos */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {/* Fluxo de Caixa */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Fluxo de Caixa por Mês</CardTitle>
@@ -516,7 +431,6 @@ const Finance = () => {
           </CardContent>
         </Card>
 
-        {/* Status das Ações (sem categorias 0 e sem sobreposição) */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Status das Ações</CardTitle>
@@ -527,8 +441,7 @@ const Finance = () => {
               <PieChart>
                 <Pie
                   data={actionsStatusChart}
-                  cx="50%"
-                  cy="50%"
+                  cx="50%" cy="50%"
                   dataKey="value"
                   outerRadius={90}
                   labelLine={false}
