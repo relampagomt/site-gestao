@@ -30,7 +30,7 @@ function SideItem({ to, icon: Icon, label, end = false, collapsed = false, onCli
       onClick={onClick}
       className={({ isActive }) =>
         cn(
-          "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
+          "flex items-center gap-3 px-4 py-2 rounded-lg transition-colors",
           "text-sm font-medium",
           isActive
             ? "bg-red-100 text-red-700"
@@ -46,16 +46,17 @@ function SideItem({ to, icon: Icon, label, end = false, collapsed = false, onCli
 
 /**
  * Layout principal do painel Admin
- * - Sidebar retrátil (desktop) + Drawer (mobile)
- * - Header fixo
- * - Conteúdo CENTRALIZADO aqui (único ponto), sem mexer nas páginas
+ * - Sidebar com itens (agora retrátil no desktop)
+ * - Drawer no mobile
+ * - Header fixo com botões de toggle
+ * - <Outlet/> com o MESMO wrapper (p-4 sm:p-6)
  */
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, user } = useAuth(); // precisa estar dentro de <AuthProvider>
 
-  // Estado do menu retrátil (desktop) + persistência
+  // === NOVO: retrátil (desktop) + persistência e drawer (mobile)
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -66,8 +67,9 @@ export default function AdminLayout() {
   useEffect(() => {
     localStorage.setItem("admin.sidebarCollapsed", collapsed ? "1" : "0");
   }, [collapsed]);
+  // === FIM NOVO
 
-  // Mapa de navegação (rotas mantidas)
+  // Mapa de navegação — Configurações REMOVIDO, Usuários RESTAURADO
   const menu = useMemo(
     () => [
       { to: "/admin", label: "Dashboard", icon: Home, end: true },
@@ -76,7 +78,8 @@ export default function AdminLayout() {
       { to: "/admin/actions", label: "Ações", icon: ClipboardList },
       { to: "/admin/finance", label: "Finanças", icon: Wallet },
       { to: "/admin/vacancies", label: "Vagas", icon: Briefcase },
-      { to: "/admin/users", label: "Usuários", icon: Users },
+      { to: "/admin/users", label: "Usuários", icon: Users }, // ✅ restaurado
+      // { to: "/admin/settings", label: "Configurações", icon: Settings }, // ❌ removido
     ],
     []
   );
@@ -94,17 +97,17 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="flex">
-        {/* Sidebar (desktop) retrátil */}
+        {/* Sidebar DESKTOP (retrátil) */}
         <aside
           className={cn(
-            "border-r bg-card/50 hidden md:block transition-[width] duration-200",
+            "hidden md:block border-r bg-card/50 transition-[width] duration-200",
             collapsed ? "w-20" : "w-64"
           )}
         >
           <div
             className={cn(
-              "h-16 px-6 flex items-center font-bold text-red-600",
-              collapsed ? "justify-center text-lg" : "text-xl"
+              "h-16 px-6 flex items-center text-xl font-bold text-red-600",
+              collapsed && "justify-center text-lg px-0"
             )}
           >
             {collapsed ? "R" : "Relâmpago"}
@@ -135,7 +138,7 @@ export default function AdminLayout() {
           </div>
         </aside>
 
-        {/* Drawer (mobile) */}
+        {/* Drawer MOBILE */}
         <div className="md:hidden">
           {mobileOpen && (
             <>
@@ -177,8 +180,8 @@ export default function AdminLayout() {
         <main className="flex-1">
           {/* Header */}
           <header className="h-16 border-b flex items-center justify-between px-4 sm:px-6 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="flex items-center gap-3">
-              {/* Toggle mobile menu */}
+            <div className="flex items-center gap-2">
+              {/* Botão menu (MOBILE) */}
               <Button
                 variant="outline"
                 size="sm"
@@ -189,7 +192,7 @@ export default function AdminLayout() {
                 <MenuIcon className="w-4 h-4" />
               </Button>
 
-              {/* Toggle retrátil (desktop) */}
+              {/* Botão retrátil (DESKTOP) */}
               <Button
                 variant="outline"
                 size="sm"
@@ -205,39 +208,34 @@ export default function AdminLayout() {
               </Button>
 
               {/* Breadcrumb simples */}
-              <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-semibold">
-                  {location.pathname.startsWith("/admin") ? "Administrador" : "Painel"}
-                </h1>
-                <span className="hidden sm:inline text-muted-foreground">·</span>
-                <span className="hidden sm:inline text-muted-foreground capitalize">
-                  {menu.find((m) => location.pathname.startsWith(m.to))?.label || "Dashboard"}
-                </span>
-              </div>
+              <h1 className="text-base sm:text-lg font-semibold">
+                {location.pathname.startsWith("/admin") ? "Administrador" : "Painel"}
+              </h1>
+              <span className="hidden sm:inline text-muted-foreground">·</span>
+              <span className="hidden sm:inline text-muted-foreground capitalize">
+                {menu.find((m) => location.pathname.startsWith(m.to))?.label || "Dashboard"}
+              </span>
             </div>
 
             <div className="flex items-center gap-3">
               <div className="text-xs sm:text-sm bg-muted px-3 py-1 rounded-full">
                 {user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : "Admin"}
               </div>
-              <Button variant="ghost" size="sm" className="hidden md:inline-flex" onClick={onLogout}>
+              <Button variant="ghost" size="sm" className="md:hidden" onClick={onLogout}>
                 <LogOut className="w-5 h-5" />
               </Button>
             </div>
           </header>
 
-          {/* ===== CONTEÚDO CENTRALIZADO AQUI ===== */}
-          <div className="p-4 sm:p-6 pb-20 md:pb-8">
-            <div className="mx-auto w-full max-w-[720px] sm:max-w-[860px] px-3 sm:px-4">
-              <Outlet />
-            </div>
+          {/* Conteúdo das rotas filhas — MANTIDO IGUAL */}
+          <div className="p-4 sm:p-6">
+            <Outlet />
           </div>
-          {/* ===== FIM CONTEÚDO CENTRALIZADO ===== */}
         </main>
       </div>
 
-      {/* Bottom nav (mobile) */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 border-t bg-background/95 backdrop-blur z-20">
+      {/* Sidebar mobile simples (footer nav) */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 border-t bg-background/95 backdrop-blur">
         <div className="grid grid-cols-4">
           {[
             { to: "/admin", icon: Home, label: "Início", end: true },
