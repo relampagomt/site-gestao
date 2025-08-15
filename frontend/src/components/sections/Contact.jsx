@@ -14,25 +14,25 @@ function Contact() {
     {
       icon: <Phone className="w-6 h-6" />,
       title: "Telefone",
-      content: "(65) 3000-0000",
-      action: "tel:+556530000000"
+      content: "(65) 3653-1130",
+      action: "tel:+556536531130"
     },
     {
       icon: <MessageCircle className="w-6 h-6" />,
       title: "WhatsApp",
-      content: "(65) 99999-9999",
-      action: "https://wa.me/5565999999999"
+      content: "(65) 99913-1130",
+      action: "https://wa.me/556536531130"
     },
     {
       icon: <Mail className="w-6 h-6" />,
       title: "E-mail",
-      content: "contato@relampago.com.br",
-      action: "mailto:contato@relampago.com.br"
+      content: "sac@relampagomt.com.br",
+      action: "mailto:sac@relampagomt.com.br"
     },
     {
       icon: <MapPin className="w-6 h-6" />,
       title: "Endereço",
-      content: "Cuiabá - Mato Grosso",
+      content: "Rua Manaíra, 589, St. Antônio do Pedregal, 78060-450, Cuiabá - Mato Grosso",
       action: null
     }
   ]
@@ -91,11 +91,11 @@ function Contact() {
               <CardContent className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Segunda a Sexta:</span>
-                  <span className="font-medium text-gray-900">08:00 - 18:00</span>
+                  <span className="font-medium text-gray-900">07:30 - 17:30</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Sábado:</span>
-                  <span className="font-medium text-gray-900">08:00 - 12:00</span>
+                  <span className="font-medium text-gray-900">07:30 - 12:30</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Domingo:</span>
@@ -126,6 +126,7 @@ function Contact() {
                     variant="yellow"
                     className="w-full text-lg py-4"
                     aria-label="Falar no WhatsApp"
+                    onClick={() => window.open("http://wa.me/556536531130", "_blank")}
                   >
                     <MessageCircle className="w-5 h-5 mr-2" />
                     Falar no WhatsApp
@@ -136,6 +137,7 @@ function Contact() {
                     variant="outline" 
                     className="w-full text-lg py-4"
                     aria-label="Ligar para a empresa"
+                    onClick={() => window.open("tel:+556536531130")}
                   >
                     <Phone className="w-5 h-5 mr-2" />
                     Ligar Agora

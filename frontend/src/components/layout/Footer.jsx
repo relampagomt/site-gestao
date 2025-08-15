@@ -31,6 +31,7 @@ function Footer() {
                 size="sm" 
                 variant="yellow"
                 aria-label="Falar no WhatsApp"
+                onClick={() => window.open("http://wa.me/556536531130", "_blank")}
               >
                 <MessageCircle className="w-4 h-4 mr-2" />
                 WhatsApp
@@ -39,6 +40,7 @@ function Footer() {
                 size="sm"
                 variant="outline"
                 aria-label="Ligar para a empresa"
+                onClick={() => window.open("tel:+556536531130")}
               >
                 <Phone className="w-4 h-4 mr-2" />
                 Ligar
@@ -116,35 +118,35 @@ function Footer() {
             <div className="space-y-3 text-gray-300">
               <div className="flex items-center space-x-3">
                 <MapPin className="w-5 h-5 text-[var(--laranja-destaque)] flex-shrink-0" />
-                <span>Cuiabá - Mato Grosso</span>
+                <span>Rua Manaíra, 589, St. Antônio do Pedregal, 78060-450, Cuiabá - Mato Grosso</span>
               </div>
               <div className="flex items-center space-x-3">
                 <Phone className="w-5 h-5 text-[var(--laranja-destaque)] flex-shrink-0" />
                 <a 
-                  href="tel:+556530000000" 
+                  href="tel:+556536531130" 
                   className="hover:text-[var(--laranja-destaque)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--laranja-destaque)] focus-visible:ring-offset-2 rounded-sm"
                 >
-                  (65) 3000-0000
+                  (65) 3653-1130
                 </a>
               </div>
               <div className="flex items-center space-x-3">
                 <MessageCircle className="w-5 h-5 text-[var(--laranja-destaque)] flex-shrink-0" />
                 <a 
-                  href="https://wa.me/5565999999999" 
+                  href="http://wa.me/556536531130" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="hover:text-[var(--laranja-destaque)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--laranja-destaque)] focus-visible:ring-offset-2 rounded-sm"
                 >
-                  (65) 99999-9999
+                  (65) 99913-1130
                 </a>
               </div>
               <div className="flex items-center space-x-3">
                 <Mail className="w-5 h-5 text-[var(--laranja-destaque)] flex-shrink-0" />
                 <a 
-                  href="mailto:contato@relampago.com.br" 
+                  href="mailto:sac@relampagomt.com.br" 
                   className="hover:text-[var(--laranja-destaque)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--laranja-destaque)] focus-visible:ring-offset-2 rounded-sm"
                 >
-                  contato@relampago.com.br
+                  sac@relampagomt.com.br
                 </a>
               </div>
             </div>

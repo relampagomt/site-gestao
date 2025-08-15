@@ -47,6 +47,7 @@ function Hero() {
                 variant="yellow"
                 className="text-lg px-8 py-4"
                 aria-label="Falar no WhatsApp"
+                onClick={() => window.open("http://wa.me/556536531130", "_blank")}
               >
                 <MessageCircle className="w-5 h-5 mr-2" />
                 Falar no WhatsApp
@@ -56,6 +57,7 @@ function Hero() {
                 variant="outline" 
                 className="text-lg px-8 py-4"
                 aria-label="Solicitar orçamento"
+                onClick={() => window.open("mailto:comercial@relampagomt.com.br")}
               >
                 <Phone className="w-5 h-5 mr-2" />
                 Quero um Orçamento

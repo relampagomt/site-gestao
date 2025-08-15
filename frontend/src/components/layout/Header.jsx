@@ -55,7 +55,7 @@ function Header() {
 
           {/* Desktop CTA Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <Button variant="outline" aria-label="Ligar para a empresa">
+            <Button variant="outline" aria-label="Ligar para a empresa" onClick={() => window.open("tel:+556536531130")}>
               <Phone className="w-4 h-4 mr-2" />
               Ligar
             </Button>
@@ -69,6 +69,7 @@ function Header() {
                          focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--vinho-medio)]
                          bg-gradient-to-b from-[var(--vinho-medio)] to-[var(--vinho-escuro)]
                          hover:from-[var(--vinho-escuro)] hover:to-[var(--vinho-escuro)]"
+              onClick={() => window.open("http://wa.me/556536531130", "_blank")}
             >
               <MessageCircle className="w-4 h-4 mr-2" />
               WhatsApp
@@ -133,6 +134,7 @@ function Header() {
                       variant="outline"
                       className="w-full justify-start h-12 text-base font-medium"
                       aria-label="Ligar para a empresa"
+                      onClick={() => window.open("tel:+556536531130")}
                     >
                       <Phone className="w-5 h-5 mr-3" />
                       Ligar na Empresa
@@ -148,6 +150,7 @@ function Header() {
                                  bg-gradient-to-b from-[var(--vinho-medio)] to-[var(--vinho-escuro)]
                                  hover:from-[var(--vinho-escuro)] hover:to-[var(--vinho-escuro)]"
                       aria-label="Falar no WhatsApp"
+                      onClick={() => window.open("http://wa.me/556536531130", "_blank")}
                     >
                       <MessageCircle className="w-5 h-5 mr-3" />
                       Falar no WhatsApp

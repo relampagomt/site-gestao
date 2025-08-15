@@ -88,6 +88,7 @@ function Highlights() {
                 variant="yellow"
                 className="text-lg px-8 py-4"
                 aria-label="Ligar para a empresa"
+                onClick={() => window.open("tel:+556536531130")}
               >
                 <Phone className="w-5 h-5 mr-2" />
                 LIGAR NA EMPRESA
@@ -97,6 +98,7 @@ function Highlights() {
                 variant="brand"
                 className="text-lg px-8 py-4"
                 aria-label="Falar no WhatsApp"
+                onClick={() => window.open("http://wa.me/556536531130", "_blank")}
               >
                 <MessageCircle className="w-5 h-5 mr-2" />
                 FALAR NO WHATSAPP
