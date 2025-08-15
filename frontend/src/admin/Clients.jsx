@@ -44,54 +44,57 @@ import {
 } from "lucide-react";
 
 /* ============================================================================
-   TELEFONE BR (+55) — normalização e máscara
+   TELEFONE BR (+55) — normalização e máscara com celular/fixo
    Regras:
    - Prefixo +55 sempre
-   - Insere SEMPRE '9' após o DDD (para celulares), inclusive quando o número
-     vier no formato antigo com 8 dígitos (ex.: 9981-5261 -> 9 9981-5261).
-   - Salva em E.164 (+55DD9XXXXXXXX)
-   - Exibe como +55(DD)9XXXXXXXX
-   Exemplos de entrada aceitos:
+   - Celular: 9 dígitos iniciando com 9
+     - Se vier antigo (8 dígitos) e começar por 7/8/9 → prefixa 9
+   - Fixo: 8 dígitos iniciando com 2/3/4/5 → NÃO insere 9
+   - Salva em E.164 (+55DD[8ou9 dígitos])
+   - Exibe como +55(DD)[número]
+   Exemplos:
      "+55 65 9981-5261" -> display: +55(65)999815261 | e164: +5565999815261
-     "65 9815261"       -> display: +55(65)99815261   (parcial)
-     "+5565999131130"   -> display: +55(65)999131130 | e164: +5565999131130
+     "(65)36531130"     -> display: +55(65)36531130  | e164: +556536531130
 ============================================================================ */
 function normalizePhoneBR(input) {
   let digits = String(input || "").replace(/\D/g, "");
 
-  // remove zeros de tronco/DDD discado (00/0 no início)
+  // remove zeros iniciais (ex.: tronco) e DDI 55
   digits = digits.replace(/^0+/, "");
-
-  // remove DDI 55 se presente
   if (digits.startsWith("55")) digits = digits.slice(2);
 
-  // extrai DDD (2 dígitos)
+  // separa DDD (2 dígitos) e local
   const ddd = digits.slice(0, 2);
   let localRaw = digits.slice(2);
 
-  // Garante que o local tenha 9 dígitos e inicie com '9'
-  if (localRaw.length >= 9) {
-    // se já começa com 9, usa os primeiros 9 dígitos
-    if (localRaw[0] === "9") {
-      localRaw = localRaw.slice(0, 9);
-    } else {
-      // não começa com 9 -> injeta 9 e usa mais 8 dígitos
-      localRaw = "9" + localRaw.slice(0, 8);
-    }
+  // função auxiliar: decide se o padrão é fixo (8 dígitos iniciando 2-5)
+  const looksLikeFixed = (nums) => nums.length >= 8 && /^[2-5]/.test(nums);
+
+  // normalização por casos
+  if (localRaw.length >= 10) {
+    // Muito longo: prioriza 9 dígitos p/ celular se começar com 9, senão 8 p/ fixo
+    localRaw = localRaw[0] === "9" ? localRaw.slice(0, 9) : localRaw.slice(0, 8);
+  } else if (localRaw.length === 9) {
+    // 9 dígitos: se não começa com 9, reduz para 8 (provável fixo digitado com extra)
+    localRaw = localRaw[0] === "9" ? localRaw : localRaw.slice(0, 8);
   } else if (localRaw.length === 8) {
-    // formato antigo (8 dígitos): sempre prefixa 9
-    localRaw = "9" + localRaw;
+    // 8 dígitos: se parece fixo (2-5) mantém; se 7/8/9 -> antigo celular -> prefixa 9
+    if (!looksLikeFixed(localRaw) && /^[7-9]/.test(localRaw)) {
+      localRaw = "9" + localRaw;
+    }
+    // se 6 (ambíguo), não força 9: trata como fixo por segurança
   } else if (localRaw.length > 0 && localRaw.length < 8) {
-    // parcial: assegura que comece com 9, sem inventar dígitos
-    if (localRaw[0] !== "9") localRaw = "9" + localRaw;
-  } else {
-    // vazio permanece vazio
+    // Parcial: heurística leve — se começa 7/8/9, garante prefixo 9; se 2-5, não faz nada
+    if (/^[7-9]/.test(localRaw) && localRaw[0] !== "9") {
+      localRaw = "9" + localRaw;
+    }
   }
+  // vazio: permanece vazio
 
   const local = localRaw;
   const e164 = `+55${ddd}${local}`;
 
-  // Exibição: +55(DD)9XXXXXXXX (sem espaços/hífens)
+  // Exibição: +55(DD)[número] (sem espaços/hífens)
   let display = "+55";
   if (ddd) display += `(${ddd})`;
   if (local) display += `${local}`;
@@ -529,7 +532,7 @@ const Clients = () => {
   function onChange(e) {
     const { name, value } = e.target;
 
-    // Trata telefone com máscara + normalização
+    // Trata telefone com máscara + normalização (suporta celular e fixo)
     if (name === "phone") {
       const { display } = normalizePhoneBR(value);
       setForm((f) => ({ ...f, phone: display }));
@@ -569,7 +572,7 @@ const Clients = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      // Normaliza telefone para salvar sempre em E.164
+      // Normaliza telefone para salvar sempre em E.164 (celular ou fixo)
       const { e164 } = normalizePhoneBR(form.phone);
 
       const payload = {
@@ -579,7 +582,7 @@ const Clients = () => {
         segments: form.segments,
         segment: form.segments.join(", "),
         email: form.email,
-        phone: e164, // <-- salvo padronizado
+        phone: e164, // <-- salvo padronizado (+55DD[8 ou 9 dígitos])
         notes: form.notes || "",
       };
 
@@ -849,7 +852,7 @@ const Clients = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="Buscar por nome, empresa, segmento, e-mail ou telefone..."
+                placeholder="+55(DD)Número"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -1084,11 +1087,11 @@ const Clients = () => {
                       </div>
                       <div>
                         <Label>Telefone</Label>
-                        {/* Exibe sempre a máscara +55(DD)9XXXXXXXX enquanto o usuário digita */}
+                        {/* Suporta celular (9 dígitos com 9) e fixo (8 dígitos sem 9) */}
                         <Input
                           name="phone"
                           inputMode="numeric"
-                          placeholder="+55(DD)9XXXXXXXX"
+                          placeholder="+55(DD)Número"
                           value={form.phone}
                           onChange={onChange}
                         />
