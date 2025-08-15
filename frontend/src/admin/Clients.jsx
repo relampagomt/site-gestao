@@ -47,38 +47,54 @@ import {
    TELEFONE BR (+55) — normalização e máscara
    Regras:
    - Prefixo +55 sempre
-   - Insere '9' no início do número local
+   - Insere SEMPRE '9' após o DDD (para celulares), inclusive quando o número
+     vier no formato antigo com 8 dígitos (ex.: 9981-5261 -> 9 9981-5261).
    - Salva em E.164 (+55DD9XXXXXXXX)
    - Exibe como +55(DD)9XXXXXXXX
+   Exemplos de entrada aceitos:
+     "+55 65 9981-5261" -> display: +55(65)999815261 | e164: +5565999815261
+     "65 9815261"       -> display: +55(65)99815261   (parcial)
+     "+5565999131130"   -> display: +55(65)999131130 | e164: +5565999131130
 ============================================================================ */
 function normalizePhoneBR(input) {
-  // Mantém só dígitos
   let digits = String(input || "").replace(/\D/g, "");
 
-  // Remove 55 inicial (vamos recolocar padronizado)
+  // remove zeros de tronco/DDD discado (00/0 no início)
+  digits = digits.replace(/^0+/, "");
+
+  // remove DDI 55 se presente
   if (digits.startsWith("55")) digits = digits.slice(2);
 
-  // DDD (2 dígitos no Brasil)
+  // extrai DDD (2 dígitos)
   const ddd = digits.slice(0, 2);
-
-  // Resto do número informado pelo usuário
   let localRaw = digits.slice(2);
 
-  // Garante o '9' no início do número local (se já houver, não duplica)
-  if (localRaw.length > 0 && localRaw[0] !== "9") {
+  // Garante que o local tenha 9 dígitos e inicie com '9'
+  if (localRaw.length >= 9) {
+    // se já começa com 9, usa os primeiros 9 dígitos
+    if (localRaw[0] === "9") {
+      localRaw = localRaw.slice(0, 9);
+    } else {
+      // não começa com 9 -> injeta 9 e usa mais 8 dígitos
+      localRaw = "9" + localRaw.slice(0, 8);
+    }
+  } else if (localRaw.length === 8) {
+    // formato antigo (8 dígitos): sempre prefixa 9
     localRaw = "9" + localRaw;
+  } else if (localRaw.length > 0 && localRaw.length < 8) {
+    // parcial: assegura que comece com 9, sem inventar dígitos
+    if (localRaw[0] !== "9") localRaw = "9" + localRaw;
+  } else {
+    // vazio permanece vazio
   }
 
-  // Limita o local a 9 dígitos (padrão celular BR)
-  const local = localRaw.slice(0, 9);
+  const local = localRaw;
+  const e164 = `+55${ddd}${local}`;
 
-  // Monta E.164 sempre que houver ao menos DDD
-  const e164 = ddd.length === 2 ? `+55${ddd}${local}` : `+55${ddd}${local}`;
-
-  // Monta exibição: +55(DD)9XXXXXXXX
+  // Exibição: +55(DD)9XXXXXXXX (sem espaços/hífens)
   let display = "+55";
-  if (ddd.length) display += `(${ddd})`;
-  if (local.length) display += `${local}`;
+  if (ddd) display += `(${ddd})`;
+  if (local) display += `${local}`;
 
   return { e164, display, ddd, local };
 }
@@ -209,8 +225,6 @@ export const SEGMENTOS_GRUPOS = [
       { value: "ONGs e Terceiro Setor", desc: "Associações, Fundações" },
     ],
   },
-
-  /* ====== NOVOS GRANDES BLOCOS DE VAREJO/LOCAL ====== */
 
   {
     group: "Comércio Varejista",
@@ -851,7 +865,7 @@ const Clients = () => {
                 </Button>
               </PopoverTrigger>
 
-            <PopoverContent
+              <PopoverContent
                 align="end"
                 side="bottom"
                 sideOffset={8}
