@@ -28,7 +28,19 @@ import {
 import { Badge } from "@/components/ui/badge.jsx";
 import { Checkbox } from "@/components/ui/checkbox.jsx";
 import { Separator } from "@/components/ui/separator.jsx";
-import { Plus, Search, Edit, Trash2, ChevronsUpDown, Check, X, Filter as FilterIcon } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  ChevronsUpDown,
+  Check,
+  X,
+  Filter as FilterIcon,
+  FileDown,           // CSV
+  FileSpreadsheet,    // Excel
+  FileText            // PDF
+} from "lucide-react";
 
 /* ====== SEGMENTOS AGRUPADOS (compactos) ================================== */
 export const SEGMENTOS_GRUPOS = [
@@ -407,6 +419,130 @@ const Clients = () => {
     return list;
   }, [clients, q, fCompanies, fSegments, fHasEmail, fHasPhone]);
 
+  /* ===================== EXPORTAÇÕES ===================== */
+
+  // Util: baixa um Blob como arquivo
+  const downloadBlob = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const nowStamp = () => {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+  };
+
+  // Dados padronizados da tabela (respeita a visualização FILTRADA)
+  const tableRows = useMemo(() => {
+    return filtered.map((c) => {
+      const name = c.name || "";
+      const company = c.company ?? c.company_name ?? c.companyName ?? "";
+      const segs = ensureArraySegments(c);
+      const email = c.email || "";
+      const phone = c.phone || "";
+      return {
+        Nome: name,
+        Empresa: company,
+        Segmentos: segs.join(" | "),
+        "E-mail": email,
+        Telefone: phone,
+      };
+    });
+  }, [filtered]);
+
+  // CSV (UTF-8 + BOM, delimitador ;)
+  const exportCSV = () => {
+    const headers = ["Nome", "Empresa", "Segmentos", "E-mail", "Telefone"];
+    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [
+      headers.join(";"),
+      ...tableRows.map((r) => headers.map((h) => esc(r[h])).join(";")),
+    ];
+    const csv = "\uFEFF" + lines.join("\n");
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `clientes_${nowStamp()}.csv`);
+  };
+
+  // Excel (HTML + MIME Excel, abre no Excel/LibreOffice) -> .xls
+  const exportExcel = () => {
+    const headers = ["Nome", "Empresa", "Segmentos", "E-mail", "Telefone"];
+    const htmlEscape = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rowsHtml = tableRows
+      .map((r) => `<tr>${headers.map((h) => `<td>${htmlEscape(r[h])}</td>`).join("")}</tr>`)
+      .join("");
+    const tableHtml = `
+      <table border="1" cellspacing="0" cellpadding="4">
+        <thead><tr>${headers.map((h) => `<th>${htmlEscape(h)}</th>`).join("")}</tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    `;
+    const doc = `
+      <!DOCTYPE html>
+      <html>
+        <head><meta charset="UTF-8"><title>Clientes</title></head>
+        <body>${tableHtml}</body>
+      </html>
+    `;
+    downloadBlob(
+      new Blob([doc], { type: "application/vnd.ms-excel;charset=utf-8;" }),
+      `clientes_${nowStamp()}.xls`
+    );
+  };
+
+  // PDF (abre uma aba com HTML pronto para impressão -> usuário salva como PDF)
+  const exportPDF = () => {
+    const headers = ["Nome", "Empresa", "Segmentos", "E-mail", "Telefone"];
+    const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const bodyRows = tableRows
+      .map((r) => `<tr>${headers.map((h) => `<td>${esc(r[h])}</td>`).join("")}</tr>`)
+      .join("");
+    const html = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8"/>
+        <title>Clientes</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { font: 12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; color: #111; margin: 24px; }
+          h1 { font-size: 18px; margin: 0 0 12px; }
+          table { width: 100%; border-collapse: collapse; }
+          thead th { text-align: left; background: #f4f4f5; }
+          th, td { border: 1px solid #e5e7eb; padding: 8px 10px; vertical-align: top; }
+          @media print {
+            @page { margin: 16mm; size: A4 portrait; }
+            a { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Clientes</h1>
+        <table>
+          <thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+        <script>window.onload = () => { setTimeout(() => { window.print(); }, 200); };</script>
+      </body>
+      </html>
+    `;
+    const w = window.open("", "_blank");
+    if (!w) {
+      alert("Permita pop-ups para exportar em PDF.");
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
+  /* ===================== UI ===================== */
+
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
@@ -419,9 +555,9 @@ const Clients = () => {
           <CardDescription>Lista de clientes cadastrados</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Filtros + botão "+ Novo Cliente" */}
-          <div className="flex items-center gap-2 mb-4">
-            <div className="relative flex-1">
+          {/* Filtros + botões */}
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3 mb-4">
+            <div className="relative flex-1 w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 className="pl-9"
@@ -434,7 +570,7 @@ const Clients = () => {
             {/* ====== FILTROS AVANÇADOS ====== */}
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" className="gap-2 w-full sm:w-auto">
                   <FilterIcon className="size-4" />
                   Filtros
                   {filtersCount > 0 && <Badge variant="secondary">{filtersCount}</Badge>}
@@ -559,6 +695,20 @@ const Clients = () => {
               </PopoverContent>
             </Popover>
 
+            {/* Botões de Exportação */}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={exportCSV} className="gap-2">
+                <FileDown className="size-4" /> CSV
+              </Button>
+              <Button variant="outline" onClick={exportExcel} className="gap-2">
+                <FileSpreadsheet className="size-4" /> Excel
+              </Button>
+              <Button variant="outline" onClick={exportPDF} className="gap-2">
+                <FileText className="size-4" /> PDF
+              </Button>
+            </div>
+
+            {/* Novo Cliente */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
