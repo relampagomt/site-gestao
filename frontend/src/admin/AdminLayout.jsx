@@ -19,9 +19,7 @@ import { Button } from "@/components/ui/button.jsx";
 import { cn } from "@/lib/utils";
 import { useAuth } from "../contexts/AuthContext";
 
-/**
- * Item da navegação lateral
- */
+/** Item da navegação lateral */
 function SideItem({ to, icon: Icon, label, end = false, collapsed = false, onClick }) {
   return (
     <NavLink
@@ -32,9 +30,7 @@ function SideItem({ to, icon: Icon, label, end = false, collapsed = false, onCli
         cn(
           "flex items-center gap-3 px-4 py-2 rounded-lg transition-colors",
           "text-sm font-medium",
-          isActive
-            ? "bg-red-100 text-red-700"
-            : "text-foreground/80 hover:text-foreground hover:bg-muted"
+          isActive ? "bg-red-100 text-red-700" : "text-foreground/80 hover:text-foreground hover:bg-muted"
         )
       }
     >
@@ -44,16 +40,11 @@ function SideItem({ to, icon: Icon, label, end = false, collapsed = false, onCli
   );
 }
 
-/**
- * Layout principal do painel Admin
- * - Sidebar (retrátil no desktop) + Drawer (mobile)
- * - Header fixo com hambúrguer
- * - Conteúdo CENTRALIZADO via wrapper único
- */
+/** Layout principal do painel Admin */
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, user } = useAuth(); // precisa estar dentro de <AuthProvider>
+  const { signOut, user } = useAuth();
 
   // Retrátil (desktop) + persistência e drawer (mobile)
   const [collapsed, setCollapsed] = useState(false);
@@ -67,7 +58,7 @@ export default function AdminLayout() {
     localStorage.setItem("admin.sidebarCollapsed", collapsed ? "1" : "0");
   }, [collapsed]);
 
-  // Mapa de navegação — rotas mantidas
+  // Mapa de navegação (rotas mantidas)
   const menu = useMemo(
     () => [
       { to: "/admin", label: "Dashboard", icon: Home, end: true },
@@ -83,9 +74,7 @@ export default function AdminLayout() {
 
   const onLogout = async () => {
     try {
-      if (typeof signOut === "function") {
-        await signOut();
-      }
+      if (typeof signOut === "function") await signOut();
     } finally {
       navigate("/login", { replace: true });
     }
@@ -139,10 +128,7 @@ export default function AdminLayout() {
         <div className="md:hidden">
           {mobileOpen && (
             <>
-              <div
-                className="fixed inset-0 bg-black/30 z-40"
-                onClick={() => setMobileOpen(false)}
-              />
+              <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setMobileOpen(false)} />
               <div className="fixed inset-y-0 left-0 w-72 bg-card/95 backdrop-blur shadow-lg z-50">
                 <div className="h-16 px-4 border-b flex items-center justify-between">
                   <div className="text-lg font-bold text-red-600">Relâmpago</div>
@@ -197,11 +183,7 @@ export default function AdminLayout() {
                 onClick={() => setCollapsed((v) => !v)}
                 title={collapsed ? "Expandir menu" : "Recolher menu"}
               >
-                {collapsed ? (
-                  <ChevronsRight className="w-4 h-4" />
-                ) : (
-                  <ChevronsLeft className="w-4 h-4" />
-                )}
+                {collapsed ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
               </Button>
 
               {/* Breadcrumb simples */}
@@ -224,12 +206,17 @@ export default function AdminLayout() {
             </div>
           </header>
 
-          {/* CONTEÚDO CENTRALIZADO */}
+          {/* ===== CONTEÚDO CENTRALIZADO (duplo wrapper garante centro em qualquer largura) ===== */}
           <div className="p-4 sm:p-6">
-            <div className="mx-auto w-full max-w-[720px] sm:max-w-[860px] px-4">
-              <Outlet />
+            {/* 1º wrapper: limita largura e adiciona padding lateral */}
+            <div className="mx-auto w-full max-w-[860px] px-4">
+              {/* 2º wrapper: força alinhamento central até mesmo quando filhos usam w-full */}
+              <div className="mx-auto w-full max-w-[720px]">
+                <Outlet />
+              </div>
             </div>
           </div>
+          {/* ===== FIM ===== */}
         </main>
       </div>
 
