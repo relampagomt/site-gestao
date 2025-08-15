@@ -1,3 +1,4 @@
+// frontend/src/admin/Finance.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '@/services/api';
 
@@ -22,7 +23,6 @@ import {
   CommandList,
 } from '@/components/ui/command.jsx';
 
-import { Separator } from '@/components/ui/separator.jsx';
 import {
   TrendingUp,
   ArrowDownCircle,
@@ -61,7 +61,10 @@ const monthLabel = (ym) => {
   // ym = '2025-08'
   const [y, m] = ym.split('-').map(Number);
   const d = new Date(y, (m || 1) - 1, 1);
-  return d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').replace(/^\w/, (c) => c.toUpperCase());
+  return d
+    .toLocaleString('pt-BR', { month: 'short' })
+    .replace('.', '')
+    .replace(/^\w/, (c) => c.toUpperCase());
 };
 
 const ensureArrayTypes = (item) => {
@@ -72,6 +75,28 @@ const ensureArrayTypes = (item) => {
   }
   return [];
 };
+
+// ---- Fallback de rotas (/finance/transactions -> /transactions) ----
+async function getWithFallback(path, altPath) {
+  try {
+    return await api.get(path);
+  } catch (err) {
+    if (err?.response?.status === 404 && altPath) {
+      return await api.get(altPath);
+    }
+    throw err;
+  }
+}
+async function postWithFallback(path, payload, altPath) {
+  try {
+    return await api.post(path, payload);
+  } catch (err) {
+    if (err?.response?.status === 404 && altPath) {
+      return await api.post(altPath, payload);
+    }
+    throw err;
+  }
+}
 
 /* =============== Página =============== */
 const Finance = () => {
@@ -102,8 +127,9 @@ const Finance = () => {
     setLoading(true);
     try {
       const [aRes, tRes] = await Promise.all([
-        api.get('/actions').catch(() => ({ data: [] })),
-        api.get('/finance/transactions').catch(() => ({ data: [] })),
+        api.get('/actions').catch(() => ({ data: [] })), // ações já funcionam
+        // tenta /finance/transactions; se 404, cai para /transactions
+        getWithFallback('/finance/transactions', '/transactions').catch(() => ({ data: [] })),
       ]);
 
       const arr = (d) => (Array.isArray(d) ? d : d?.items || d?.data || d?.results || []);
@@ -111,7 +137,6 @@ const Finance = () => {
       setTransactions(arr(tRes.data));
     } catch (err) {
       console.error('Erro ao carregar finanças:', err);
-      // fallback leve para não quebrar UI
       setActions((prev) => prev || []);
       setTransactions((prev) => prev || []);
     } finally {
@@ -132,10 +157,11 @@ const Finance = () => {
     const k = q.trim().toLowerCase();
     if (k) {
       list = list.filter((t) =>
-        [t.category, t.type, t.notes, t.amount].filter(Boolean).some((v) => String(v).toLowerCase().includes(k))
+        [t.category, t.type, t.notes, t.amount]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(k))
       );
     }
-    // ordena por data desc
     list.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
     return list;
   }, [transactions, selectedActions, q]);
@@ -154,13 +180,12 @@ const Finance = () => {
       if (t.type === 'entrada') row.entrada += amt;
       else row.saida += amt;
     });
-    // ordena por ano-mês
     return Array.from(buckets.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([, v]) => v);
   }, [filtered]);
 
-  // Status das ações (ativas/andamento, concluída, aguardando, cancelada)
+  // Status das ações (filtrando zeros)
   const actionsStatusChart = useMemo(() => {
     const counts = { aguardando: 0, andamento: 0, concluída: 0, cancelada: 0 };
     actions.forEach((a) => {
@@ -170,12 +195,14 @@ const Finance = () => {
       else if (s.includes('andam') || a.active) counts.andamento += 1;
       else counts.aguardando += 1;
     });
-    return [
+    const data = [
       { name: 'Aguardando', value: counts.aguardando, color: '#f59e0b' },
       { name: 'Andamento', value: counts.andamento, color: '#2563eb' },
       { name: 'Concluída', value: counts.concluída, color: '#16a34a' },
       { name: 'Cancelada', value: counts.cancelada, color: '#dc2626' },
     ];
+    // não renderiza categorias com 0
+    return data.filter((d) => d.value > 0);
   }, [actions]);
 
   /* -------- Create (simples) -------- */
@@ -195,8 +222,10 @@ const Finance = () => {
         category: form.category || '',
         notes: form.notes || '',
         action_id: form.action_id || null,
+        // chaves alternativas, caso o backend espere outros nomes
+        actionId: form.action_id || null,
       };
-      await api.post('/finance/transactions', payload);
+      await postWithFallback('/finance/transactions', payload, '/transactions');
       setOpen(false);
       setForm(emptyForm);
       loadAll();
@@ -220,9 +249,7 @@ const Finance = () => {
           {selectedActions.length === 0 ? (
             'Filtrar por ações'
           ) : (
-            <span className="truncate">
-              {selectedActions.length} selecionada(s)
-            </span>
+            <span className="truncate">{selectedActions.length} selecionada(s)</span>
           )}
           <Layers className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
@@ -230,7 +257,6 @@ const Finance = () => {
 
       {/* largura responsiva + altura máxima, SCROLL funcional em touchpad/mobile */}
       <PopoverContent align="start" className="p-0 w-[min(92vw,560px)] max-h-[70vh] overflow-hidden">
-        {/* wrapper com scroll (touch OK em Android/iOS) */}
         <div className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
           <Command>
             <CommandInput placeholder="Buscar ação..." />
@@ -262,8 +288,12 @@ const Finance = () => {
   );
 
   /* -------- RENDER -------- */
-  const totalEntrada = filtered.filter((t) => t.type === 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
-  const totalSaida = filtered.filter((t) => t.type !== 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const totalEntrada = filtered
+    .filter((t) => t.type === 'entrada')
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
+  const totalSaida = filtered
+    .filter((t) => t.type !== 'entrada')
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
   const saldo = totalEntrada - totalSaida;
 
   return (
@@ -486,7 +516,7 @@ const Finance = () => {
           </CardContent>
         </Card>
 
-        {/* Status das Ações */}
+        {/* Status das Ações (sem categorias 0 e sem sobreposição) */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Status das Ações</CardTitle>
@@ -501,7 +531,8 @@ const Finance = () => {
                   cy="50%"
                   dataKey="value"
                   outerRadius={90}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  labelLine={false}
+                  label={({ name, percent }) => (percent > 0.05 ? `${name} ${(percent * 100).toFixed(0)}%` : '')}
                 >
                   {actionsStatusChart.map((e, i) => (
                     <Cell key={e.name} fill={e.color || COLORS[i % COLORS.length]} />
