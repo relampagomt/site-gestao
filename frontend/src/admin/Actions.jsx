@@ -136,43 +136,27 @@ const Actions = () => {
   };
   useEffect(() => { loadActions(); }, []);
 
-  /* =================== FILTROS (NOVO) =================== */
+  /* =================== FILTROS =================== */
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [fStatus, setFStatus] = useState("");          // '', 'aguardando', 'andamento', 'concluída'
-  const [fTypes, setFTypes] = useState([]);            // multi
-  const [fPeriods, setFPeriods] = useState([]);        // multi
-  const [fStartBr, setFStartBr] = useState("");        // "DD/MM/AAAA"
-  const [fEndBr, setFEndBr] = useState("");            // "DD/MM/AAAA"
+  const [fStatus, setFStatus] = useState("");
+  const [fTypes, setFTypes] = useState([]);
+  const [fPeriods, setFPeriods] = useState([]);
+  const [fStartBr, setFStartBr] = useState("");
+  const [fEndBr, setFEndBr] = useState("");
 
-  const toggleFilterType = (t) => {
-    setFTypes((prev) => prev.includes(t) ? prev.filter((i) => i !== t) : [...prev, t]);
-  };
-  const toggleFilterPeriod = (p) => {
-    setFPeriods((prev) => prev.includes(p) ? prev.filter((i) => i !== p) : [...prev, p]);
-  };
+  const toggleFilterType = (t) => setFTypes((prev) => prev.includes(t) ? prev.filter((i) => i !== t) : [...prev, t]);
+  const toggleFilterPeriod = (p) => setFPeriods((prev) => prev.includes(p) ? prev.filter((i) => i !== p) : [...prev, p]);
   const onFilterDateChange = (setter) => (e) => setter(maskBR(e.target.value));
-  const clearFilters = () => {
-    setFStatus("");
-    setFTypes([]);
-    setFPeriods([]);
-    setFStartBr("");
-    setFEndBr("");
-  };
-  const filtersCount =
-    (fStatus ? 1 : 0) +
-    (fTypes.length ? 1 : 0) +
-    (fPeriods.length ? 1 : 0) +
-    ((fStartBr || fEndBr) ? 1 : 0);
+  const clearFilters = () => { setFStatus(""); setFTypes([]); setFPeriods([]); setFStartBr(""); setFEndBr(""); };
+  const filtersCount = (fStatus ? 1 : 0) + (fTypes.length ? 1 : 0) + (fPeriods.length ? 1 : 0) + ((fStartBr || fEndBr) ? 1 : 0);
 
   /* -------- Filter -------- */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const startF = brToYMD(fStartBr);
     const endF = brToYMD(fEndBr);
-
     let base = actions;
 
-    // Busca por digitação (mantida)
     if (q) {
       base = base.filter((a) => {
         const typesBlob = ensureArrayTypes(a).join(" ").toLowerCase();
@@ -181,40 +165,22 @@ const Actions = () => {
         return blob.includes(q);
       });
     }
-
-    // Filtro: status
-    if (fStatus) {
-      base = base.filter((a) => deriveStatusFromItem(a) === fStatus);
-    }
-
-    // Filtro: tipos (qualquer um)
-    if (fTypes.length > 0) {
-      base = base.filter((a) => {
-        const types = ensureArrayTypes(a);
-        return fTypes.some((t) => types.includes(t));
-      });
-    }
-
-    // Filtro: períodos (qualquer um)
-    if (fPeriods.length > 0) {
-      base = base.filter((a) => {
-        const arr = Array.isArray(a.day_periods) ? a.day_periods : [];
-        return fPeriods.some((p) => arr.includes(p));
-      });
-    }
-
-    // Filtro: intervalo de datas (interseção com o range da ação)
+    if (fStatus) base = base.filter((a) => deriveStatusFromItem(a) === fStatus);
+    if (fTypes.length > 0) base = base.filter((a) => fTypes.some((t) => ensureArrayTypes(a).includes(t)));
+    if (fPeriods.length > 0) base = base.filter((a) => {
+      const arr = Array.isArray(a.day_periods) ? a.day_periods : [];
+      return fPeriods.some((p) => arr.includes(p));
+    });
     if (startF || endF) {
       base = base.filter((a) => {
         const s = a.start_date || a.end_date || "";
         const e = a.end_date || a.start_date || "";
-        if (!s || !e) return false; // sem datas, não passa quando há filtro
-        if (startF && e < startF) return false; // ação termina antes do início filtrado
-        if (endF && s > endF) return false;     // ação começa depois do fim filtrado
+        if (!s || !e) return false;
+        if (startF && e < startF) return false;
+        if (endF && s > endF) return false;
         return true;
       });
     }
-
     return base;
   }, [actions, query, fStatus, fTypes, fPeriods, fStartBr, fEndBr]);
 
@@ -222,20 +188,8 @@ const Actions = () => {
   const resetForm = () => setForm({ ...initialForm });
   const onChange = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
   const onDateChange = (k) => (e) => onChange(k, maskBR(e.target.value));
-  const toggleType = (type) => {
-    setForm((prev) => {
-      const exists = prev.types.includes(type);
-      const next = exists ? prev.types.filter((t) => t !== type) : [...prev.types, type];
-      return { ...prev, types: next };
-    });
-  };
-  const togglePeriod = (period) => {
-    setForm((prev) => {
-      const exists = prev.day_periods.includes(period);
-      const next = exists ? prev.day_periods.filter((p) => p !== period) : [...prev.day_periods, period];
-      return { ...prev, day_periods: next };
-    });
-  };
+  const toggleType = (type) => setForm((prev) => ({ ...prev, types: prev.types.includes(type) ? prev.types.filter((t) => t !== type) : [...prev.types, type] }));
+  const togglePeriod = (period) => setForm((prev) => ({ ...prev, day_periods: prev.day_periods.includes(period) ? prev.day_periods.filter((p) => p !== period) : [...prev.day_periods, period] }));
 
   // Upload imediato da amostra
   const onMaterialChange = async (e) => {
@@ -257,7 +211,6 @@ const Actions = () => {
   /* -------- Create -------- */
   const handleCreate = async (e) => {
     e.preventDefault();
-
     const startISO = brToYMD(form.startBr);
     const endISO = brToYMD(form.endBr);
     if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
@@ -278,7 +231,6 @@ const Actions = () => {
         status: form.status,
         active: activeFromStatus(form.status),
       };
-
       await api.post("/actions", payload);
       await loadActions();
       setIsCreateOpen(false);
@@ -310,7 +262,6 @@ const Actions = () => {
   const handleEdit = async (e) => {
     e.preventDefault();
     if (!editing) return;
-
     const startISO = brToYMD(form.startBr);
     const endISO = brToYMD(form.endBr);
     if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
@@ -331,7 +282,6 @@ const Actions = () => {
         status: form.status,
         active: activeFromStatus(form.status),
       };
-
       await api.put(`/actions/${editing.id}`, payload);
       await loadActions();
       setIsEditOpen(false);
@@ -443,7 +393,7 @@ const Actions = () => {
               />
             </div>
 
-            {/* ====== FILTROS (NOVO) ====== */}
+            {/* ====== FILTROS (fix: container flex com body rolável) ====== */}
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="gap-2">
@@ -459,96 +409,100 @@ const Actions = () => {
                 align="end"
                 side="bottom"
                 sideOffset={8}
-                className="w-[min(92vw,560px)] p-0 max-h-[80vh] overflow-hidden"
+                collisionPadding={12}
+                className="w-[min(92vw,560px)] p-0"
               >
-                <div className="px-4 py-3 border-b">
-                  <p className="text-sm font-medium">Filtrar ações</p>
-                  <p className="text-xs text-muted-foreground">Refine os resultados com seletores.</p>
-                </div>
-
-                {/* Wrapper rolável */}
-                <div
-                  className="p-4 grid md:grid-cols-2 gap-4 max-h-[65vh] overflow-y-auto overscroll-contain touch-pan-y pr-2 [-webkit-overflow-scrolling:touch]"
-                  onWheel={(e) => e.stopPropagation()}
-                  onTouchMove={(e) => e.stopPropagation()}
-                >
-                  {/* Status */}
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <select
-                      className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                      value={fStatus}
-                      onChange={(e) => setFStatus(e.target.value)}
-                    >
-                      <option value="">Todos</option>
-                      <option value="aguardando">Aguardando</option>
-                      <option value="andamento">Andamento</option>
-                      <option value="concluída">Concluída</option>
-                    </select>
+                {/* container FLEX controla a altura máxima; body faz o scroll */}
+                <div className="flex flex-col max-h-[calc(100vh-120px)]">
+                  <div className="px-4 py-3 border-b">
+                    <p className="text-sm font-medium">Filtrar ações</p>
+                    <p className="text-xs text-muted-foreground">Refine os resultados com seletores.</p>
                   </div>
 
-                  {/* Períodos */}
-                  <div className="space-y-2">
-                    <Label>Períodos do dia</Label>
-                    <div className="flex flex-wrap gap-4">
-                      {periodOptions.map((p) => (
-                        <label key={p} className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox checked={fPeriods.includes(p)} onCheckedChange={() => toggleFilterPeriod(p)} />
-                          <span className="text-sm">{p}</span>
-                        </label>
-                      ))}
+                  {/* BODY ROLÁVEL */}
+                  <div
+                    className="p-4 grid md:grid-cols-2 gap-4 flex-1 overflow-y-auto overscroll-contain touch-pan-y pr-2 [-webkit-overflow-scrolling:touch]"
+                    onWheel={(e) => e.stopPropagation()}
+                    onTouchMove={(e) => e.stopPropagation()}
+                  >
+                    {/* Status */}
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <select
+                        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                        value={fStatus}
+                        onChange={(e) => setFStatus(e.target.value)}
+                      >
+                        <option value="">Todos</option>
+                        <option value="aguardando">Aguardando</option>
+                        <option value="andamento">Andamento</option>
+                        <option value="concluída">Concluída</option>
+                      </select>
                     </div>
-                  </div>
 
-                  {/* Tipos */}
-                  <div className="space-y-2 md:col-span-2">
-                    <Label>Tipo(s) de ação</Label>
-                    <div className="grid sm:grid-cols-2 gap-2">
-                      {ACTION_OPTIONS.map((group) => (
-                        <div key={group.group} className="sm:col-span-2">
-                          <p className="text-xs font-semibold text-muted-foreground mb-2">{group.group}</p>
-                          <div className="grid sm:grid-cols-2 gap-2">
-                            {group.items.map((opt) => (
-                              <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
-                                <Checkbox checked={fTypes.includes(opt)} onCheckedChange={() => toggleFilterType(opt)} />
-                                <span>{opt}</span>
-                              </label>
-                            ))}
-                          </div>
-                          <Separator className="my-3" />
-                        </div>
-                      ))}
-                    </div>
-                    {fTypes.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {fTypes.map((t) => (
-                          <Badge key={t} variant="secondary" className="gap-1">
-                            {t}
-                            <button type="button" onClick={() => toggleFilterType(t)} className="ml-1 opacity-70 hover:opacity-100">
-                              <X className="size-3" />
-                            </button>
-                          </Badge>
+                    {/* Períodos */}
+                    <div className="space-y-2">
+                      <Label>Períodos do dia</Label>
+                      <div className="flex flex-wrap gap-4">
+                        {periodOptions.map((p) => (
+                          <label key={p} className="flex items-center gap-2 cursor-pointer">
+                            <Checkbox checked={fPeriods.includes(p)} onCheckedChange={() => toggleFilterPeriod(p)} />
+                            <span className="text-sm">{p}</span>
+                          </label>
                         ))}
                       </div>
-                    )}
+                    </div>
+
+                    {/* Tipos */}
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>Tipo(s) de ação</Label>
+                      <div className="grid sm:grid-cols-2 gap-2">
+                        {ACTION_OPTIONS.map((group) => (
+                          <div key={group.group} className="sm:col-span-2">
+                            <p className="text-xs font-semibold text-muted-foreground mb-2">{group.group}</p>
+                            <div className="grid sm:grid-cols-2 gap-2">
+                              {group.items.map((opt) => (
+                                <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <Checkbox checked={fTypes.includes(opt)} onCheckedChange={() => toggleFilterType(opt)} />
+                                  <span>{opt}</span>
+                                </label>
+                              ))}
+                            </div>
+                            <Separator className="my-3" />
+                          </div>
+                        ))}
+                      </div>
+                      {fTypes.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {fTypes.map((t) => (
+                            <Badge key={t} variant="secondary" className="gap-1">
+                              {t}
+                              <button type="button" onClick={() => toggleFilterType(t)} className="ml-1 opacity-70 hover:opacity-100">
+                                <X className="size-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Intervalo de datas */}
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início (de)</Label>
+                      <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={fStartBr} onChange={onFilterDateChange(setFStartBr)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término (até)</Label>
+                      <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={fEndBr} onChange={onFilterDateChange(setFEndBr)} />
+                    </div>
                   </div>
 
-                  {/* Intervalo de datas */}
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início (de)</Label>
-                    <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={fStartBr} onChange={onFilterDateChange(setFStartBr)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término (até)</Label>
-                    <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={fEndBr} onChange={onFilterDateChange(setFEndBr)} />
-                  </div>
-                </div>
-
-                <div className="px-4 py-3 border-t flex justify-between">
-                  <Button variant="ghost" onClick={clearFilters}>Limpar filtros</Button>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setFiltersOpen(false)}>Fechar</Button>
-                    <Button onClick={() => setFiltersOpen(false)}>Aplicar</Button>
+                  <div className="px-4 py-3 border-t flex justify-between">
+                    <Button variant="ghost" onClick={clearFilters}>Limpar filtros</Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => setFiltersOpen(false)}>Fechar</Button>
+                      <Button onClick={() => setFiltersOpen(false)}>Aplicar</Button>
+                    </div>
                   </div>
                 </div>
               </PopoverContent>
