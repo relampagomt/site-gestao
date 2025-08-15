@@ -11,14 +11,13 @@ import {
   LogOut,
   ChevronsLeft,
   ChevronsRight,
-  Menu as MenuIcon, // Importando o ícone do menu para o botão mobile
+  Menu as MenuIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button.jsx";
 import { cn } from "@/lib/utils";
 import { useAuth } from "../contexts/AuthContext";
 
-// ... (O componente SideItem permanece o mesmo)
 function SideItem({ to, icon: Icon, label, end = false, collapsed = false }) {
   return (
     <NavLink
@@ -40,14 +39,12 @@ function SideItem({ to, icon: Icon, label, end = false, collapsed = false }) {
   );
 }
 
-
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
-
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // Estado para o menu mobile
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("admin.sidebarCollapsed");
@@ -87,53 +84,60 @@ export default function AdminLayout() {
         {/* Sidebar Desktop */}
         <aside
           className={cn(
-            "border-r bg-card/50 hidden md:block transition-[width] duration-200",
+            "border-r bg-card/50 hidden md:flex flex-col transition-[width] duration-200",
             collapsed ? "w-20" : "w-64"
           )}
         >
-          {/* ... (conteúdo da sidebar desktop idêntico ao original) ... */}
-          <div className={cn("h-16 px-6 flex items-center font-bold text-red-600", collapsed ? "justify-center text-lg" : "text-xl")}>
-            {collapsed ? "R" : "Relâmpago"}
+          {/* Cabeçalho da Sidebar com Título e Botão */}
+          <div className={cn(
+            "h-16 flex items-center",
+            collapsed ? "justify-center" : "justify-between px-4" // Ajusta o alinhamento
+          )}>
+            {!collapsed && (
+              <span className="font-bold text-red-600 text-xl">
+                Relâmpago
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setCollapsed((v) => !v)}
+              title={collapsed ? "Expandir menu" : "Recolher menu"}
+            >
+              {collapsed ? <ChevronsRight className="w-5 h-5" /> : <ChevronsLeft className="w-5 h-5" />}
+            </Button>
           </div>
-          <nav className={cn("py-2 space-y-1", collapsed ? "px-2" : "px-3")}>
+
+          {/* Navegação Principal */}
+          <nav className={cn("py-2 space-y-1 flex-1", collapsed ? "px-2" : "px-3")}>
             {menu.map((item) => <SideItem key={item.to} {...item} collapsed={collapsed} />)}
           </nav>
-          <div className={cn("px-4 py-4 mt-auto", collapsed && "px-2")}>
-            <Button variant="outline" className={cn("w-full justify-center gap-2", collapsed && "px-2")} onClick={onLogout}>
+
+          {/* Rodapé da Sidebar (apenas botão Sair) */}
+          <div className={cn("p-2")}>
+            <Button
+              variant="outline"
+              className={cn("w-full justify-center gap-2", collapsed && "px-2")}
+              onClick={onLogout}
+            >
               <LogOut className="w-4 h-4" />
               {!collapsed && <span>Sair</span>}
             </Button>
           </div>
         </aside>
 
-        {/* Sidebar Mobile (Menu Hamburguer) */}
+        {/* Sidebar Mobile (Menu Hamburguer - Sem alterações) */}
         <div
-          className={cn(
-            "fixed inset-0 z-40 bg-black/60 md:hidden",
-            mobileMenuOpen ? "block" : "hidden"
-          )}
+          className={cn("fixed inset-0 z-40 bg-black/60 md:hidden", mobileMenuOpen ? "block" : "hidden")}
           onClick={() => setMobileMenuOpen(false)}
         />
         <aside
-          className={cn(
-            "fixed top-0 left-0 h-full z-50 w-64 bg-card border-r flex flex-col transition-transform duration-300 md:hidden",
-            mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-          )}
+          className={cn("fixed top-0 left-0 h-full z-50 w-64 bg-card border-r flex flex-col transition-transform duration-300 md:hidden", mobileMenuOpen ? "translate-x-0" : "-translate-x-full")}
         >
-          <div className="h-16 px-6 flex items-center font-bold text-red-600 text-xl">
-            Relâmpago
-          </div>
+          <div className="h-16 px-6 flex items-center font-bold text-red-600 text-xl">Relâmpago</div>
           <nav className="py-2 px-3 space-y-1 flex-1">
             {menu.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                onClick={() => setMobileMenuOpen(false)}
-                className={({ isActive }) =>
-                  cn("flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium", isActive ? "bg-red-100 text-red-700" : "text-foreground/80 hover:text-foreground hover:bg-muted")
-                }
-              >
+              <NavLink key={item.to} to={item.to} end={item.end} onClick={() => setMobileMenuOpen(false)} className={({ isActive }) => cn("flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium", isActive ? "bg-red-100 text-red-700" : "text-foreground/80 hover:text-foreground hover:bg-muted")}>
                 <item.icon className="h-5 w-5" />
                 <span>{item.label}</span>
               </NavLink>
@@ -148,24 +152,11 @@ export default function AdminLayout() {
         </aside>
 
         {/* Conteúdo Principal */}
-        <main className="flex-1 w-full md:w-auto"> {/* <--- ÚNICA MUDANÇA APLICADA AQUI */}
+        <main className="flex-1 w-full md:w-auto">
           <header className="h-16 border-b flex items-center justify-between px-4 sm:px-6 bg-background/60 backdrop-blur">
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="md:hidden"
-                onClick={() => setMobileMenuOpen(true)}
-              >
+              <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(true)}>
                 <MenuIcon className="w-6 h-6" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="hidden md:inline-flex"
-                onClick={() => setCollapsed((v) => !v)}
-              >
-                {collapsed ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
               </Button>
               <h1 className="text-lg font-semibold hidden sm:block">
                 {menu.find((m) => location.pathname.startsWith(m.to))?.label || "Dashboard"}
