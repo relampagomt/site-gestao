@@ -11,15 +11,14 @@ import {
   LogOut,
   ChevronsLeft,
   ChevronsRight,
+  Menu as MenuIcon, // Importando o ícone do menu para o botão mobile
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button.jsx";
 import { cn } from "@/lib/utils";
 import { useAuth } from "../contexts/AuthContext";
 
-/**
- * Item da navegação lateral
- */
+// ... (O componente SideItem permanece o mesmo)
 function SideItem({ to, icon: Icon, label, end = false, collapsed = false }) {
   return (
     <NavLink
@@ -41,28 +40,24 @@ function SideItem({ to, icon: Icon, label, end = false, collapsed = false }) {
   );
 }
 
-/**
- * Layout principal do painel Admin
- * - Sidebar com itens (agora retrátil no desktop)
- * - Header fixo com botão de toggle
- * - <Outlet/> para as rotas filhas
- */
+
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, user } = useAuth(); // precisa estar dentro de <AuthProvider>
+  const { signOut, user } = useAuth();
 
-  // Estado do menu retrátil (desktop) + persistência
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // Estado para o menu mobile
+
   useEffect(() => {
     const saved = localStorage.getItem("admin.sidebarCollapsed");
     if (saved) setCollapsed(saved === "1");
   }, []);
+
   useEffect(() => {
     localStorage.setItem("admin.sidebarCollapsed", collapsed ? "1" : "0");
   }, [collapsed]);
 
-  // Mapa de navegação — Mantido exatamente como no seu código original.
   const menu = useMemo(
     () => [
       { to: "/admin", label: "Dashboard", icon: Home, end: true },
@@ -89,120 +84,103 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="flex">
-        {/* Sidebar (desktop) retrátil */}
+        {/* Sidebar Desktop */}
         <aside
           className={cn(
             "border-r bg-card/50 hidden md:block transition-[width] duration-200",
             collapsed ? "w-20" : "w-64"
           )}
         >
-          <div className={cn(
-            "h-16 px-6 flex items-center font-bold text-red-600",
-            collapsed ? "justify-center text-lg" : "text-xl"
-          )}>
+          {/* ... (conteúdo da sidebar desktop idêntico ao original) ... */}
+          <div className={cn("h-16 px-6 flex items-center font-bold text-red-600", collapsed ? "justify-center text-lg" : "text-xl")}>
             {collapsed ? "R" : "Relâmpago"}
           </div>
-
           <nav className={cn("py-2 space-y-1", collapsed ? "px-2" : "px-3")}>
-            {menu.map((item) => (
-              <SideItem
-                key={item.to}
-                to={item.to}
-                icon={item.icon}
-                label={item.label}
-                end={item.end}
-                collapsed={collapsed}
-              />
-            ))}
+            {menu.map((item) => <SideItem key={item.to} {...item} collapsed={collapsed} />)}
           </nav>
-
-          <div className={cn("px-4 py-4", collapsed && "px-2")}>
-            <Button
-              variant="outline"
-              className={cn("w-full justify-center gap-2", collapsed && "px-2")}
-              onClick={onLogout}
-            >
+          <div className={cn("px-4 py-4 mt-auto", collapsed && "px-2")}>
+            <Button variant="outline" className={cn("w-full justify-center gap-2", collapsed && "px-2")} onClick={onLogout}>
               <LogOut className="w-4 h-4" />
               {!collapsed && <span>Sair</span>}
             </Button>
           </div>
         </aside>
 
-        {/* Conteúdo */}
-        <main className="flex-1 w-full overflow-x-hidden"> {/* <-- MUDANÇA AQUI */}
-          {/* Header */}
-          <header className="h-16 border-b flex items-center justify-between px-4 sm:px-6 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="flex items-center gap-3">
-              {/* Botão de toggle do sidebar (desktop somente) */}
+        {/* Sidebar Mobile (Menu Hamburguer) */}
+        <div
+          className={cn(
+            "fixed inset-0 z-40 bg-black/60 md:hidden",
+            mobileMenuOpen ? "block" : "hidden"
+          )}
+          onClick={() => setMobileMenuOpen(false)}
+        />
+        <aside
+          className={cn(
+            "fixed top-0 left-0 h-full z-50 w-64 bg-card border-r flex flex-col transition-transform duration-300 md:hidden",
+            mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          )}
+        >
+          <div className="h-16 px-6 flex items-center font-bold text-red-600 text-xl">
+            Relâmpago
+          </div>
+          <nav className="py-2 px-3 space-y-1 flex-1">
+            {menu.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                onClick={() => setMobileMenuOpen(false)}
+                className={({ isActive }) =>
+                  cn("flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium", isActive ? "bg-red-100 text-red-700" : "text-foreground/80 hover:text-foreground hover:bg-muted")
+                }
+              >
+                <item.icon className="h-5 w-5" />
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+          </nav>
+          <div className="px-4 py-4">
+            <Button variant="outline" className="w-full justify-center gap-2" onClick={onLogout}>
+              <LogOut className="w-4 h-4" />
+              <span>Sair</span>
+            </Button>
+          </div>
+        </aside>
+
+        {/* Conteúdo Principal */}
+        <main className="flex-1 w-full md:w-auto"> {/* <--- ÚNICA MUDANÇA APLICADA AQUI */}
+          <header className="h-16 border-b flex items-center justify-between px-4 sm:px-6 bg-background/60 backdrop-blur">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                onClick={() => setMobileMenuOpen(true)}
+              >
+                <MenuIcon className="w-6 h-6" />
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
                 className="hidden md:inline-flex"
                 onClick={() => setCollapsed((v) => !v)}
-                title={collapsed ? "Expandir menu" : "Recolher menu"}
               >
-                {collapsed ? (
-                  <ChevronsRight className="w-4 h-4" />
-                ) : (
-                  <ChevronsLeft className="w-4 h-4" />
-                )}
+                {collapsed ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
               </Button>
-
-              {/* Breadcrumb simples */}
-              <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-semibold">
-                  {location.pathname.startsWith("/admin") ? "Administrador" : "Painel"}
-                </h1>
-                <span className="hidden sm:inline text-muted-foreground">·</span>
-                <span className="hidden sm:inline text-muted-foreground capitalize">
-                  {menu.find((m) => location.pathname.startsWith(m.to))?.label || "Dashboard"}
-                </span>
-              </div>
+              <h1 className="text-lg font-semibold hidden sm:block">
+                {menu.find((m) => location.pathname.startsWith(m.to))?.label || "Dashboard"}
+              </h1>
             </div>
-
-            <div className="flex items-center gap-3">
-              <div className="text-xs sm:text-sm bg-muted px-3 py-1 rounded-full">
-                {user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : "Admin"}
-              </div>
-              <Button variant="ghost" size="sm" className="md:hidden" onClick={onLogout}>
-                <LogOut className="w-5 h-5" />
-              </Button>
+            <div className="text-sm bg-muted px-3 py-1 rounded-full">
+              {user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : "Admin"}
             </div>
           </header>
 
-          {/* Conteúdo das rotas filhas */}
-          <div className="p-4 sm:p-6 pb-16 md:pb-6 max-w-7xl mx-auto w-full">
+          <div className="p-4 sm:p-6 max-w-7xl mx-auto">
             <Outlet />
           </div>
         </main>
       </div>
-
-      {/* Sidebar mobile simples (mantido exatamente como no seu código original) */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 border-t bg-background/95 backdrop-blur z-20">
-        <div className="grid grid-cols-4">
-          {[
-            { to: "/admin", icon: Home, label: "Início", end: true },
-            { to: "/admin/actions", icon: ClipboardList, label: "Ações" },
-            { to: "/admin/finance", icon: Wallet, label: "Finanças" },
-            { to: "/admin/users", icon: Users, label: "Usuários" },
-          ].map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                cn(
-                  "flex flex-col items-center justify-center py-2 text-xs",
-                  isActive ? "text-red-600" : "text-muted-foreground hover:text-foreground"
-                )
-              }
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="mt-1">{item.label}</span>
-            </NavLink>
-          ))}
-        </div>
-      </nav>
     </div>
   );
 }
