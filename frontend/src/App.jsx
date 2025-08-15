@@ -47,7 +47,7 @@ function App() {
               <Route path="finance" element={<Finance />} /> {/* ✅ ROTA DE FINANÇAS */}
               <Route path="vacancies" element={<Vacancies />} />
               <Route
-                path="usuarios"
+                path="users"
                 element={
                   <RoleGuard roles={['admin']}>
                     <Users />
