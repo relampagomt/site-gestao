@@ -11,6 +11,8 @@ import {
   LogOut,
   ChevronsLeft,
   ChevronsRight,
+  Menu as MenuIcon,
+  X as XIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button.jsx";
@@ -20,11 +22,12 @@ import { useAuth } from "../contexts/AuthContext";
 /**
  * Item da navegação lateral
  */
-function SideItem({ to, icon: Icon, label, end = false, collapsed = false }) {
+function SideItem({ to, icon: Icon, label, end = false, collapsed = false, onClick }) {
   return (
     <NavLink
       to={to}
       end={end}
+      onClick={onClick}
       className={({ isActive }) =>
         cn(
           "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
@@ -43,9 +46,9 @@ function SideItem({ to, icon: Icon, label, end = false, collapsed = false }) {
 
 /**
  * Layout principal do painel Admin
- * - Sidebar com itens (agora retrátil no desktop)
- * - Header fixo com botão de toggle
- * - <Outlet/> para as rotas filhas
+ * - Sidebar com itens (retrátil no desktop, drawer no mobile)
+ * - Header fixo com toggle
+ * - Conteúdo centralizado por container ÚNICO aqui (sem mudar páginas)
  */
 export default function AdminLayout() {
   const location = useLocation();
@@ -54,6 +57,8 @@ export default function AdminLayout() {
 
   // Estado do menu retrátil (desktop) + persistência
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   useEffect(() => {
     const saved = localStorage.getItem("admin.sidebarCollapsed");
     if (saved) setCollapsed(saved === "1");
@@ -62,7 +67,7 @@ export default function AdminLayout() {
     localStorage.setItem("admin.sidebarCollapsed", collapsed ? "1" : "0");
   }, [collapsed]);
 
-  // Mapa de navegação — Configurações REMOVIDO previamente, Usuários RESTAURADO
+  // Mapa de navegação
   const menu = useMemo(
     () => [
       { to: "/admin", label: "Dashboard", icon: Home, end: true },
@@ -71,7 +76,7 @@ export default function AdminLayout() {
       { to: "/admin/actions", label: "Ações", icon: ClipboardList },
       { to: "/admin/finance", label: "Finanças", icon: Wallet },
       { to: "/admin/vacancies", label: "Vagas", icon: Briefcase },
-      { to: "/admin/users", label: "Usuários", icon: Users }, // mantém exatamente como estava
+      { to: "/admin/users", label: "Usuários", icon: Users },
     ],
     []
   );
@@ -96,10 +101,12 @@ export default function AdminLayout() {
             collapsed ? "w-20" : "w-64"
           )}
         >
-          <div className={cn(
-            "h-16 px-6 flex items-center font-bold text-red-600",
-            collapsed ? "justify-center text-lg" : "text-xl"
-          )}>
+          <div
+            className={cn(
+              "h-16 px-6 flex items-center font-bold text-red-600",
+              collapsed ? "justify-center text-lg" : "text-xl"
+            )}
+          >
             {collapsed ? "R" : "Relâmpago"}
           </div>
 
@@ -128,12 +135,61 @@ export default function AdminLayout() {
           </div>
         </aside>
 
+        {/* Drawer (mobile) */}
+        <div className="md:hidden">
+          {mobileOpen && (
+            <>
+              <div
+                className="fixed inset-0 bg-black/30 z-40"
+                onClick={() => setMobileOpen(false)}
+              />
+              <div className="fixed inset-y-0 left-0 w-72 bg-card/95 backdrop-blur shadow-lg z-50">
+                <div className="h-16 px-4 border-b flex items-center justify-between">
+                  <div className="text-lg font-bold text-red-600">Relâmpago</div>
+                  <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)}>
+                    <XIcon className="w-5 h-5" />
+                  </Button>
+                </div>
+                <nav className="px-3 py-2 space-y-1">
+                  {menu.map((item) => (
+                    <SideItem
+                      key={item.to}
+                      to={item.to}
+                      icon={item.icon}
+                      label={item.label}
+                      end={item.end}
+                      onClick={() => setMobileOpen(false)}
+                    />
+                  ))}
+                </nav>
+                <div className="px-4 py-4">
+                  <Button variant="outline" className="w-full justify-center gap-2" onClick={onLogout}>
+                    <LogOut className="w-4 h-4" />
+                    Sair
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
         {/* Conteúdo */}
         <main className="flex-1">
           {/* Header */}
           <header className="h-16 border-b flex items-center justify-between px-4 sm:px-6 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="flex items-center gap-3">
-              {/* Botão de toggle do sidebar (desktop somente) */}
+              {/* Toggle mobile menu */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="md:hidden"
+                onClick={() => setMobileOpen(true)}
+                title="Menu"
+              >
+                <MenuIcon className="w-4 h-4" />
+              </Button>
+
+              {/* Toggle retrátil (desktop) */}
               <Button
                 variant="outline"
                 size="sm"
@@ -164,27 +220,30 @@ export default function AdminLayout() {
               <div className="text-xs sm:text-sm bg-muted px-3 py-1 rounded-full">
                 {user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : "Admin"}
               </div>
-              <Button variant="ghost" size="sm" className="md:hidden" onClick={onLogout}>
+              <Button variant="ghost" size="sm" className="hidden md:inline-flex" onClick={onLogout}>
                 <LogOut className="w-5 h-5" />
               </Button>
             </div>
           </header>
 
-          {/* Conteúdo das rotas filhas */}
-          <div className="p-4 sm:p-6 pb-16 md:pb-6 max-w-7xl mx-auto w-full">
-            <Outlet />
+          {/* ===== CONTEÚDO CENTRALIZADO AQUI ===== */}
+          <div className="p-4 sm:p-6 pb-20 md:pb-8">
+            <div className="mx-auto w-full max-w-[720px] sm:max-w-[860px]">
+              <Outlet />
+            </div>
           </div>
+          {/* ===== FIM CONTEÚDO CENTRALIZADO ===== */}
         </main>
       </div>
 
-      {/* Sidebar mobile simples (permanece igual; apenas garante z-index e padding do conteúdo) */}
+      {/* Bottom nav (mobile) */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 border-t bg-background/95 backdrop-blur z-20">
         <div className="grid grid-cols-4">
           {[
             { to: "/admin", icon: Home, label: "Início", end: true },
             { to: "/admin/actions", icon: ClipboardList, label: "Ações" },
             { to: "/admin/finance", icon: Wallet, label: "Finanças" },
-            { to: "/admin/users", icon: Users, label: "Usuários" }, // atalho útil no mobile
+            { to: "/admin/users", icon: Users, label: "Usuários" },
           ].map((item) => (
             <NavLink
               key={item.to}
