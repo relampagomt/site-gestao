@@ -96,14 +96,17 @@ export default function AdminLayout() {
             )}
           >
             {collapsed ? (
-              // LOGO QUANDO RECOLHIDO
+              /* LOGO quando recolhido */
               <div className="flex items-center justify-center w-8 h-8 bg-white border-2 border-red-600 rounded-md">
                 <span className="text-lg font-bold text-red-600">R</span>
               </div>
             ) : (
-              // TÍTULO QUANDO EXPANDIDO
-              <span className="font-bold text-red-600 text-xl">Relâmpago</span>
+              /* Título em bloco quando expandido */
+              <div className="inline-flex items-center bg-white border-2 border-red-600 rounded-md px-3 py-1">
+                <span className="font-bold text-red-600 text-xl tracking-wide">Relâmpago</span>
+              </div>
             )}
+
             <Button
               variant="ghost"
               size="icon"
@@ -138,7 +141,7 @@ export default function AdminLayout() {
           </div>
         </aside>
 
-        {/* Sidebar Mobile (Menu Hamburguer) */}
+        {/* Backdrop Mobile */}
         <div
           className={cn(
             "fixed inset-0 z-40 bg-black/60 md:hidden",
@@ -146,14 +149,18 @@ export default function AdminLayout() {
           )}
           onClick={() => setMobileMenuOpen(false)}
         />
+
+        {/* Sidebar Mobile (Menu Hamburguer) */}
         <aside
           className={cn(
             "fixed top-0 left-0 h-full z-50 w-64 bg-card border-r flex flex-col transition-transform duration-300 md:hidden",
             mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
           )}
         >
-          <div className="h-16 px-6 flex items-center font-bold text-red-600 text-xl">
-            Relâmpago
+          <div className="h-16 px-6 flex items-center">
+            <div className="inline-flex items-center bg-white border-2 border-red-600 rounded-md px-3 py-1">
+              <span className="font-bold text-red-600 text-lg tracking-wide">Relâmpago</span>
+            </div>
           </div>
           <nav className="py-2 px-3 space-y-1 flex-1">
             {menu.map((item) => (
@@ -201,14 +208,11 @@ export default function AdminLayout() {
                 <MenuIcon className="w-6 h-6" />
               </Button>
               <h1 className="text-lg font-semibold hidden sm:block">
-                {menu.find((m) => location.pathname.startsWith(m.to))?.label ||
-                  "Dashboard"}
+                {menu.find((m) => location.pathname.startsWith(m.to))?.label || "Dashboard"}
               </h1>
             </div>
             <div className="text-sm bg-muted px-3 py-1 rounded-full">
-              {user?.role
-                ? user.role[0].toUpperCase() + user.role.slice(1)
-                : "Admin"}
+              {user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : "Admin"}
             </div>
           </header>
 
