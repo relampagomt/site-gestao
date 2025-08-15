@@ -1,3 +1,4 @@
+# backend/src/main.py
 import os
 import sys
 import logging
@@ -6,9 +7,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # -----------------------
-# Import path
+# Import path (garante "src" importável)
 # -----------------------
-# Garante que a pasta "src" (dentro de backend) seja importável.
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.join(backend_dir, "src")
 for p in (backend_dir, src_dir):
@@ -20,24 +20,24 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from werkzeug.exceptions import RequestEntityTooLarge
 
-
 def create_app():
     app = Flask(__name__)
 
     # -----------------------
     # Configs
     # -----------------------
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'asdf#FGSgvasgf$5$WGT')
-    app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-string-change-in-production')
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False  # token sem expirar
-    # Limite de upload (padrão 25 MB) — pode ajustar via env MAX_CONTENT_LENGTH
-    app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_CONTENT_LENGTH', 25 * 1024 * 1024))
-    app.config['JSON_SORT_KEYS'] = False
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "asdf#FGSgvasgf$5$WGT")
+    app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "jwt-secret-string-change-in-production")
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = False  # token sem expirar
+    app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 25 * 1024 * 1024))
+    app.config["JSON_SORT_KEYS"] = False
+    # útil para ver tracebacks reais no log da plataforma
+    app.config["PROPAGATE_EXCEPTIONS"] = True
 
-    # Logging básico (ajuste via LOG_LEVEL=INFO|DEBUG|WARNING|ERROR)
+    # Logging básico
     logging.basicConfig(
         level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
     # -----------------------
@@ -64,9 +64,9 @@ def create_app():
     from src.routes.action import action_bp
     from src.routes.job_vacancy import job_vacancy_bp
     from src.routes.metrics import metrics_bp
-    from src.routes.upload import upload_bp  # rota de upload
-    from src.routes.user import user_bp      # rota de gerenciamento de usuários
-    from src.routes.finance import finance_bp  # <<< NOVO: módulo de finanças
+    from src.routes.upload import upload_bp
+    from src.routes.user import user_bp
+    from src.routes.finance import finance_bp  # <— finanças
     from src.services.user_service import ensure_admin_seed
 
     # -----------------------
@@ -78,9 +78,9 @@ def create_app():
     app.register_blueprint(action_bp, url_prefix="/api")
     app.register_blueprint(job_vacancy_bp, url_prefix="/api")
     app.register_blueprint(metrics_bp, url_prefix="/api/metrics")
-    app.register_blueprint(upload_bp, url_prefix="/api")   # POST /api/upload
-    app.register_blueprint(user_bp, url_prefix="/api")     # Rotas de usuário
-    app.register_blueprint(finance_bp, url_prefix="/api")  # <<< registra /api/finance/...
+    app.register_blueprint(upload_bp, url_prefix="/api")
+    app.register_blueprint(user_bp, url_prefix="/api")
+    app.register_blueprint(finance_bp, url_prefix="/api")  # /api/finance/* e /api/transactions
 
     # -----------------------
     # Healthcheck
@@ -91,22 +91,25 @@ def create_app():
 
     # -----------------------
     # Preflight genérico para /api/*
-    # (Garante 204 no OPTIONS mesmo que a rota específica não tenha sido criada)
     # -----------------------
     @app.route("/api/<path:any_path>", methods=["OPTIONS"])
     def api_preflight(any_path):
+        # CORS já injeta os cabeçalhos. 204 é suficiente para o browser prosseguir.
         return ("", 204)
 
     # -----------------------
-    # Error Handlers úteis
+    # Error Handlers úteis (JSON)
     # -----------------------
+    @app.errorhandler(404)
+    def handle_404(e):
+        return jsonify(error="not_found"), 404
+
     @app.errorhandler(RequestEntityTooLarge)
     def handle_file_too_large(e):
-        return jsonify(error="file_too_large", max_bytes=app.config['MAX_CONTENT_LENGTH']), 413
+        return jsonify(error="file_too_large", max_bytes=app.config["MAX_CONTENT_LENGTH"]), 413
 
     @app.errorhandler(500)
     def handle_500(e):
-        # resposta JSON consistente (detalhes ficam no log do servidor)
         return jsonify(error="internal_server_error"), 500
 
     # -----------------------
@@ -121,8 +124,8 @@ def create_app():
     return app
 
 
-# expõe um objeto app global (funciona com "backend.main:app")
+# expõe um objeto app global (funciona com "src.main:create_app()")
 app = create_app()
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)

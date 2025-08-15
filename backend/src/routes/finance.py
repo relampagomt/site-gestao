@@ -1,35 +1,79 @@
+# backend/src/routes/finance.py
 import os
-import time
+import json
+import uuid
+import logging
+import importlib
 from datetime import datetime
+from typing import Any, Dict, List
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-# Tenta usar utilitário de DB do projeto; se não existir, faz fallback para PyMongo
-try:
-    # ex.: def get_collection(name): return db[name]
-    from src.db import get_collection  # type: ignore
-except Exception:  # fallback independente
-    from pymongo import MongoClient  # type: ignore
-
-    _MONGO_URI = os.getenv("MONGODB_URI") or os.getenv("MONGO_URI") or "mongodb://localhost:27017"
-    _DB_NAME = os.getenv("MONGODB_DB") or os.getenv("MONGO_DBNAME") or "site_gestao"
-
-    _cli = MongoClient(_MONGO_URI, serverSelectionTimeoutMS=5000)
-    _db = _cli[_DB_NAME]
-
-    def get_collection(name: str):
-        return _db[name]
-
-
+log = logging.getLogger(__name__)
 finance_bp = Blueprint("finance", __name__)
 
-# --------- helpers ---------
+# ========================= BACKEND DE DADOS (3 MODOS) =========================
+def _try_import_get_collection():
+    """
+    Tenta achar uma função get_collection() em módulos do projeto.
+    Se achar e der erro ao executar, vamos cair no fallback JSON sem quebrar.
+    """
+    for modname in ("src.db", "src.database", "src.services.db", "src.db_client"):
+        try:
+            mod = importlib.import_module(modname)
+            fn = getattr(mod, "get_collection", None)
+            if callable(fn):
+                log.info("[finance] usando get_collection de %s", modname)
+                return fn
+        except Exception as e:
+            log.debug("[finance] %s sem get_collection (%s)", modname, e)
+    return None
+
+def _try_build_mongo_get_collection():
+    """
+    Só usa pymongo se existir e se as variáveis MONGODB_URI/DB estiverem presentes.
+    """
+    try:
+        pymongo = importlib.import_module("pymongo")
+    except Exception:
+        return None
+    uri = os.getenv("MONGODB_URI") or os.getenv("MONGO_URI")
+    dbname = os.getenv("MONGODB_DB") or os.getenv("MONGO_DBNAME") or "site_gestao"
+    if not uri:
+        return None
+    client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=5000)
+    db = client[dbname]
+    log.info("[finance] usando MongoDB (%s/%s)", uri.split("@")[-1] if "@" in uri else "uri", dbname)
+    return lambda name: db[name]
+
+_get_collection_fn = _try_import_get_collection() or _try_build_mongo_get_collection()
+
+_JSON_PATH = os.getenv("FINANCE_JSON_PATH") or "/tmp/finance_transactions.json"
+
+def _json_load() -> List[Dict[str, Any]]:
+    try:
+        if not os.path.exists(_JSON_PATH):
+            return []
+        with open(_JSON_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        log.exception("[finance] erro lendo JSON: %s", e)
+        return []
+
+def _json_save(items: List[Dict[str, Any]]):
+    os.makedirs(os.path.dirname(_JSON_PATH), exist_ok=True)
+    with open(_JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2, default=str)
+
+# ============================== HELPERS DE DOMÍNIO ============================
 _VALID_TYPES = {"entrada", "saida", "despesa"}
 
-def _iso_date_only(s: str) -> str:
-    """Normaliza para YYYY-MM-DD (retorna '' se inválido)."""
+def _iso_date_only(val) -> str:
+    s = str(val or "")[:10]
     try:
-        d = datetime.fromisoformat(str(s)[:10])
+        d = datetime.strptime(s, "%Y-%m-%d")
         return d.strftime("%Y-%m-%d")
     except Exception:
         return ""
@@ -41,129 +85,205 @@ def _to_number(v):
         return 0.0
 
 def _doc_to_json(doc):
-    if not doc:
-        return None
-    d = dict(doc)
-    _id = str(d.pop("_id", "")) if "_id" in d else d.get("id") or ""
-    d["id"] = _id
-    # normaliza amount para float
+    d = dict(doc or {})
+    if "_id" in d:
+        d["id"] = str(d.pop("_id"))
+    if not d.get("id"):
+        d["id"] = str(uuid.uuid4())
     d["amount"] = _to_number(d.get("amount", 0))
-    # garante date YYYY-MM-DD
-    d["date"] = _iso_date_only(d.get("date", ""))
+    d["date"] = _iso_date_only(d.get("date"))
     return d
 
+def _safe_get_collection(name: str):
+    if not _get_collection_fn:
+        return None
+    try:
+        return _get_collection_fn(name)
+    except Exception as e:
+        log.warning("[finance] get_collection('%s') falhou, usando JSON fallback: %s", name, e)
+        return None
 
-# ========= LISTAR =========
+# ================================= ROTAS =====================================
+
+# LISTAR
 @finance_bp.route("/finance/transactions", methods=["GET"])
-@finance_bp.route("/transactions", methods=["GET"])  # alias legado
+@finance_bp.route("/transactions", methods=["GET"])  # alias
 @jwt_required(optional=True)
 def list_transactions():
-    col = get_collection("transactions")
-    q = {}
-
-    # filtros simples opcionais
-    t = request.args.get("type")
-    if t in _VALID_TYPES:
-        q["type"] = t
-
-    action_id = request.args.get("action_id")
-    if action_id:
-        q["action_id"] = action_id
-
-    cur = col.find(q).sort([("date", -1), ("_id", -1)])
-    items = [_doc_to_json(x) for x in cur]
-    return jsonify(items), 200
-
-
-# ========= CRIAR =========
-@finance_bp.route("/finance/transactions", methods=["POST"])
-@finance_bp.route("/transactions", methods=["POST"])  # alias legado
-@jwt_required()  # exige token (igual ao resto do painel)
-def create_transaction():
-    col = get_collection("transactions")
-    data = request.get_json(silent=True) or {}
-
-    ttype = str(data.get("type", "")).lower().strip()
-    if ttype not in _VALID_TYPES:
-        return jsonify({"message": "type inválido (use: entrada, saida, despesa)"}), 400
-
-    date = _iso_date_only(data.get("date", ""))
-    if not date:
-        return jsonify({"message": "date inválida (YYYY-MM-DD)"}), 400
-
-    amount = _to_number(data.get("amount", 0))
     try:
-        # pode ter despesa negativa? Aqui guardamos sempre positivo
-        amount = abs(float(amount))
-    except Exception:
-        return jsonify({"message": "amount inválido"}), 400
+        ttype = request.args.get("type")
+        action_id = request.args.get("action_id")
 
-    doc = {
-        "type": ttype,
-        "date": date,
-        "amount": amount,
-        "category": (data.get("category") or "").strip(),
-        "notes": (data.get("notes") or "").strip(),
-        "action_id": (data.get("action_id") or None),
-        "created_by": get_jwt_identity(),  # id do usuário do token
-        "created_at": datetime.utcnow(),
-        "ts": int(time.time()),
-    }
+        col = _safe_get_collection("transactions")
+        if col:
+            query: Dict[str, Any] = {}
+            if ttype in _VALID_TYPES:
+                query["type"] = ttype
+            if action_id:
+                query["action_id"] = action_id
 
-    res = col.insert_one(doc)
-    saved = col.find_one({"_id": res.inserted_id})
-    return jsonify(_doc_to_json(saved)), 201
+            items: List[Dict[str, Any]] = []
+            try:
+                cur = col.find(query)  # pymongo-like
+                try:
+                    cur = cur.sort([("date", -1), ("_id", -1)])
+                except Exception:
+                    pass
+                for x in cur:
+                    items.append(_doc_to_json(x))
+                return jsonify(items), 200
+            except Exception as e:
+                log.warning("[finance][GET] driver falhou (%s), usando JSON fallback", e)
 
+        items = _json_load()
+        if ttype in _VALID_TYPES:
+            items = [x for x in items if x.get("type") == ttype]
+        if action_id:
+            items = [x for x in items if str(x.get("action_id") or "") == str(action_id)]
+        items.sort(key=lambda x: (x.get("date") or "", x.get("id") or ""), reverse=True)
+        return jsonify(items), 200
+    except Exception as e:
+        log.exception("[finance][GET] falha: %s", e)
+        return jsonify({"message": "internal_error"}), 500
 
-# ========= (OPCIONAL) ATUALIZAR =========
+# CRIAR
+@finance_bp.route("/finance/transactions", methods=["POST"])
+@finance_bp.route("/transactions", methods=["POST"])  # alias
+@jwt_required()
+def create_transaction():
+    try:
+        data = request.get_json(silent=True) or {}
+        ttype = str(data.get("type", "")).lower().strip()
+        if ttype not in _VALID_TYPES:
+            return jsonify({"message": "type inválido (entrada, saida, despesa)"}), 400
+        date = _iso_date_only(data.get("date"))
+        if not date:
+            return jsonify({"message": "date inválida (YYYY-MM-DD)"}), 400
+
+        doc = {
+            "type": ttype,
+            "date": date,
+            "amount": abs(_to_number(data.get("amount", 0))),
+            "category": (data.get("category") or "").strip(),
+            "notes": (data.get("notes") or "").strip(),
+            "action_id": data.get("action_id") or None,
+            "created_by": get_jwt_identity(),
+            "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+
+        col = _safe_get_collection("transactions")
+        if col:
+            # tenta várias APIs comuns; em qualquer erro cai pro JSON
+            try:
+                if hasattr(col, "insert_one"):
+                    res = col.insert_one(doc)  # pymongo
+                    inserted_id = getattr(res, "inserted_id", None)
+                    saved = None
+                    if inserted_id is not None and hasattr(col, "find_one"):
+                        try:
+                            saved = col.find_one({"_id": inserted_id})
+                        except Exception:
+                            saved = None
+                    return jsonify(_doc_to_json(saved or {**doc, "_id": inserted_id})), 201
+
+                if hasattr(col, "insert"):
+                    res = col.insert(doc)  # alguns drivers retornam id/doc
+                    if isinstance(res, dict):
+                        return jsonify(_doc_to_json({**doc, **res})), 201
+                    return jsonify(_doc_to_json({**doc, "id": str(res)})), 201
+
+                if hasattr(col, "create"):
+                    saved = col.create(doc)
+                    return jsonify(_doc_to_json(saved)), 201
+            except Exception as e:
+                log.warning("[finance][POST] erro no driver, usando JSON fallback: %s", e)
+
+        # JSON fallback
+        items = _json_load()
+        doc["id"] = str(uuid.uuid4())
+        items.append(doc)
+        _json_save(items)
+        return jsonify(_doc_to_json(doc)), 201
+
+    except Exception as e:
+        log.exception("[finance][POST] falha: %s", e)
+        return jsonify({"message": "internal_error"}), 500
+
+# ATUALIZAR
 @finance_bp.route("/finance/transactions/<txid>", methods=["PUT", "PATCH"])
-@finance_bp.route("/transactions/<txid>", methods=["PUT", "PATCH"])  # alias legado
+@finance_bp.route("/transactions/<txid>", methods=["PUT", "PATCH"])  # alias
 @jwt_required()
 def update_transaction(txid):
-    from bson import ObjectId  # type: ignore
-    col = get_collection("transactions")
     try:
-        _id = ObjectId(txid)
-    except Exception:
-        return jsonify({"message": "id inválido"}), 400
+        data = request.get_json(silent=True) or {}
+        upd: Dict[str, Any] = {}
 
-    data = request.get_json(silent=True) or {}
-    upd = {}
+        if "type" in data and str(data["type"]).lower() in _VALID_TYPES:
+            upd["type"] = str(data["type"]).lower()
+        if "date" in data:
+            d = _iso_date_only(data["date"])
+            if d:
+                upd["date"] = d
+        if "amount" in data:
+            upd["amount"] = abs(_to_number(data["amount"]))
+        for k in ("category", "notes", "action_id"):
+            if k in data:
+                upd[k] = data[k]
 
-    if "type" in data and str(data["type"]).lower() in _VALID_TYPES:
-        upd["type"] = str(data["type"]).lower()
+        if not upd:
+            return jsonify({"message": "Nada para atualizar"}), 400
 
-    if "date" in data:
-        d = _iso_date_only(data["date"])
-        if d:
-            upd["date"] = d
+        col = _safe_get_collection("transactions")
+        if col:
+            try:
+                from bson import ObjectId  # opcional
+                _id = ObjectId(txid)
+                col.update_one({"_id": _id}, {"$set": upd})
+                saved = col.find_one({"_id": _id})
+                return jsonify(_doc_to_json(saved)), 200
+            except Exception:
+                try:
+                    col.update_one({"id": txid}, {"$set": upd})
+                    saved = col.find_one({"id": txid})
+                    return jsonify(_doc_to_json(saved)), 200
+                except Exception as e:
+                    log.warning("[finance][PUT] driver falhou (%s), usando JSON fallback", e)
 
-    if "amount" in data:
-        upd["amount"] = abs(_to_number(data["amount"]))
+        items = _json_load()
+        for i, it in enumerate(items):
+            if str(it.get("id")) == str(txid):
+                items[i].update(upd)
+                _json_save(items)
+                return jsonify(_doc_to_json(items[i])), 200
+        return jsonify({"message": "não encontrado"}), 404
+    except Exception as e:
+        log.exception("[finance][PUT] falha: %s", e)
+        return jsonify({"message": "internal_error"}), 500
 
-    for k in ("category", "notes", "action_id"):
-        if k in data:
-            upd[k] = (data[k] or "").strip() if isinstance(data[k], str) else data[k]
-
-    if not upd:
-        return jsonify({"message": "Nada para atualizar"}), 400
-
-    col.update_one({"_id": _id}, {"$set": upd})
-    saved = col.find_one({"_id": _id})
-    return jsonify(_doc_to_json(saved)), 200
-
-
-# ========= (OPCIONAL) DELETAR =========
+# DELETAR
 @finance_bp.route("/finance/transactions/<txid>", methods=["DELETE"])
-@finance_bp.route("/transactions/<txid>", methods=["DELETE"])  # alias legado
+@finance_bp.route("/transactions/<txid>", methods=["DELETE"])  # alias
 @jwt_required()
 def delete_transaction(txid):
-    from bson import ObjectId  # type: ignore
-    col = get_collection("transactions")
     try:
-        _id = ObjectId(txid)
-    except Exception:
-        return jsonify({"message": "id inválido"}), 400
+        col = _safe_get_collection("transactions")
+        if col:
+            try:
+                from bson import ObjectId
+                _id = ObjectId(txid)
+                col.delete_one({"_id": _id})
+                return ("", 204)
+            except Exception:
+                try:
+                    col.delete_one({"id": txid})
+                    return ("", 204)
+                except Exception as e:
+                    log.warning("[finance][DELETE] driver falhou (%s), usando JSON fallback", e)
 
-    col.delete_one({"_id": _id})
-    return ("", 204)
+        items = _json_load()
+        new_items = [x for x in items if str(x.get("id")) != str(txid)]
+        _json_save(new_items)
+        return ("", 204)
+    except Exception as e:
+        log.exception("[finance][DELETE] falha: %s", e)
+        return jsonify({"message": "internal_error"}), 500
