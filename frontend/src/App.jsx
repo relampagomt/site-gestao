@@ -13,7 +13,7 @@ import Vacancies from "./admin/Vacancies.jsx";
 import Users from "./admin/Users.jsx";
 
 // Páginas públicas (ajuste os caminhos se necessário)
-import Login from "./auth/Login.jsx";            // caso seu login esteja em outra pasta, ajuste
+import Login from "./pages/Login.jsx";
 import NotFound from "./pages/NotFound.jsx";     // se não existir, há um fallback abaixo
 import Forbidden from "./pages/Forbidden.jsx";   // se não existir, há um fallback abaixo
 
