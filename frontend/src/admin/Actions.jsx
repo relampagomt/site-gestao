@@ -372,24 +372,26 @@ const Actions = () => {
 
   /* ===================== RENDER ===================== */
   return (
-    <div className="admin-page-container admin-space-y-6">
-      <Card className="admin-card">
-        <CardHeader className="admin-card-header admin-page-header">
-          <div>
-            <CardTitle className="admin-page-title">Ações</CardTitle>
-            <CardDescription className="admin-card-description">
-              Cadastre e gerencie ações promocionais e de distribuição.
-            </CardDescription>
-          </div>
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl md:text-2xl font-semibold">Ações</h1>
+      </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 opacity-60" />
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Registros</CardTitle>
+          <CardDescription>Lista de ações promocionais e de distribuição cadastradas</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* Controles padronizados */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por cliente, empresa, tipo, status ou observação"
-                className="pl-9 w-full sm:w-[260px]"
+                placeholder="Buscar por cliente, empresa, tipo, status ou observação..."
+                className="pl-9"
               />
             </div>
 
@@ -508,11 +510,11 @@ const Actions = () => {
               </PopoverContent>
             </Popover>
 
-            {/* Modal CRIAR */}
+            {/* Botão Nova Ação */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
-                <Button className="admin-btn-primary">
-                  <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+                <Button className="gap-2">
+                  <Plus className="h-4 w-4" />
                   <span className="whitespace-nowrap">Nova Ação</span>
                 </Button>
               </DialogTrigger>
@@ -635,7 +637,7 @@ const Actions = () => {
               </DialogContent>
             </Dialog>
           </div>
-        </CardHeader>
+        </CardContent>
 
         {/* Tabela */}
         <CardContent>

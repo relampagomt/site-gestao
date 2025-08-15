@@ -261,9 +261,9 @@ export default function Vacancies() {
 
   /* ===================== RENDER ===================== */
   return (
-    <div className="admin-page-container admin-space-y-6">
-      <div className="admin-page-header">
-        <h2 className="admin-page-title">Vagas</h2>
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl md:text-2xl font-semibold">Vagas</h1>
       </div>
 
       {/* KPIs (compacto no desktop) */}
@@ -315,82 +315,70 @@ export default function Vacancies() {
 
       {/* Busca e Filtros */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            <div className="w-full">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Registros</CardTitle>
+          <CardDescription>Lista de vagas e indicações de candidatos</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* Controles padronizados */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome, telefone, endereço, etc…"
+                className="pl-9"
+                placeholder="Buscar por nome, telefone, endereço..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os status</SelectItem>
-                  <SelectItem value="Aberta">Aberta</SelectItem>
-                  <SelectItem value="Em Processo">Em Processo</SelectItem>
-                  <SelectItem value="Fechada">Fechada</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* Filtros */}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="Aberta">Aberta</SelectItem>
+                <SelectItem value="Em Processo">Em Processo</SelectItem>
+                <SelectItem value="Fechada">Fechada</SelectItem>
+              </SelectContent>
+            </Select>
 
-              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por departamento" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os departamentos</SelectItem>
-                  <SelectItem value="Comercial">Comercial</SelectItem>
-                  <SelectItem value="Operacional">Operacional</SelectItem>
-                  <SelectItem value="Administrativo">Administrativo</SelectItem>
-                  <SelectItem value="Técnico">Técnico</SelectItem>
-                </SelectContent>
-              </Select>
+            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Departamento" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="Comercial">Comercial</SelectItem>
+                <SelectItem value="Operacional">Operacional</SelectItem>
+                <SelectItem value="Administrativo">Administrativo</SelectItem>
+                <SelectItem value="Técnico">Técnico</SelectItem>
+              </SelectContent>
+            </Select>
 
-              <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os tipos</SelectItem>
-                  <SelectItem value="CLT">CLT</SelectItem>
-                  <SelectItem value="PJ">PJ</SelectItem>
-                  <SelectItem value="Freelancer">Freelancer</SelectItem>
-                  <SelectItem value="Estágio">Estágio</SelectItem>
-                </SelectContent>
-              </Select>
+            <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="CLT">CLT</SelectItem>
+                <SelectItem value="PJ">PJ</SelectItem>
+                <SelectItem value="Freelancer">Freelancer</SelectItem>
+                <SelectItem value="Estágio">Estágio</SelectItem>
+              </SelectContent>
+            </Select>
 
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSearch("");
-                  setStatusFilter("todos");
-                  setDepartmentFilter("todos");
-                  setJobTypeFilter("todos");
-                }}
-              >
-                Limpar Filtros
-              </Button>
-
-              <Button onClick={openCreate} className="admin-btn-primary">
-                <Plus className="mr-2 h-4 w-4" /> Nova Indicação
-              </Button>
-            </div>
+            {/* Botão Nova Vaga */}
+            <Button onClick={openCreate} className="gap-2">
+              <Plus className="h-4 w-4" />
+              <span className="whitespace-nowrap">Nova Vaga</span>
+            </Button>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Tabela */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Lista de Vagas</CardTitle>
-          <CardDescription>Gerencie as indicações de candidatos</CardDescription>
-        </CardHeader>
-        <CardContent>
+          {/* Tabela */}
           <div className="overflow-x-auto">
             <table className="min-w-full table-auto text-sm">
               <thead className="text-muted-foreground">

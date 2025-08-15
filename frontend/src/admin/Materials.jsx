@@ -366,8 +366,8 @@ const Materials = () => {
           <CardDescription>Lista de materiais cadastrados</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Filtros + Novo */}
-          <div className="flex flex-col md:flex-row md:items-center gap-2 mb-4">
+          {/* Controles padronizados */}
+          <div className="flex items-center gap-2 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
@@ -378,25 +378,7 @@ const Materials = () => {
               />
             </div>
 
-            {/* Filtro por mês (mantido) */}
-            <div className="flex items-center gap-2">
-              <Label htmlFor="filter-month" className="text-xs md:text-sm whitespace-nowrap">Mês</Label>
-              <Input
-                id="filter-month"
-                type="month"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                className="w-[130px]"
-                lang="pt-BR"
-              />
-              {month && (
-                <Button variant="outline" size="sm" onClick={() => setMonth("")}>
-                  Limpar mês
-                </Button>
-              )}
-            </div>
-
-            {/* ====== FILTROS AVANÇADOS (POPOVER) ====== */}
+            {/* Filtros avançados */}
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="gap-2">
@@ -426,6 +408,23 @@ const Materials = () => {
                     onWheel={(e) => e.stopPropagation()}
                     onTouchMove={(e) => e.stopPropagation()}
                   >
+                    {/* Filtro por mês */}
+                    <div className="space-y-2">
+                      <Label htmlFor="filter-month">Mês</Label>
+                      <Input
+                        id="filter-month"
+                        type="month"
+                        value={month}
+                        onChange={(e) => setMonth(e.target.value)}
+                        lang="pt-BR"
+                      />
+                      {month && (
+                        <Button variant="outline" size="sm" onClick={() => setMonth("")}>
+                          Limpar mês
+                        </Button>
+                      )}
+                    </div>
+
                     {/* Clientes */}
                     <div className="space-y-2 md:col-span-1">
                       <Label>Clientes</Label>
@@ -540,12 +539,12 @@ const Materials = () => {
               </PopoverContent>
             </Popover>
 
-            {/* Novo */}
+            {/* Botão Novo Material */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
-                  <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
-                  <span className="whitespace-nowrap">Novo</span>
+                <Button className="gap-2" onClick={openCreate}>
+                  <Plus className="h-4 w-4" />
+                  <span className="whitespace-nowrap">Novo Material</span>
                 </Button>
               </DialogTrigger>
 
