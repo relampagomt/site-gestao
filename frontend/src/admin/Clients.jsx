@@ -1,3 +1,4 @@
+// frontend/src/admin/Clients.jsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import api from "@/services/api";
 
@@ -41,6 +42,51 @@ import {
   FileSpreadsheet,    // Excel
   FileText            // PDF
 } from "lucide-react";
+
+/* ============================================================================
+   TELEFONE BR (+55) — normalização e máscara
+   Regras:
+   - Prefixo +55 sempre
+   - Insere '9' no início do número local
+   - Salva em E.164 (+55DD9XXXXXXXX)
+   - Exibe como +55(DD)9XXXXXXXX
+============================================================================ */
+function normalizePhoneBR(input) {
+  // Mantém só dígitos
+  let digits = String(input || "").replace(/\D/g, "");
+
+  // Remove 55 inicial (vamos recolocar padronizado)
+  if (digits.startsWith("55")) digits = digits.slice(2);
+
+  // DDD (2 dígitos no Brasil)
+  const ddd = digits.slice(0, 2);
+
+  // Resto do número informado pelo usuário
+  let localRaw = digits.slice(2);
+
+  // Garante o '9' no início do número local (se já houver, não duplica)
+  if (localRaw.length > 0 && localRaw[0] !== "9") {
+    localRaw = "9" + localRaw;
+  }
+
+  // Limita o local a 9 dígitos (padrão celular BR)
+  const local = localRaw.slice(0, 9);
+
+  // Monta E.164 sempre que houver ao menos DDD
+  const e164 = ddd.length === 2 ? `+55${ddd}${local}` : `+55${ddd}${local}`;
+
+  // Monta exibição: +55(DD)9XXXXXXXX
+  let display = "+55";
+  if (ddd.length) display += `(${ddd})`;
+  if (local.length) display += `${local}`;
+
+  return { e164, display, ddd, local };
+}
+
+function formatPhoneDisplay(v) {
+  const { display } = normalizePhoneBR(v);
+  return display || "";
+}
 
 /* ====== SEGMENTOS AGRUPADOS (expandido) ================================== */
 export const SEGMENTOS_GRUPOS = [
@@ -468,6 +514,14 @@ const Clients = () => {
 
   function onChange(e) {
     const { name, value } = e.target;
+
+    // Trata telefone com máscara + normalização
+    if (name === "phone") {
+      const { display } = normalizePhoneBR(value);
+      setForm((f) => ({ ...f, phone: display }));
+      return;
+    }
+
     setForm((f) => ({ ...f, [name]: value }));
   }
 
@@ -485,7 +539,8 @@ const Clients = () => {
       company: row.company ?? row.company_name ?? row.companyName ?? "",
       segments: ensureArraySegments(row),
       email: row.email ?? "",
-      phone: row.phone ?? "",
+      // Exibe sempre a máscara no modal de edição
+      phone: formatPhoneDisplay(row.phone ?? ""),
       notes: row.notes ?? "",
     });
     setOpen(true);
@@ -500,6 +555,9 @@ const Clients = () => {
     e.preventDefault();
     setSaving(true);
     try {
+      // Normaliza telefone para salvar sempre em E.164
+      const { e164 } = normalizePhoneBR(form.phone);
+
       const payload = {
         name: form.name,
         company: form.company || "",
@@ -507,7 +565,7 @@ const Clients = () => {
         segments: form.segments,
         segment: form.segments.join(", "),
         email: form.email,
-        phone: form.phone,
+        phone: e164, // <-- salvo padronizado
         notes: form.notes || "",
       };
 
@@ -662,7 +720,7 @@ const Clients = () => {
       const company = c.company ?? c.company_name ?? c.companyName ?? "";
       const segs = ensureArraySegments(c);
       const email = c.email || "";
-      const phone = c.phone || "";
+      const phone = formatPhoneDisplay(c.phone || "");
       return {
         Nome: name,
         Empresa: company,
@@ -793,7 +851,7 @@ const Clients = () => {
                 </Button>
               </PopoverTrigger>
 
-              <PopoverContent
+            <PopoverContent
                 align="end"
                 side="bottom"
                 sideOffset={8}
@@ -1012,7 +1070,14 @@ const Clients = () => {
                       </div>
                       <div>
                         <Label>Telefone</Label>
-                        <Input name="phone" value={form.phone} onChange={onChange} />
+                        {/* Exibe sempre a máscara +55(DD)9XXXXXXXX enquanto o usuário digita */}
+                        <Input
+                          name="phone"
+                          inputMode="numeric"
+                          placeholder="+55(DD)9XXXXXXXX"
+                          value={form.phone}
+                          onChange={onChange}
+                        />
                       </div>
 
                       <div className="md:col-span-2">
@@ -1072,7 +1137,9 @@ const Clients = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">{c.email || "—"}</TableCell>
-                        <TableCell className="text-center">{c.phone || "—"}</TableCell>
+                        <TableCell className="text-center">
+                          {c.phone ? formatPhoneDisplay(c.phone) : "—"}
+                        </TableCell>
                         <TableCell className="text-center">
                           <div className="flex justify-center gap-2">
                             <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(c)}>
