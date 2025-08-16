@@ -128,8 +128,7 @@ export default function AdminLayout() {
               <SideItem key={item.to} {...item} collapsed={collapsed} />
             ))}
           </nav>
-
-          {/* (removido) Rodapé com botão Sair no desktop */}
+          {/* (sem botão Sair no desktop) */}
         </aside>
 
         {/* Backdrop Mobile */}
@@ -141,7 +140,7 @@ export default function AdminLayout() {
           onClick={() => setMobileMenuOpen(false)}
         />
 
-        {/* Sidebar Mobile (Menu Hamburguer) */}
+        {/* Sidebar Mobile (Menu Hambúrguer) */}
         <aside
           className={cn(
             "fixed top-0 left-0 h-full z-50 w-64 bg-card border-r flex flex-col transition-transform duration-300 md:hidden",
@@ -175,7 +174,7 @@ export default function AdminLayout() {
             ))}
           </nav>
           <div className="px-4 py-4">
-            {/* Mantém o Sair dentro do drawer mobile */}
+            {/* ÚNICO botão Sair no mobile (dentro do drawer) */}
             <Button
               variant="outline"
               className="w-full justify-center gap-2"
@@ -204,20 +203,21 @@ export default function AdminLayout() {
               </h1>
             </div>
 
-            {/* Lado direito do header: badge + botão Sair */}
+            {/* Lado direito do header */}
             <div className="flex items-center gap-2">
               <div className="text-sm bg-muted px-3 py-1 rounded-full">
                 {user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : "Admin"}
               </div>
+              {/* Botão Sair visível só no DESKTOP (oculto no mobile) */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={onLogout}
-                className="gap-2"
+                className="gap-2 hidden md:inline-flex"
                 title="Sair"
               >
                 <LogOut className="w-4 h-4" />
-                <span className="hidden sm:inline">Sair</span>
+                <span className="hidden lg:inline">Sair</span>
               </Button>
             </div>
           </header>
