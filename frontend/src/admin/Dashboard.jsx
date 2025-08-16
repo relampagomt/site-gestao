@@ -73,23 +73,55 @@ function buildMonthlyFromActions(actions, monthsDates) {
   return Object.values(buckets);
 }
 
-// agrega e limita fatias (top N + “Outros”)
-function buildPieDataFromMap(map, maxSlices = 8) {
-  const entries = [...map.entries()].sort((a, b) => b[1] - a[1]);
-  const total = entries.reduce((acc, [, v]) => acc + v, 0) || 1;
-  const top = entries.slice(0, maxSlices);
-  const rest = entries.slice(maxSlices);
+/** ===== Pizza: dinâmica (top N + manter >= minPercent + "Outros (n)") ===== */
+function buildPieDataFromMap(map, opts = {}) {
+  const {
+    maxSlices = 12,       // máximo de categorias visíveis
+    minPercent = 0.03,    // mantém sempre >= 3%
+    labelOthers = 'Outros'
+  } = opts;
 
-  const data = top.map(([name, value], idx) => ({
-    name,
-    value,
+  const entries = [...map.entries()]
+    .map(([name, value]) => ({ name, value: Number(value) || 0 }))
+    .filter(e => e.value > 0)
+    .sort((a, b) => b.value - a.value);
+
+  const total = entries.reduce((acc, e) => acc + e.value, 0) || 1;
+  const withPct = entries.map(e => ({ ...e, percent: e.value / total }));
+
+  // 1) tudo acima do limiar fica
+  const keep = withPct.filter(e => e.percent >= minPercent);
+
+  // 2) completa com as maiores restantes até atingir maxSlices (ou todas)
+  const limit = Math.min(maxSlices, withPct.length);
+  if (keep.length < limit) {
+    for (const e of withPct) {
+      if (!keep.some(k => k.name === e.name)) {
+        keep.push(e);
+        if (keep.length >= limit) break;
+      }
+    }
+  }
+
+  const keepNames = new Set(keep.map(e => e.name));
+  const rest = withPct.filter(e => !keepNames.has(e.name));
+
+  // monta dataset com paleta
+  const data = keep.map((e, idx) => ({
+    name: e.name,
+    value: e.value,
     color: COLORS[idx % COLORS.length],
   }));
 
   if (rest.length) {
-    const otherVal = rest.reduce((acc, [, v]) => acc + v, 0);
-    data.push({ name: 'Outros', value: otherVal, color: COLORS[(top.length) % COLORS.length] });
+    const otherVal = rest.reduce((acc, e) => acc + e.value, 0);
+    data.push({
+      name: `${labelOthers} (${rest.length})`,
+      value: otherVal,
+      color: COLORS[data.length % COLORS.length],
+    });
   }
+
   return data;
 }
 
@@ -183,7 +215,8 @@ const Dashboard = () => {
         map.set(seg, (map.get(seg) || 0) + 1);
       }
     }
-    return buildPieDataFromMap(map);
+    // manter ≥ 2% e até 12 fatias
+    return buildPieDataFromMap(map, { maxSlices: 12, minPercent: 0.02, labelOthers: 'Outros' });
   }, [clientsArr]);
 
   const actionTypesPie = useMemo(() => {
@@ -196,13 +229,17 @@ const Dashboard = () => {
         for (const t of types) map.set(t, (map.get(t) || 0) + 1);
       }
     }
-    return buildPieDataFromMap(map);
+    // manter ≥ 3% e até 12 fatias
+    return buildPieDataFromMap(map, { maxSlices: 12, minPercent: 0.03, labelOthers: 'Outros' });
   }, [actionsArr]);
 
   const hasRevenue = useMemo(
     () => monthlyData.some(d => (d.receita || 0) > 0),
     [monthlyData]
   );
+
+  // rótulo de pizza: só mostra ≥ 3% para evitar poluição visual
+  const pieLabel = ({ name, percent }) => (percent >= 0.03 ? `${name} ${(percent * 100).toFixed(0)}%` : '');
 
   return (
     <div className="space-y-6">
@@ -329,7 +366,7 @@ const Dashboard = () => {
                   outerRadius={90}
                   labelLine={false}
                   dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  label={pieLabel}
                 >
                   {clientsSegmentsPie.map((entry, idx) => (
                     <Cell key={`cseg-${idx}`} fill={entry.color || COLORS[idx % COLORS.length]} />
@@ -357,7 +394,7 @@ const Dashboard = () => {
                   outerRadius={90}
                   labelLine={false}
                   dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  label={pieLabel}
                 >
                   {actionTypesPie.map((entry, idx) => (
                     <Cell key={`atype-${idx}`} fill={entry.color || COLORS[idx % COLORS.length]} />
