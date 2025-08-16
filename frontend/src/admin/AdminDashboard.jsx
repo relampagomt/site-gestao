@@ -99,7 +99,12 @@ const AdminDashboard = () => {
 
               <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
                 <div className="hidden sm:flex items-center space-x-2">
-                  <User className="w-4 h-4 text-gray-500" />
+                  {/* ✅ Ícone diferenciado do "Clientes": Shield para Admin, User para Supervisor */}
+                  {isAdmin() ? (
+                    <Shield className="w-4 h-4 text-gray-500" />
+                  ) : (
+                    <User className="w-4 h-4 text-gray-500" />
+                  )}
                   <span className="text-sm text-gray-700 truncate max-w-32">{user?.name}</span>
                   <Badge variant={isAdmin() ? 'default' : 'secondary'}>
                     {user?.role === 'admin' ? 'Admin' : 'Supervisor'}
