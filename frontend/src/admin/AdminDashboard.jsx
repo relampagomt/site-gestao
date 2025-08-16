@@ -10,14 +10,15 @@ import {
   User,
   Shield,
   Settings,
-  Users,
+  Users as UsersIcon,   // 👈 ícone plural para Clientes
+  UserCog,              // 👈 ícone diferente para Usuários
   Package,
   Activity,
   Briefcase,
   Home,
   Menu,
   X,
-  Wallet, // ✅ novo ícone
+  Wallet,
 } from 'lucide-react';
 
 import Dashboard from './Dashboard';
@@ -26,7 +27,10 @@ import Materials from './Materials';
 import Actions from './Actions';
 import Vacancies from './Vacancies';
 import SettingsPage from './Settings';
-import Finance from './Finance'; // ✅ novo
+import Finance from './Finance';
+
+// Se o seu componente de administração de usuários for "Users.jsx", importe assim:
+import UsersPage from './Users'; // 👈 página de Usuários (gestão de usuários)
 
 const AdminDashboard = () => {
   const { user, logout, isAdmin } = useAuth();
@@ -37,10 +41,11 @@ const AdminDashboard = () => {
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home, component: Dashboard },
-    { id: 'clients', label: 'Clientes', icon: Users, component: Clients },
+    { id: 'clients', label: 'Clientes', icon: UsersIcon, component: Clients },      // 👈 continua Users (plural)
+    { id: 'users', label: 'Usuários', icon: UserCog, component: UsersPage },        // 👈 agora UserCog (diferente)
     { id: 'materials', label: 'Materiais', icon: Package, component: Materials },
     { id: 'actions', label: 'Ações', icon: Activity, component: Actions },
-    { id: 'finance', label: 'Finanças', icon: Wallet, component: Finance }, // ✅ novo item
+    { id: 'finance', label: 'Finanças', icon: Wallet, component: Finance },
     { id: 'vacancies', label: 'Vagas', icon: Briefcase, component: Vacancies },
     { id: 'settings', label: 'Configurações', icon: Settings, component: SettingsPage },
   ];
@@ -99,7 +104,6 @@ const AdminDashboard = () => {
 
               <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
                 <div className="hidden sm:flex items-center space-x-2">
-                  {/* ✅ Ícone diferenciado do "Clientes": Shield para Admin, User para Supervisor */}
                   {isAdmin() ? (
                     <Shield className="w-4 h-4 text-gray-500" />
                   ) : (
