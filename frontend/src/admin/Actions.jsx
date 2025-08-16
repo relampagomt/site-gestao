@@ -19,7 +19,7 @@ import ImagePreview from "@/components/ImagePreview.jsx";
 import {
   Plus, Edit, Trash2, Search, Calendar as CalendarIcon, Layers, X,
   CheckCircle, Loader2, Clock, UploadCloud, Filter as FilterIcon,
-  FileDown, FileSpreadsheet, FileJson, ClipboardCopy
+  FileDown, FileSpreadsheet, FileJson, ClipboardCopy, FileText
 } from "lucide-react";
 
 import { formatDateBR } from "@/utils/dates.js";
@@ -209,7 +209,7 @@ const Actions = () => {
     }
   };
 
-  /* =================== EXPORTS (CSV/JSON/Copy) =================== */
+  /* =================== EXPORTS (CSV/JSON/Copy/PDF) =================== */
   const headers = [
     "Cliente",
     "Empresa",
@@ -288,6 +288,75 @@ const Actions = () => {
   const handleExportJSON = () => {
     const json = JSON.stringify(filtered, null, 2);
     downloadFile("acoes.json", json, "application/json;charset=utf-8;");
+  };
+
+  // ===== PDF =====
+  const handleExportPDF = async () => {
+    if (!filtered.length) {
+      alert("Não há dados para exportar.");
+      return;
+    }
+    try {
+      // import dinâmico para evitar quebrar SSR/build em ambientes sem o pacote instalado
+      const { jsPDF } = await import("jspdf");
+      const autoTable = (await import("jspdf-autotable")).default;
+
+      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+      // Cabeçalho
+      const title = "Relatório de Ações";
+      const subtitle = new Date().toLocaleString("pt-BR");
+      doc.setFontSize(14);
+      doc.text(title, 40, 32);
+      doc.setFontSize(10);
+      doc.text(`Gerado em: ${subtitle}`, 40, 48);
+
+      const rows = filtered.map(toRow);
+
+      autoTable(doc, {
+        head: [headers],
+        body: rows,
+        startY: 64,
+        styles: {
+          fontSize: 8,
+          cellPadding: 4,
+          overflow: "linebreak",
+        },
+        headStyles: {
+          fillColor: [239, 68, 68], // vermelho suave (shadcn vibe)
+          textColor: [255, 255, 255],
+          halign: "center",
+        },
+        bodyStyles: {
+          valign: "middle",
+        },
+        columnStyles: {
+          0: { cellWidth: 120 }, // Cliente
+          1: { cellWidth: 120 }, // Empresa
+          2: { cellWidth: 160 }, // Tipos
+          3: { cellWidth: 80 },  // Períodos
+          4: { cellWidth: 70 },  // Início
+          5: { cellWidth: 70 },  // Término
+          6: { cellWidth: 80 },  // Quantidade
+          7: { cellWidth: 80 },  // Status
+          8: { cellWidth: 160 }, // Observações
+          9: { cellWidth: 160 }, // Foto (URL)
+        },
+        margin: { top: 32, right: 24, bottom: 24, left: 24 },
+        didDrawPage: (data) => {
+          // rodapé simples com numeração
+          const pageCount = doc.getNumberOfPages();
+          const str = `Página ${data.pageNumber} de ${pageCount}`;
+          doc.setFontSize(9);
+          doc.text(str, doc.internal.pageSize.getWidth() - 24 - doc.getTextWidth(str), doc.internal.pageSize.getHeight() - 14);
+        },
+      });
+
+      doc.save("acoes.pdf");
+    } catch (err) {
+      console.error("Falha ao exportar PDF:", err);
+      alert("Para exportar em PDF, instale as dependências: npm i jspdf jspdf-autotable");
+    }
   };
 
   /* -------- Create -------- */
@@ -608,6 +677,9 @@ const Actions = () => {
                   </Button>
                   <Button variant="ghost" className="justify-start gap-2" onClick={handleExportJSON}>
                     <FileJson className="size-4" /> Exportar JSON
+                  </Button>
+                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportPDF}>
+                    <FileText className="size-4" /> Exportar PDF
                   </Button>
                 </div>
               </PopoverContent>
