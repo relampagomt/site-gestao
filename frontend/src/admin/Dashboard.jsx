@@ -6,6 +6,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell
 } from 'recharts';
+import { useNavigate } from 'react-router-dom';
 import api from '@/services/api';
 
 const COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#2563eb', '#7c3aed', '#0ea5e9', '#22c55e', '#f97316', '#e11d48'];
@@ -106,7 +107,7 @@ function buildPieDataFromMap(map, opts = {}) {
   const keepNames = new Set(keep.map(e => e.name));
   const rest = withPct.filter(e => !keepNames.has(e.name));
 
-  // monta dataset com paleta
+  // dataset com paleta
   const data = keep.map((e, idx) => ({
     name: e.name,
     value: e.value,
@@ -127,6 +128,8 @@ function buildPieDataFromMap(map, opts = {}) {
 
 /* ================= componente ================= */
 const Dashboard = () => {
+  const navigate = useNavigate();
+
   const [stats, setStats] = useState({
     totalClients: 0,
     totalMaterials: 0,
@@ -207,6 +210,18 @@ const Dashboard = () => {
     }
   };
 
+  // ===== Helper de navegação: abre /admin/actions com filtros =====
+  const goToActions = (filter) => {
+    try {
+      // guarda também no localStorage (caso a página de ações leia isso)
+      localStorage.setItem('actions:prefilter', JSON.stringify(filter));
+    } catch {}
+    const params = new URLSearchParams();
+    if (filter?.type) params.set('type', filter.type);
+    if (filter?.segment) params.set('segment', filter.segment);
+    navigate(`/admin/actions${params.toString() ? `?${params.toString()}` : ''}`);
+  };
+
   // pizzas (derivadas do estado)
   const clientsSegmentsPie = useMemo(() => {
     const map = new Map();
@@ -215,7 +230,6 @@ const Dashboard = () => {
         map.set(seg, (map.get(seg) || 0) + 1);
       }
     }
-    // manter ≥ 2% e até 12 fatias
     return buildPieDataFromMap(map, { maxSlices: 12, minPercent: 0.02, labelOthers: 'Outros' });
   }, [clientsArr]);
 
@@ -229,7 +243,6 @@ const Dashboard = () => {
         for (const t of types) map.set(t, (map.get(t) || 0) + 1);
       }
     }
-    // manter ≥ 3% e até 12 fatias
     return buildPieDataFromMap(map, { maxSlices: 12, minPercent: 0.03, labelOthers: 'Outros' });
   }, [actionsArr]);
 
@@ -238,8 +251,33 @@ const Dashboard = () => {
     [monthlyData]
   );
 
-  // rótulo de pizza: só mostra ≥ 3% para evitar poluição visual
-  const pieLabel = ({ name, percent }) => (percent >= 0.03 ? `${name} ${(percent * 100).toFixed(0)}%` : '');
+  // rótulo de pizza clicável (≥3% para evitar poluição visual)
+  const makeClickableLabel = (kind /* 'segment' | 'type' */) => (props) => {
+    const { cx, cy, midAngle, outerRadius, percent, name } = props;
+    if (percent < 0.03) return null;
+    const isOthers = /^Outros/.test(name);
+    const RAD = Math.PI / 180;
+    const r = outerRadius + 10;
+    const x = cx + r * Math.cos(-midAngle * RAD);
+    const y = cy + r * Math.sin(-midAngle * RAD);
+    const handleClick = () => {
+      if (isOthers) return;
+      if (kind === 'segment') goToActions({ segment: name });
+      else goToActions({ type: name });
+    };
+    return (
+      <text
+        x={x}
+        y={y}
+        textAnchor={x > cx ? 'start' : 'end'}
+        dominantBaseline="central"
+        style={{ fontSize: 12, cursor: isOthers ? 'default' : 'pointer' }}
+        onClick={handleClick}
+      >
+        {`${name} ${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -366,11 +404,19 @@ const Dashboard = () => {
                   outerRadius={90}
                   labelLine={false}
                   dataKey="value"
-                  label={pieLabel}
+                  label={makeClickableLabel('segment')}
                 >
-                  {clientsSegmentsPie.map((entry, idx) => (
-                    <Cell key={`cseg-${idx}`} fill={entry.color || COLORS[idx % COLORS.length]} />
-                  ))}
+                  {clientsSegmentsPie.map((entry, idx) => {
+                    const isOthers = /^Outros/.test(entry.name);
+                    return (
+                      <Cell
+                        key={`cseg-${idx}`}
+                        fill={entry.color || COLORS[idx % COLORS.length]}
+                        style={{ cursor: isOthers ? 'default' : 'pointer' }}
+                        onClick={() => !isOthers && goToActions({ segment: entry.name })}
+                      />
+                    );
+                  })}
                 </Pie>
                 <Tooltip formatter={(v, n, p) => [v, p?.payload?.name]} />
               </PieChart>
@@ -394,11 +440,19 @@ const Dashboard = () => {
                   outerRadius={90}
                   labelLine={false}
                   dataKey="value"
-                  label={pieLabel}
+                  label={makeClickableLabel('type')}
                 >
-                  {actionTypesPie.map((entry, idx) => (
-                    <Cell key={`atype-${idx}`} fill={entry.color || COLORS[idx % COLORS.length]} />
-                  ))}
+                  {actionTypesPie.map((entry, idx) => {
+                    const isOthers = /^Outros/.test(entry.name);
+                    return (
+                      <Cell
+                        key={`atype-${idx}`}
+                        fill={entry.color || COLORS[idx % COLORS.length]}
+                        style={{ cursor: isOthers ? 'default' : 'pointer' }}
+                        onClick={() => !isOthers && goToActions({ type: entry.name })}
+                      />
+                    );
+                  })}
                 </Pie>
                 <Tooltip formatter={(v, n, p) => [v, p?.payload?.name]} />
               </PieChart>
