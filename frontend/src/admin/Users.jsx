@@ -18,43 +18,19 @@ import {
   Edit,
   Trash2,
   Search,
-  Shield,
   Mail,
   User as UserIcon,
   Lock,
   CheckCircle,
   XCircle,
+  UserCog, // 👈 novo ícone para diferenciar "Usuários"
 } from 'lucide-react';
 
 // --- Mock (somente em DEV) ---------------------------------------------------
 const mockUsers = [
-  {
-    id: 'u1',
-    name: 'Admin Master',
-    username: 'admin',
-    email: 'admin@empresa.com',
-    role: 'admin',
-    active: true,
-    created_at: '2025-08-01T12:00:00Z',
-  },
-  {
-    id: 'u2',
-    name: 'Supervisor 01',
-    username: 'sup01',
-    email: 'sup01@empresa.com',
-    role: 'supervisor',
-    active: true,
-    created_at: '2025-08-01T13:00:00Z',
-  },
-  {
-    id: 'u3',
-    name: 'Supervisor 02 (inativo)',
-    username: 'sup02',
-    email: 'sup02@empresa.com',
-    role: 'supervisor',
-    active: false,
-    created_at: '2025-08-02T09:00:00Z',
-  },
+  { id: 'u1', name: 'Admin Master', username: 'admin', email: 'admin@empresa.com', role: 'admin', active: true, created_at: '2025-08-01T12:00:00Z' },
+  { id: 'u2', name: 'Supervisor 01', username: 'sup01', email: 'sup01@empresa.com', role: 'supervisor', active: true, created_at: '2025-08-01T13:00:00Z' },
+  { id: 'u3', name: 'Supervisor 02 (inativo)', username: 'sup02', email: 'sup02@empresa.com', role: 'supervisor', active: false, created_at: '2025-08-02T09:00:00Z' },
 ];
 
 // --- Helpers ------------------------------------------------------------------
@@ -307,7 +283,7 @@ const Users = () => {
         <CardHeader className="admin-card-header admin-page-header">
           <div>
             <CardTitle className="admin-page-title flex items-center gap-2">
-              <Shield className="size-5" />
+              <UserCog className="size-5" /> {/* 👈 alterado para diferenciar de "Clientes" */}
               Usuários
             </CardTitle>
             <CardDescription className="admin-card-description">Gerencie contas, perfis e permissões.</CardDescription>
@@ -324,19 +300,16 @@ const Users = () => {
               />
             </div>
 
+            {/* Botão Novo Usuário só para Admin */}
             {canAdmin && (
               <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                 <DialogTrigger asChild>
-                  <Button
-                    className="admin-btn-primary"
-                    onClick={resetForm}
-                  >
+                  <Button className="admin-btn-primary" onClick={resetForm}>
                     <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
                     <span className="whitespace-nowrap">Novo Usuário</span>
                   </Button>
                 </DialogTrigger>
 
-                {/* Casulo padrão */}
                 <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
                   <div className="px-5 pt-5 pb-3 border-b">
                     <DialogHeader>
@@ -426,7 +399,6 @@ const Users = () => {
                         </div>
                       </div>
 
-                      {/* Footer padrão */}
                       <div className="pt-2 mt-4 border-t flex justify-end gap-2">
                         <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
                           Cancelar
@@ -640,7 +612,6 @@ const Users = () => {
                 </div>
               </div>
 
-              {/* Footer padrão */}
               <div className="pt-2 mt-4 border-t flex justify-end gap-2">
                 <Button
                   type="button"
