@@ -12,6 +12,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Menu as MenuIcon,
+  UserCog, // 👈 novo ícone para diferenciar "Usuários"
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button.jsx";
@@ -58,12 +59,12 @@ export default function AdminLayout() {
   const menu = useMemo(
     () => [
       { to: "/admin", label: "Dashboard", icon: Home, end: true },
-      { to: "/admin/clients", label: "Clientes", icon: Users },
+      { to: "/admin/clients", label: "Clientes", icon: Users },       // 👈 permanece Users (plural)
       { to: "/admin/materials", label: "Materiais", icon: Package },
       { to: "/admin/actions", label: "Ações", icon: ClipboardList },
       { to: "/admin/finance", label: "Finanças", icon: Wallet },
       { to: "/admin/vacancies", label: "Vagas", icon: Briefcase },
-      { to: "/admin/users", label: "Usuários", icon: Users },
+      { to: "/admin/users", label: "Usuários", icon: UserCog },       // 👈 agora UserCog (diferente de Clientes)
     ],
     []
   );
