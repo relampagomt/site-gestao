@@ -36,7 +36,6 @@ import {
   FileText,
 } from "lucide-react";
 import api from "@/services/api";
-import { loadPdfLibs } from "@/utils/pdf.js";
 
 /* ===================== Helpers ===================== */
 const emptyForm = {
@@ -356,7 +355,9 @@ export default function Vacancies() {
       return;
     }
     try {
-      const { jsPDF, autoTable } = await loadPdfLibs();
+      const { jsPDF } = await import("jspdf");
+      const autoTable = (await import("jspdf-autotable")).default;
+
       const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
       // Cabeçalho
@@ -423,7 +424,7 @@ export default function Vacancies() {
       doc.save("vagas.pdf");
     } catch (err) {
       console.error("Falha ao exportar PDF:", err);
-      alert("Não foi possível gerar o PDF no navegador.");
+      alert("Não foi possível gerar o PDF (verifique jspdf e jspdf-autotable).");
     }
   };
 
