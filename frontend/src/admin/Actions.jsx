@@ -18,7 +18,8 @@ import ImagePreview from "@/components/ImagePreview.jsx";
 
 import {
   Plus, Edit, Trash2, Search, Calendar as CalendarIcon, Layers, X,
-  CheckCircle, Loader2, Clock, UploadCloud, Filter as FilterIcon
+  CheckCircle, Loader2, Clock, UploadCloud, Filter as FilterIcon,
+  FileDown, FileSpreadsheet, FileJson, ClipboardCopy
 } from "lucide-react";
 
 import { formatDateBR } from "@/utils/dates.js";
@@ -208,6 +209,87 @@ const Actions = () => {
     }
   };
 
+  /* =================== EXPORTS (CSV/JSON/Copy) =================== */
+  const headers = [
+    "Cliente",
+    "Empresa",
+    "Tipos",
+    "Períodos",
+    "Início",
+    "Término",
+    "Quantidade de material",
+    "Status",
+    "Observações",
+    "Foto (URL)"
+  ];
+
+  const toRow = (a) => {
+    const types = ensureArrayTypes(a).join(" | ");
+    const periods = Array.isArray(a?.day_periods) ? a.day_periods.join(" | ") : "";
+    const start = a.start_date ? formatDateBR(a.start_date) : "";
+    const end = a.end_date ? formatDateBR(a.end_date) : "";
+    const status = deriveStatusFromItem(a);
+    return [
+      a.client_name || "",
+      a.company_name || "",
+      types,
+      periods,
+      start,
+      end,
+      a.material_qty ?? "",
+      status,
+      a.notes || "",
+      a.material_photo_url || ""
+    ];
+  };
+
+  const csvEscape = (v) => {
+    const s = String(v ?? "");
+    // usando ; como separador (compat BR). Excel abre normal.
+    if (/[;"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+
+  const buildCSV = (rows) => {
+    const data = [headers, ...rows].map(r => r.map(csvEscape).join(";")).join("\n");
+    // BOM p/ Excel reconhecer UTF-8
+    return "\uFEFF" + data;
+  };
+
+  const downloadFile = (name, content, mime) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = () => {
+    const rows = filtered.map(toRow);
+    const csv = buildCSV(rows);
+    downloadFile("acoes.csv", csv, "text/csv;charset=utf-8;");
+  };
+
+  const handleCopyCSV = async () => {
+    try {
+      const rows = filtered.map(toRow);
+      const csv = buildCSV(rows);
+      await navigator.clipboard.writeText(csv);
+      alert("CSV copiado para a área de transferência.");
+    } catch {
+      alert("Não foi possível copiar. Tente exportar como arquivo CSV.");
+    }
+  };
+
+  const handleExportJSON = () => {
+    const json = JSON.stringify(filtered, null, 2);
+    downloadFile("acoes.json", json, "application/json;charset=utf-8;");
+  };
+
   /* -------- Create -------- */
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -393,7 +475,7 @@ const Actions = () => {
               />
             </div>
 
-            {/* ====== FILTROS (fix: container flex com body rolável) ====== */}
+            {/* ====== FILTROS ====== */}
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="gap-2">
@@ -504,6 +586,29 @@ const Actions = () => {
                       <Button onClick={() => setFiltersOpen(false)}>Aplicar</Button>
                     </div>
                   </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* ====== EXPORTAÇÕES ====== */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <FileDown className="size-4" />
+                  Exportar
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" side="bottom" sideOffset={8} className="w-56 p-2">
+                <div className="flex flex-col gap-1">
+                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportCSV}>
+                    <FileSpreadsheet className="size-4" /> Exportar CSV
+                  </Button>
+                  <Button variant="ghost" className="justify-start gap-2" onClick={handleCopyCSV}>
+                    <ClipboardCopy className="size-4" /> Copiar CSV
+                  </Button>
+                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportJSON}>
+                    <FileJson className="size-4" /> Exportar JSON
+                  </Button>
                 </div>
               </PopoverContent>
             </Popover>
@@ -841,7 +946,13 @@ const Actions = () => {
               </div>
 
               <div className="pt-2 mt-4 border-t flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => { setIsEditOpen(false); setEditing(null); resetForm(); }}>Cancelar</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { setIsEditOpen(false); setEditing(null); resetForm(); }}
+                >
+                  Cancelar
+                </Button>
                 <Button type="submit" disabled={uploadingMaterial}>Salvar</Button>
               </div>
             </form>
