@@ -19,8 +19,24 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
-import { Plus, Pencil, Trash2, UploadCloud, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  UploadCloud,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  // Ícones de exportação
+  FileDown,
+  FileSpreadsheet,
+  FileJson,
+  ClipboardCopy,
+  FileText,
+} from "lucide-react";
 import api from "@/services/api";
+import { loadPdfLibs } from "@/utils/pdf.js";
 
 /* ===================== Helpers ===================== */
 const emptyForm = {
@@ -36,12 +52,16 @@ const emptyForm = {
   photos: [], // array de URLs de imagens
 };
 
+const BRL = (n) =>
+  n === null || n === undefined || n === ""
+    ? "—"
+    : Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
 // checagem simples por extensão
 const isImageUrl = (url) => /\.(png|jpe?g)(\?|#|$)/i.test(String(url || ""));
 
 // normaliza para um array de fotos a partir do item vindo da API
 function getPhotosFromItem(v) {
-  // caminhos comuns
   const a =
     v?.photos ||
     v?.images ||
@@ -54,7 +74,6 @@ function getPhotosFromItem(v) {
     return a.filter(Boolean).filter(isImageUrl);
   }
 
-  // compat: se houver documents_url e for imagem
   if (isImageUrl(v?.documents_url || v?.document_url || v?.documentsUrl)) {
     return [v.documents_url || v.document_url || v.documentsUrl].filter(Boolean);
   }
@@ -80,7 +99,7 @@ export default function Vacancies() {
   // upload
   const [uploading, setUploading] = useState(false);
 
-  // preview (padrão materiais: modal interno com imagem grande)
+  // preview
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewList, setPreviewList] = useState([]); // array de URLs
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -94,7 +113,6 @@ export default function Vacancies() {
       setLoading(true);
       const { data } = await api.get("/job-vacancies");
       const arr = Array.isArray(data) ? data : [];
-      // anexa campo _photos normalizado para exibir na tabela
       setItems(
         arr.map((v) => ({
           ...v,
@@ -136,6 +154,8 @@ export default function Vacancies() {
 
   const total = items.length;
   const openCount = items.filter((v) => (v?.status || "").toLowerCase() === "aberta").length;
+  const processCount = items.filter((v) => (v?.status || "").toLowerCase() === "em processo").length;
+  const closedCount = items.filter((v) => (v?.status || "").toLowerCase() === "fechada").length;
 
   function openCreate() {
     setEditingId(null);
@@ -171,7 +191,6 @@ export default function Vacancies() {
       age: form.age ? Number(form.age) : null,
       salary: form.salary ? Number(form.salary) : null,
       photos: Array.isArray(form.photos) ? form.photos : [],
-      // compat: mantém documents_url como a 1ª foto (se o backend antigo usar esse campo)
       documents_url: Array.isArray(form.photos) && form.photos[0] ? form.photos[0] : "",
     };
 
@@ -202,7 +221,7 @@ export default function Vacancies() {
     }
   }
 
-  // upload múltiplo de imagens (PNG/JPG) — envia uma a uma, sem forçar headers
+  // upload múltiplo de imagens
   async function onImagesChange(e) {
     const files = Array.from(e.target.files || []).filter(Boolean);
     if (!files.length) return;
@@ -211,17 +230,12 @@ export default function Vacancies() {
     try {
       const uploaded = [];
       for (const file of files) {
-        // garante apenas imagem
         if (!/^image\/(png|jpe?g)$/i.test(file.type)) continue;
         const fd = new FormData();
-        fd.append("file", file); // backend espera 'file'
-        const { data } = await api.post("/upload", fd); // axios define boundary automaticamente
+        fd.append("file", file);
+        const { data } = await api.post("/upload", fd);
         const url =
-          data?.url ||
-          data?.secure_url ||
-          data?.location ||
-          data?.file?.url ||
-          "";
+          data?.url || data?.secure_url || data?.location || data?.file?.url || "";
         if (url) uploaded.push(url);
       }
       if (uploaded.length === 0) {
@@ -229,7 +243,6 @@ export default function Vacancies() {
         return;
       }
       setForm((f) => ({ ...f, photos: [...(f.photos || []), ...uploaded] }));
-      // limpa o input para permitir reenviar os mesmos arquivos depois, se quiser
       e.target.value = "";
     } catch (err) {
       console.error("Erro no upload de imagens:", err);
@@ -259,6 +272,161 @@ export default function Vacancies() {
     setPreviewIndex((i) => (i + 1) % previewList.length);
   }
 
+  /* ===================== EXPORTS ===================== */
+  const headers = [
+    "Nome",
+    "Telefone",
+    "Endereço",
+    "Idade",
+    "Sexo",
+    "Departamento",
+    "Tipo (Cargo)",
+    "Salário",
+    "Status",
+    "Fotos (URLs)"
+  ];
+
+  const toRow = (v) => {
+    const photos = Array.isArray(v._photos) ? v._photos.join(" | ") : "";
+    return [
+      v.name || "",
+      v.phone || "",
+      v.address || "",
+      v.age ?? "",
+      v.sex || "",
+      v.department || "",
+      v.job_type || "",
+      Number(v.salary || 0), // número cru p/ planilha
+      v.status || "",
+      photos,
+    ];
+  };
+
+  const csvEscape = (val) => {
+    const s = String(val ?? "");
+    return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const buildCSV = (rows) => {
+    // ; como separador (compat BR) + BOM p/ Excel reconhecer UTF-8
+    const data = [headers, ...rows].map((r) => r.map(csvEscape).join(";")).join("\n");
+    return "\uFEFF" + data;
+  };
+
+  const downloadFile = (name, content, mime) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = () => {
+    if (!filtered.length) return alert("Não há dados para exportar.");
+    const rows = filtered.map(toRow);
+    const csv = buildCSV(rows);
+    downloadFile("vagas.csv", csv, "text/csv;charset=utf-8;");
+  };
+
+  const handleCopyCSV = async () => {
+    if (!filtered.length) return alert("Não há dados para copiar.");
+    try {
+      const rows = filtered.map(toRow);
+      const csv = buildCSV(rows);
+      await navigator.clipboard.writeText(csv);
+      alert("CSV copiado para a área de transferência.");
+    } catch {
+      alert("Não foi possível copiar. Tente exportar como arquivo CSV.");
+    }
+  };
+
+  const handleExportJSON = () => {
+    if (!filtered.length) return alert("Não há dados para exportar.");
+    const json = JSON.stringify(filtered, null, 2);
+    downloadFile("vagas.json", json, "application/json;charset=utf-8;");
+  };
+
+  const handleExportPDF = async () => {
+    if (!filtered.length) {
+      alert("Não há dados para exportar.");
+      return;
+    }
+    try {
+      const { jsPDF, autoTable } = await loadPdfLibs();
+      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+      // Cabeçalho
+      const title = "Relatório de Vagas";
+      const subtitle = new Date().toLocaleString("pt-BR");
+      doc.setFontSize(14);
+      doc.text(title, 40, 32);
+      doc.setFontSize(10);
+      doc.text(`Gerado em: ${subtitle}`, 40, 48);
+
+      const rows = filtered.map((v) => {
+        const r = toRow(v);
+        // Formata salário no PDF como moeda BRL para leitura
+        r[7] = BRL(r[7]);
+        return r;
+      });
+
+      autoTable(doc, {
+        head: [headers],
+        body: rows,
+        startY: 64,
+        styles: { fontSize: 9, cellPadding: 4, overflow: "linebreak", valign: "middle" },
+        headStyles: { fillColor: [239, 68, 68], textColor: [255, 255, 255], halign: "center" },
+        columnStyles: {
+          0: { cellWidth: 120 }, // Nome
+          1: { cellWidth: 100 }, // Telefone
+          2: { cellWidth: 150 }, // Endereço
+          3: { cellWidth: 50 },  // Idade
+          4: { cellWidth: 70 },  // Sexo
+          5: { cellWidth: 110 }, // Departamento
+          6: { cellWidth: 110 }, // Tipo (Cargo)
+          7: { cellWidth: 90 },  // Salário
+          8: { cellWidth: 90 },  // Status
+          9: { cellWidth: 180 }, // Fotos (URLs)
+        },
+        margin: { top: 32, right: 24, bottom: 90, left: 24 },
+        didDrawPage: (data) => {
+          const pageCount = doc.getNumberOfPages();
+          const str = `Página ${data.pageNumber} de ${pageCount}`;
+          doc.setFontSize(9);
+          doc.text(
+            str,
+            doc.internal.pageSize.getWidth() - 24 - doc.getTextWidth(str),
+            doc.internal.pageSize.getHeight() - 14
+          );
+        },
+      });
+
+      // Resumo no rodapé (totais)
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const blockW = 360;
+      const x = pageW - blockW - 24;
+      const y = pageH - 70;
+
+      doc.setFontSize(10);
+      doc.text("Resumo do conjunto filtrado", x, y);
+      doc.setFontSize(12);
+      doc.text(`Total de vagas: ${total}`, x, y + 18);
+      doc.text(`Abertas: ${openCount}`, x, y + 36);
+      doc.text(`Em Processo: ${processCount}`, x, y + 54);
+      doc.text(`Fechadas: ${closedCount}`, x, y + 72);
+
+      doc.save("vagas.pdf");
+    } catch (err) {
+      console.error("Falha ao exportar PDF:", err);
+      alert("Não foi possível gerar o PDF no navegador.");
+    }
+  };
+
   /* ===================== RENDER ===================== */
   return (
     <div className="admin-page-container admin-space-y-6">
@@ -266,7 +434,7 @@ export default function Vacancies() {
         <h2 className="admin-page-title">Vagas</h2>
       </div>
 
-      {/* KPIs (compacto no desktop) */}
+      {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <Card className="md:p-0">
           <CardHeader className="p-3 pb-1">
@@ -295,7 +463,7 @@ export default function Vacancies() {
           </CardHeader>
           <CardContent className="p-3 pt-0">
             <div className="text-xl font-semibold leading-tight">
-              {loading ? "—" : items.filter((v) => (v.status || "").toLowerCase() === "em processo").length}
+              {loading ? "—" : processCount}
             </div>
           </CardContent>
         </Card>
@@ -307,13 +475,13 @@ export default function Vacancies() {
           </CardHeader>
           <CardContent className="p-3 pt-0">
             <div className="text-xl font-semibold leading-tight">
-              {loading ? "—" : items.filter((v) => (v.status || "").toLowerCase() === "fechada").length}
+              {loading ? "—" : closedCount}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Busca e Filtros */}
+      {/* Busca / Filtros / Ações */}
       <Card>
         <CardContent className="pt-6">
           <div className="space-y-4">
@@ -325,7 +493,7 @@ export default function Vacancies() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="Filtrar por status" />
@@ -364,6 +532,7 @@ export default function Vacancies() {
                 </SelectContent>
               </Select>
 
+              {/* Limpar filtros */}
               <Button
                 variant="outline"
                 onClick={() => {
@@ -376,6 +545,33 @@ export default function Vacancies() {
                 Limpar Filtros
               </Button>
 
+              {/* Exportar */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <FileDown className="size-4" />
+                    Exportar
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" side="bottom" sideOffset={8} className="w-56 p-2">
+                  <div className="flex flex-col gap-1">
+                    <Button variant="ghost" className="justify-start gap-2" onClick={handleExportCSV}>
+                      <FileSpreadsheet className="size-4" /> Exportar CSV (planilha)
+                    </Button>
+                    <Button variant="ghost" className="justify-start gap-2" onClick={handleCopyCSV}>
+                      <ClipboardCopy className="size-4" /> Copiar CSV
+                    </Button>
+                    <Button variant="ghost" className="justify-start gap-2" onClick={handleExportJSON}>
+                      <FileJson className="size-4" /> Exportar JSON
+                    </Button>
+                    <Button variant="ghost" className="justify-start gap-2" onClick={handleExportPDF}>
+                      <FileText className="size-4" /> Exportar PDF
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Nova indicação */}
               <Button onClick={openCreate} className="admin-btn-primary">
                 <Plus className="mr-2 h-4 w-4" /> Nova Indicação
               </Button>
@@ -429,11 +625,9 @@ export default function Vacancies() {
                         <Badge variant="secondary">{v.department}</Badge>
                       </td>
                       <td className="py-3 px-3 text-center">{v.job_type}</td>
-                      <td className="py-3 px-3 text-center">
-                        {v.salary ? `R$ ${Number(v.salary).toLocaleString()}` : "—"}
-                      </td>
+                      <td className="py-3 px-3 text-center">{BRL(v.salary)}</td>
 
-                      {/* Fotos (miniaturas como em "materiais", com modal) */}
+                      {/* Fotos */}
                       <td className="py-3 px-3 text-center">
                         {photos.length > 0 ? (
                           <div className="inline-flex items-center gap-1">
@@ -650,7 +844,6 @@ export default function Vacancies() {
                   </Button>
                 </div>
 
-                {/* Miniaturas das fotos já anexadas, com remover */}
                 {Array.isArray(form.photos) && form.photos.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {form.photos.map((src, idx) => (
@@ -690,7 +883,7 @@ export default function Vacancies() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de visualização de imagens (padrão materiais) */}
+      {/* Modal de visualização de imagens */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
