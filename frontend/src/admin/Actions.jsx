@@ -19,7 +19,7 @@ import ImagePreview from "@/components/ImagePreview.jsx";
 import {
   Plus, Edit, Trash2, Search, Calendar as CalendarIcon, Layers, X,
   CheckCircle, Loader2, Clock, UploadCloud, Filter as FilterIcon,
-  FileDown, FileSpreadsheet, FileJson, ClipboardCopy
+  FileSpreadsheet, FileJson, ClipboardCopy
 } from "lucide-react";
 
 import { formatDateBR } from "@/utils/dates.js";
@@ -211,16 +211,7 @@ const Actions = () => {
 
   /* =================== EXPORTS (CSV/JSON/Copy) =================== */
   const headers = [
-    "Cliente",
-    "Empresa",
-    "Tipos",
-    "Períodos",
-    "Início",
-    "Término",
-    "Quantidade de material",
-    "Status",
-    "Observações",
-    "Foto (URL)"
+    "Cliente","Empresa","Tipos","Períodos","Início","Término","Quantidade de material","Status","Observações","Foto (URL)"
   ];
 
   const toRow = (a) => {
@@ -230,41 +221,27 @@ const Actions = () => {
     const end = a.end_date ? formatDateBR(a.end_date) : "";
     const status = deriveStatusFromItem(a);
     return [
-      a.client_name || "",
-      a.company_name || "",
-      types,
-      periods,
-      start,
-      end,
-      a.material_qty ?? "",
-      status,
-      a.notes || "",
-      a.material_photo_url || ""
+      a.client_name || "", a.company_name || "", types, periods, start, end,
+      a.material_qty ?? "", status, a.notes || "", a.material_photo_url || ""
     ];
   };
 
   const csvEscape = (v) => {
     const s = String(v ?? "");
-    // usando ; como separador (compat BR). Excel abre normal.
     if (/[;"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
     return s;
   };
 
   const buildCSV = (rows) => {
     const data = [headers, ...rows].map(r => r.map(csvEscape).join(";")).join("\n");
-    // BOM p/ Excel reconhecer UTF-8
-    return "\uFEFF" + data;
+    return "\uFEFF" + data; // BOM para Excel
   };
 
   const downloadFile = (name, content, mime) => {
     const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   };
 
@@ -289,168 +266,6 @@ const Actions = () => {
     const json = JSON.stringify(filtered, null, 2);
     downloadFile("acoes.json", json, "application/json;charset=utf-8;");
   };
-
-  /* -------- Create -------- */
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    const startISO = brToYMD(form.startBr);
-    const endISO = brToYMD(form.endBr);
-    if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
-    if (startISO && endISO && startISO > endISO) return alert("Data de término não pode ser anterior à data de início.");
-
-    try {
-      const payload = {
-        client_name: form.client_name,
-        company_name: form.company_name,
-        types: form.types,
-        type: form.types.join(", "),
-        start_date: startISO || null,
-        end_date: endISO || null,
-        day_periods: form.day_periods,
-        material_qty: Number(form.material_qty || 0),
-        material_photo_url: form.material_photo_url || "",
-        notes: form.notes || "",
-        status: form.status,
-        active: activeFromStatus(form.status),
-      };
-      await api.post("/actions", payload);
-      await loadActions();
-      setIsCreateOpen(false);
-      resetForm();
-    } catch (err) {
-      console.error("Erro ao criar ação:", err);
-      alert("Erro ao criar ação: " + (err?.response?.data?.message || err.message));
-    }
-  };
-
-  /* -------- Edit -------- */
-  const openEdit = (item) => {
-    setEditing(item);
-    setForm({
-      client_name: item.client_name || "",
-      company_name: item.company_name || "",
-      types: ensureArrayTypes(item),
-      startBr: ymdToBR(item.start_date || ""),
-      endBr: ymdToBR(item.end_date || ""),
-      day_periods: Array.isArray(item.day_periods) ? item.day_periods : [],
-      material_qty: item.material_qty ?? "",
-      material_photo_url: item.material_photo_url || "",
-      notes: item.notes || "",
-      status: deriveStatusFromItem(item),
-    });
-    setIsEditOpen(true);
-  };
-
-  const handleEdit = async (e) => {
-    e.preventDefault();
-    if (!editing) return;
-    const startISO = brToYMD(form.startBr);
-    const endISO = brToYMD(form.endBr);
-    if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
-    if (startISO && endISO && startISO > endISO) return alert("Data de término não pode ser anterior à data de início.");
-
-    try {
-      const payload = {
-        client_name: form.client_name,
-        company_name: form.company_name,
-        types: form.types,
-        type: form.types.join(", "),
-        start_date: startISO || null,
-        end_date: endISO || null,
-        day_periods: form.day_periods,
-        material_qty: Number(form.material_qty || 0),
-        material_photo_url: form.material_photo_url || "",
-        notes: form.notes || "",
-        status: form.status,
-        active: activeFromStatus(form.status),
-      };
-      await api.put(`/actions/${editing.id}`, payload);
-      await loadActions();
-      setIsEditOpen(false);
-      setEditing(null);
-      resetForm();
-    } catch (err) {
-      console.error("Erro ao atualizar ação:", err);
-      alert("Erro ao atualizar ação: " + (err?.response?.data?.message || err.message));
-    }
-  };
-
-  /* -------- Delete -------- */
-  const handleDelete = async (id) => {
-    if (!window.confirm("Tem certeza que deseja excluir esta ação?")) return;
-    try {
-      await api.delete(`/actions/${id}`);
-      await loadActions();
-    } catch (err) {
-      console.error("Erro ao excluir ação:", err);
-      alert("Erro ao excluir ação: " + (err?.response?.data?.message || err.message));
-    }
-  };
-
-  /* -------- TypeSelector (scroll fix) -------- */
-  const [typesPopoverOpen, setTypesPopoverOpen] = useState(false);
-  const TypeSelector = () => (
-    <Popover open={typesPopoverOpen} onOpenChange={setTypesPopoverOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" className="w-full justify-between">
-          <span className="inline-flex flex-wrap gap-2">
-            {form.types.length === 0 ? "Selecionar tipos" : (
-              form.types.slice(0, 2).map((t) => <Badge key={t} variant="secondary" className="mr-1">{t}</Badge>)
-            )}
-            {form.types.length > 2 && <Badge variant="outline">+{form.types.length - 2}</Badge>}
-          </span>
-          <Layers className="size-4 opacity-70" />
-        </Button>
-      </PopoverTrigger>
-
-      <PopoverContent
-        align="start"
-        side="bottom"
-        sideOffset={8}
-        className="p-0 w-[min(92vw,420px)] max-h-[70vh] overflow-hidden"
-      >
-        <div
-          className="px-3 py-3 max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
-          onWheel={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Tipos de ação</span>
-            {form.types.length > 0 && (
-              <Button size="sm" variant="ghost" onClick={() => onChange("types", [])}>
-                Limpar
-              </Button>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            {ACTION_OPTIONS.map((group) => (
-              <div key={group.group}>
-                <p className="text-xs font-semibold text-muted-foreground mb-2">{group.group}</p>
-                <div className="space-y-2">
-                  {group.items.map((opt) => {
-                    const checked = form.types.includes(opt);
-                    return (
-                      <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
-                        <Checkbox checked={checked} onCheckedChange={() => toggleType(opt)} />
-                        <span>{opt}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-                <Separator className="my-3" />
-              </div>
-            ))}
-          </div>
-
-          <div className="flex justify-end gap-2 pt-3">
-            <Button variant="outline" onClick={() => setTypesPopoverOpen(false)}>Fechar</Button>
-            <Button onClick={() => setTypesPopoverOpen(false)}>Aplicar</Button>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
 
   /* ===================== RENDER ===================== */
   return (
@@ -590,28 +405,19 @@ const Actions = () => {
               </PopoverContent>
             </Popover>
 
-            {/* ====== EXPORTAÇÕES ====== */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="gap-2">
-                  <FileDown className="size-4" />
-                  Exportar
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" side="bottom" sideOffset={8} className="w-56 p-2">
-                <div className="flex flex-col gap-1">
-                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportCSV}>
-                    <FileSpreadsheet className="size-4" /> Exportar CSV
-                  </Button>
-                  <Button variant="ghost" className="justify-start gap-2" onClick={handleCopyCSV}>
-                    <ClipboardCopy className="size-4" /> Copiar CSV
-                  </Button>
-                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportJSON}>
-                    <FileJson className="size-4" /> Exportar JSON
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+            {/* ====== EXPORTAÇÕES: botões individuais ====== */}
+            <Button variant="outline" className="gap-2" onClick={handleExportCSV} title="Exportar CSV">
+              <FileSpreadsheet className="size-4" />
+              <span className="hidden sm:inline">CSV</span>
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={handleCopyCSV} title="Copiar CSV">
+              <ClipboardCopy className="size-4" />
+              <span className="hidden sm:inline">Copiar</span>
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={handleExportJSON} title="Exportar JSON">
+              <FileJson className="size-4" />
+              <span className="hidden sm:inline">JSON</span>
+            </Button>
 
             {/* Modal CRIAR */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
