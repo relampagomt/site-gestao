@@ -74,7 +74,7 @@ function buildMonthlyFromActions(actions, monthsDates) {
   return Object.values(buckets);
 }
 
-/** ===== Pizza dinâmica (top N + manter >= minPercent + "Outros (n)") ===== */
+/** ===== Pizza: dinâmica (top N + manter >= minPercent + "Outros (n)") ===== */
 function buildPieDataFromMap(map, opts = {}) {
   const {
     maxSlices = 12,       // máximo de categorias visíveis
@@ -107,6 +107,7 @@ function buildPieDataFromMap(map, opts = {}) {
   const keepNames = new Set(keep.map(e => e.name));
   const rest = withPct.filter(e => !keepNames.has(e.name));
 
+  // dataset com paleta
   const data = keep.map((e, idx) => ({
     name: e.name,
     value: e.value,
@@ -169,9 +170,11 @@ const Dashboard = () => {
       const actions = arr(actionsRes.data);
       const vacancies = arr(vacanciesRes.data);
 
+      // guardar para as pizzas
       setClientsArr(clients);
       setActionsArr(actions);
 
+      // contadores
       setStats({
         totalClients: clients.length,
         totalMaterials: materials.length,
@@ -180,6 +183,7 @@ const Dashboard = () => {
         loading: false
       });
 
+      // atividades recentes simples
       const activities = [];
       if (clients.length > 0) activities.push({ id: 'c', action: 'Cliente cadastrado', client: clients.at(-1)?.name || 'Cliente', time: 'Recente' });
       if (actions.length > 0) activities.push({ id: 'a', action: 'Ação criada', client: actions.at(-1)?.client_name || 'Cliente', time: 'Recente' });
@@ -187,6 +191,7 @@ const Dashboard = () => {
       if (vacancies.length > 0) activities.push({ id: 'v', action: 'Vaga publicada', client: vacancies.at(-1)?.company || 'Empresa', time: 'Recente' });
       setRecentActivities(activities);
 
+      // campanhas por mês (API -> fallback)
       if (Array.isArray(monthlyRes.data) && monthlyRes.data.length) {
         const normalized = monthlyRes.data.map((row, i) => ({
           month: row.month ?? row.label ?? monthLabelPT(monthsDates[i] || new Date()),
@@ -205,19 +210,15 @@ const Dashboard = () => {
     }
   };
 
-  /** ===== Navegação ===== */
-  const goToClients = (filter) => {
-    try { localStorage.setItem('clients:prefilter', JSON.stringify(filter)); } catch {}
-    const params = new URLSearchParams();
-    if (filter?.segments?.length) params.set('segment', filter.segments[0]);
-    if (filter?.q) params.set('q', filter.q);
-    navigate(`/admin/clients${params.toString() ? `?${params.toString()}` : ''}`);
-  };
-
+  // ===== Helper de navegação: abre /admin/actions com filtros =====
   const goToActions = (filter) => {
-    try { localStorage.setItem('actions:prefilter', JSON.stringify(filter)); } catch {}
+    try {
+      // guarda também no localStorage (caso a página de ações leia isso)
+      localStorage.setItem('actions:prefilter', JSON.stringify(filter));
+    } catch {}
     const params = new URLSearchParams();
     if (filter?.type) params.set('type', filter.type);
+    if (filter?.segment) params.set('segment', filter.segment);
     navigate(`/admin/actions${params.toString() ? `?${params.toString()}` : ''}`);
   };
 
@@ -250,8 +251,8 @@ const Dashboard = () => {
     [monthlyData]
   );
 
-  // rótulo clicável (≥3%), com alvo configurável
-  const makeClickableLabel = (onClickBuilder) => (props) => {
+  // rótulo de pizza clicável (≥3% para evitar poluição visual)
+  const makeClickableLabel = (kind /* 'segment' | 'type' */) => (props) => {
     const { cx, cy, midAngle, outerRadius, percent, name } = props;
     if (percent < 0.03) return null;
     const isOthers = /^Outros/.test(name);
@@ -259,7 +260,11 @@ const Dashboard = () => {
     const r = outerRadius + 10;
     const x = cx + r * Math.cos(-midAngle * RAD);
     const y = cy + r * Math.sin(-midAngle * RAD);
-    const handleClick = () => !isOthers && onClickBuilder(name);
+    const handleClick = () => {
+      if (isOthers) return;
+      if (kind === 'segment') goToActions({ segment: name });
+      else goToActions({ type: name });
+    };
     return (
       <text
         x={x}
@@ -383,7 +388,7 @@ const Dashboard = () => {
 
       {/* ===== DUAS PIZZAS ===== */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-        {/* Pizza 1: Segmentos (Clientes) → CLIENTES filtrados por segmento */}
+        {/* Pizza 1: Segmentos (Clientes) */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Segmentos (Clientes)</CardTitle>
@@ -399,7 +404,7 @@ const Dashboard = () => {
                   outerRadius={90}
                   labelLine={false}
                   dataKey="value"
-                  label={makeClickableLabel((segment) => goToClients({ segments: [segment] }))}
+                  label={makeClickableLabel('segment')}
                 >
                   {clientsSegmentsPie.map((entry, idx) => {
                     const isOthers = /^Outros/.test(entry.name);
@@ -408,7 +413,7 @@ const Dashboard = () => {
                         key={`cseg-${idx}`}
                         fill={entry.color || COLORS[idx % COLORS.length]}
                         style={{ cursor: isOthers ? 'default' : 'pointer' }}
-                        onClick={() => !isOthers && goToClients({ segments: [entry.name] })}
+                        onClick={() => !isOthers && goToActions({ segment: entry.name })}
                       />
                     );
                   })}
@@ -419,7 +424,7 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Pizza 2: Tipos de Ação → AÇÕES filtradas por tipo de ação */}
+        {/* Pizza 2: Tipos de Ação */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">Tipos de Ação</CardTitle>
@@ -435,7 +440,7 @@ const Dashboard = () => {
                   outerRadius={90}
                   labelLine={false}
                   dataKey="value"
-                  label={makeClickableLabel((type) => goToActions({ type }))}
+                  label={makeClickableLabel('type')}
                 >
                   {actionTypesPie.map((entry, idx) => {
                     const isOthers = /^Outros/.test(entry.name);
