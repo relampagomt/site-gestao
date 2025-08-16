@@ -12,7 +12,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Menu as MenuIcon,
-  UserCog, // 👈 novo ícone para diferenciar "Usuários"
+  UserCog, // ícone para "Usuários"
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button.jsx";
@@ -59,12 +59,12 @@ export default function AdminLayout() {
   const menu = useMemo(
     () => [
       { to: "/admin", label: "Dashboard", icon: Home, end: true },
-      { to: "/admin/clients", label: "Clientes", icon: Users },       // 👈 permanece Users (plural)
+      { to: "/admin/clients", label: "Clientes", icon: Users },
       { to: "/admin/materials", label: "Materiais", icon: Package },
       { to: "/admin/actions", label: "Ações", icon: ClipboardList },
       { to: "/admin/finance", label: "Finanças", icon: Wallet },
       { to: "/admin/vacancies", label: "Vagas", icon: Briefcase },
-      { to: "/admin/users", label: "Usuários", icon: UserCog },       // 👈 agora UserCog (diferente de Clientes)
+      { to: "/admin/users", label: "Usuários", icon: UserCog }, // diferenciado
     ],
     []
   );
@@ -129,17 +129,7 @@ export default function AdminLayout() {
             ))}
           </nav>
 
-          {/* Rodapé da Sidebar (apenas botão Sair) */}
-          <div className={cn("p-2")}>
-            <Button
-              variant="outline"
-              className={cn("w-full justify-center gap-2", collapsed && "px-2")}
-              onClick={onLogout}
-            >
-              <LogOut className="w-4 h-4" />
-              {!collapsed && <span>Sair</span>}
-            </Button>
-          </div>
+          {/* (removido) Rodapé com botão Sair no desktop */}
         </aside>
 
         {/* Backdrop Mobile */}
@@ -185,6 +175,7 @@ export default function AdminLayout() {
             ))}
           </nav>
           <div className="px-4 py-4">
+            {/* Mantém o Sair dentro do drawer mobile */}
             <Button
               variant="outline"
               className="w-full justify-center gap-2"
@@ -212,8 +203,22 @@ export default function AdminLayout() {
                 {menu.find((m) => location.pathname.startsWith(m.to))?.label || "Dashboard"}
               </h1>
             </div>
-            <div className="text-sm bg-muted px-3 py-1 rounded-full">
-              {user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : "Admin"}
+
+            {/* Lado direito do header: badge + botão Sair */}
+            <div className="flex items-center gap-2">
+              <div className="text-sm bg-muted px-3 py-1 rounded-full">
+                {user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : "Admin"}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onLogout}
+                className="gap-2"
+                title="Sair"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Sair</span>
+              </Button>
             </div>
           </header>
 
