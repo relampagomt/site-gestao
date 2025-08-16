@@ -495,43 +495,52 @@ export default function Vacancies() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os status</SelectItem>
-                  <SelectItem value="Aberta">Aberta</SelectItem>
-                  <SelectItem value="Em Processo">Em Processo</SelectItem>
-                  <SelectItem value="Fechada">Fechada</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Status */}
+              <div className="min-w-0">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Filtrar por status" className="truncate" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os status</SelectItem>
+                    <SelectItem value="Aberta">Aberta</SelectItem>
+                    <SelectItem value="Em Processo">Em Processo</SelectItem>
+                    <SelectItem value="Fechada">Fechada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por departamento" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os departamentos</SelectItem>
-                  <SelectItem value="Comercial">Comercial</SelectItem>
-                  <SelectItem value="Operacional">Operacional</SelectItem>
-                  <SelectItem value="Administrativo">Administrativo</SelectItem>
-                  <SelectItem value="Técnico">Técnico</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Departamentos */}
+              <div className="min-w-0">
+                <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Filtrar por departamento" className="truncate" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os departamentos</SelectItem>
+                    <SelectItem value="Comercial">Comercial</SelectItem>
+                    <SelectItem value="Operacional">Operacional</SelectItem>
+                    <SelectItem value="Administrativo">Administrativo</SelectItem>
+                    <SelectItem value="Técnico">Técnico</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os tipos</SelectItem>
-                  <SelectItem value="CLT">CLT</SelectItem>
-                  <SelectItem value="PJ">PJ</SelectItem>
-                  <SelectItem value="Freelancer">Freelancer</SelectItem>
-                  <SelectItem value="Estágio">Estágio</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Tipos */}
+              <div className="min-w-0">
+                <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Filtrar por tipo" className="truncate" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os tipos</SelectItem>
+                    <SelectItem value="CLT">CLT</SelectItem>
+                    <SelectItem value="PJ">PJ</SelectItem>
+                    <SelectItem value="Freelancer">Freelancer</SelectItem>
+                    <SelectItem value="Estágio">Estágio</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
               {/* Limpar filtros */}
               <Button
