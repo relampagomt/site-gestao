@@ -1,3 +1,4 @@
+// frontend/src/admin/Finance.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '@/services/api';
 
@@ -22,6 +23,12 @@ import {
   Search,
   Edit,
   Trash2,
+  // === Ícones para Exportar ===
+  FileDown,
+  FileSpreadsheet,
+  FileJson,
+  ClipboardCopy,
+  FileText,
 } from 'lucide-react';
 
 import {
@@ -334,6 +341,144 @@ const Finance = () => {
   const totalSaida = filtered.filter((t) => t.type !== 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
   const saldo = totalEntrada - totalSaida;
 
+  /* =================== EXPORTAÇÕES (CSV/JSON/Copiar/PDF) =================== */
+  const headers = ['Data', 'Tipo', 'Categoria', 'Ação', 'Valor', 'Observações'];
+
+  const actionLabelById = (id) => {
+    const ac = actions.find((a) => a.id === id);
+    return ac ? ac.client_name || ac.company_name || `Ação ${ac.id}` : '—';
+  };
+
+  const toRow = (t) => [
+    isoToBR(String(t.date || '').slice(0, 10)) || '',
+    t.type || '',
+    t.category || '',
+    actionLabelById(t.action_id),
+    Number(t.amount || 0), // valor numérico (CSV fica mais útil)
+    t.notes || '',
+  ];
+
+  const csvEscape = (v) => {
+    const s = String(v ?? '');
+    if (/[;"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+
+  const buildCSV = (rows) => {
+    // Usa ; (padrão BR) e BOM para Excel reconhecer UTF-8
+    const data = [headers, ...rows].map((r) => r.map(csvEscape).join(';')).join('\n');
+    return '\uFEFF' + data;
+  };
+
+  const downloadFile = (name, content, mime) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = () => {
+    const rows = filtered.map(toRow);
+    const csv = buildCSV(rows);
+    downloadFile('financas.csv', csv, 'text/csv;charset=utf-8;');
+  };
+
+  const handleCopyCSV = async () => {
+    try {
+      const rows = filtered.map(toRow);
+      const csv = buildCSV(rows);
+      await navigator.clipboard.writeText(csv);
+      alert('CSV copiado para a área de transferência.');
+    } catch {
+      alert('Não foi possível copiar. Tente exportar como arquivo CSV.');
+    }
+  };
+
+  const handleExportJSON = () => {
+    const json = JSON.stringify(filtered, null, 2);
+    downloadFile('financas.json', json, 'application/json;charset=utf-8;');
+  };
+
+  const handleExportPDF = async () => {
+    if (!filtered.length) {
+      alert('Não há dados para exportar.');
+      return;
+    }
+    try {
+      const { jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
+
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+      // Cabeçalho
+      const title = 'Relatório Financeiro';
+      const subtitle = new Date().toLocaleString('pt-BR');
+      doc.setFontSize(14);
+      doc.text(title, 40, 32);
+      doc.setFontSize(10);
+      doc.text(`Gerado em: ${subtitle}`, 40, 48);
+
+      const rows = filtered.map((t) => {
+        const r = toRow(t);
+        // Formata valor no PDF como moeda BRL legível
+        r[4] = BRL(r[4]);
+        return r;
+      });
+
+      autoTable(doc, {
+        head: [headers],
+        body: rows,
+        startY: 64,
+        styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
+        headStyles: { fillColor: [239, 68, 68], textColor: [255, 255, 255], halign: 'center' },
+        columnStyles: {
+          0: { cellWidth: 70 },  // Data
+          1: { cellWidth: 70 },  // Tipo
+          2: { cellWidth: 150 }, // Categoria
+          3: { cellWidth: 200 }, // Ação
+          4: { cellWidth: 90 },  // Valor
+          5: { cellWidth: 240 }, // Observações
+        },
+        margin: { top: 32, right: 24, bottom: 80, left: 24 }, // deixa espaço p/ totais
+        didDrawPage: (data) => {
+          // Rodapé com numeração
+          const pageCount = doc.getNumberOfPages();
+          const str = `Página ${data.pageNumber} de ${pageCount}`;
+          doc.setFontSize(9);
+          doc.text(
+            str,
+            doc.internal.pageSize.getWidth() - 24 - doc.getTextWidth(str),
+            doc.internal.pageSize.getHeight() - 14
+          );
+        },
+      });
+
+      // Totais (fixo no fim)
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const blockW = 320;
+      const x = pageW - blockW - 24;
+      const y = pageH - 64;
+
+      doc.setFontSize(10);
+      doc.text('Totais do período filtrado', x, y);
+      doc.setFontSize(12);
+      doc.text(`Entradas: ${BRL(totalEntrada)}`, x, y + 18);
+      doc.text(`Saídas/Despesas: ${BRL(totalSaida)}`, x, y + 36);
+      doc.text(`Saldo: ${BRL(saldo)}`, x, y + 54);
+
+      doc.save('financas.pdf');
+    } catch (err) {
+      console.error('Falha ao exportar PDF:', err);
+      alert('Para exportar em PDF, instale: npm i jspdf jspdf-autotable');
+    }
+  };
+
   /* -------- Render -------- */
   return (
     <div className="space-y-6">
@@ -375,7 +520,7 @@ const Finance = () => {
         </Card>
       </div>
 
-      {/* Filtros + Novo lançamento */}
+      {/* Filtros + Novo lançamento + Exportar */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Lançamentos</CardTitle>
@@ -414,7 +559,33 @@ const Finance = () => {
               <ActionsSelector />
             </div>
 
-            {/* Criar */}
+            {/* Exportar */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2 min-h-[36px]">
+                  <FileDown className="size-4" />
+                  Exportar
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" side="bottom" sideOffset={8} className="w-56 p-2">
+                <div className="flex flex-col gap-1">
+                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportCSV}>
+                    <FileSpreadsheet className="size-4" /> Exportar CSV (planilha)
+                  </Button>
+                  <Button variant="ghost" className="justify-start gap-2" onClick={handleCopyCSV}>
+                    <ClipboardCopy className="size-4" /> Copiar CSV
+                  </Button>
+                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportJSON}>
+                    <FileJson className="size-4" /> Exportar JSON
+                  </Button>
+                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportPDF}>
+                    <FileText className="size-4" /> Exportar PDF
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Criar/Editar */}
             <Dialog open={open} onOpenChange={(v) => { if (!v) { setEditing(null); setForm(emptyForm); } setOpen(v); }}>
               <DialogTrigger asChild>
                 <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
