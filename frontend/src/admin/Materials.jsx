@@ -15,7 +15,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
 import { Checkbox } from "@/components/ui/checkbox.jsx";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 import { Separator } from "@/components/ui/separator.jsx";
 import {
   Plus,
@@ -50,7 +49,7 @@ function toYMDInCuiaba(value) {
   if (isDMY(s)) {
     const [d, m, y] = s.split("/");
     return `${y}-${m}-${d}`;
-  }
+    }
   const d = new Date(s);
   if (isNaN(d)) return "";
   const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -127,7 +126,9 @@ const Materials = () => {
   const [deleting, setDeleting] = useState(false);
   const [delId, setDelId] = useState(null);
 
-  // upload de imagem/arquivo
+  // upload (estados dos DIÁLOGOS revertidos)
+  const [isSampleDialogOpen, setIsSampleDialogOpen] = useState(false);
+  const [isProtocolDialogOpen, setIsProtocolDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   // efeitos
@@ -182,7 +183,7 @@ const Materials = () => {
       return { ...m, _ymd };
     });
 
-    // mês único (atajo)
+    // mês único (atalho)
     if (month) list = list.filter((m) => m._ymd.slice(0, 7) === month);
 
     // busca por digitação
@@ -292,11 +293,9 @@ const Materials = () => {
   // Mês focado (cards clicáveis setam esse state)
   const setMonthFilterFromCard = (ym) => {
     setMonth(ym);
-    // desmarca período avançado para evitar conflito visual (opcional):
-    // setFStartBr(""); setFEndBr("");
   };
 
-  // ByMonth filtrado por anoFocus (quando groupBy === 'mes')
+  // ByMonth filtrado por yearFocus (quando groupBy === 'mes')
   const byMonthForUI = useMemo(() => {
     if (yearFocus === "todos") return byMonth;
     return byMonth.filter((m) => m.ym.startsWith(String(yearFocus)));
@@ -593,7 +592,7 @@ const Materials = () => {
                       key={year}
                       type="button"
                       onClick={() => {
-                        setMonth(""); // limpa o atalho de mês
+                        setMonth("");
                         setFStartBr(`01/01/${year}`);
                         setFEndBr(`31/12/${year}`);
                       }}
@@ -927,24 +926,14 @@ const Materials = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* === AMOSTRA: DIÁLOGO (revertido) === */}
                 <div>
                   <Label className="text-xs flex items-center gap-2">
                     Amostra (URL)
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button type="button" size="xs" variant="outline" className="h-6 px-2">
-                          <UploadCloud className="size-3 mr-1" />
-                          Upload
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-72">
-                        <UploadWidget
-                          onUploaded={(url) => setCurrent((c) => ({ ...c, material_sample_url: url }))}
-                          uploading={uploading}
-                          setUploading={setUploading}
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <Button type="button" size="xs" variant="outline" className="h-6 px-2" onClick={() => setIsSampleDialogOpen(true)}>
+                      <UploadCloud className="size-3 mr-1" />
+                      Upload
+                    </Button>
                   </Label>
                   {current.material_sample_url ? (
                     <div className="flex items-center gap-2 mt-1">
@@ -966,26 +955,33 @@ const Materials = () => {
                       onChange={(e) => setCurrent((c) => ({ ...c, material_sample_url: e.target.value }))}
                     />
                   )}
+
+                  <Dialog open={isSampleDialogOpen} onOpenChange={setIsSampleDialogOpen}>
+                    <DialogContent className="w-[420px]">
+                      <DialogHeader>
+                        <DialogTitle>Enviar amostra</DialogTitle>
+                        <DialogDescription>Selecione um arquivo para enviar. Ao concluir, o link será preenchido automaticamente.</DialogDescription>
+                      </DialogHeader>
+                      <UploadWidget
+                        onUploaded={(url) => {
+                          setCurrent((c) => ({ ...c, material_sample_url: url }));
+                          setIsSampleDialogOpen(false);
+                        }}
+                        uploading={uploading}
+                        setUploading={setUploading}
+                      />
+                    </DialogContent>
+                  </Dialog>
                 </div>
 
+                {/* === PROTOCOLO: DIÁLOGO (revertido) === */}
                 <div>
                   <Label className="text-xs flex items-center gap-2">
                     Protocolo (URL)
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button type="button" size="xs" variant="outline" className="h-6 px-2">
-                          <UploadCloud className="size-3 mr-1" />
-                          Upload
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-72">
-                        <UploadWidget
-                          onUploaded={(url) => setCurrent((c) => ({ ...c, protocol_url: url }))}
-                          uploading={uploading}
-                          setUploading={setUploading}
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <Button type="button" size="xs" variant="outline" className="h-6 px-2" onClick={() => setIsProtocolDialogOpen(true)}>
+                      <UploadCloud className="size-3 mr-1" />
+                      Upload
+                    </Button>
                   </Label>
                   {current.protocol_url ? (
                     <div className="flex items-center gap-2 mt-1">
@@ -1014,6 +1010,23 @@ const Materials = () => {
                       onChange={(e) => setCurrent((c) => ({ ...c, protocol_url: e.target.value }))}
                     />
                   )}
+
+                  <Dialog open={isProtocolDialogOpen} onOpenChange={setIsProtocolDialogOpen}>
+                    <DialogContent className="w-[420px]">
+                      <DialogHeader>
+                        <DialogTitle>Enviar protocolo</DialogTitle>
+                        <DialogDescription>Envie um arquivo e o link será preenchido automaticamente.</DialogDescription>
+                      </DialogHeader>
+                      <UploadWidget
+                        onUploaded={(url) => {
+                          setCurrent((c) => ({ ...c, protocol_url: url }));
+                          setIsProtocolDialogOpen(false);
+                        }}
+                        uploading={uploading}
+                        setUploading={setUploading}
+                      />
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
 
