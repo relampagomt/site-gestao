@@ -117,10 +117,10 @@ importers:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       jspdf:
-        specifier: ^2.5.1
+        specifier: ^2.5.2
         version: 2.5.2
       jspdf-autotable:
-        specifier: ^3.8.3
+        specifier: ^3.8.4
         version: 3.8.4(jspdf@2.5.2)
       lucide-react:
         specifier: ^0.510.0
