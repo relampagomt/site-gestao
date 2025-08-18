@@ -177,7 +177,7 @@ const Finance = () => {
       });
     }
 
-    // Actions filter (mantido)
+    // Actions filter
     if (selectedActions.length > 0) {
       const actionSet = new Set(selectedActions);
       list = list.filter((t) => actionSet.has(t.action_id));
@@ -352,28 +352,32 @@ const Finance = () => {
           <Layers className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="p-0 w-[min(92vw,560px)] max-h-[70vh] overflow-hidden">
-        <div className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-          <Command>
-            <CommandInput placeholder="Buscar ação..." />
-            <CommandEmpty>Nenhuma ação encontrada.</CommandEmpty>
-            <CommandList className="max-h-none">
-              <CommandGroup heading="Ações">
-                {actions.map((a) => {
-                  const checked = selectedActions.includes(a.id);
-                  const label = actionLabelById(a.id);
-                  return (
-                    <CommandItem key={a.id} value={label} className="flex items-center gap-2" onSelect={() => toggleAction(a.id)}>
-                      <Checkbox checked={checked} onCheckedChange={() => toggleAction(a.id)} />
-                      <span className="flex-1">{label}</span>
-                      {checked && <span className="text-xs text-muted-foreground">selecionada</span>}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </div>
+      <PopoverContent
+        side="bottom"
+        align="start"
+        sideOffset={8}
+        collisionPadding={12}
+        className="z-[80] p-0 w-[min(92vw,560px)] max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+      >
+        <Command>
+          <CommandInput placeholder="Buscar ação..." />
+          <CommandEmpty>Nenhuma ação encontrada.</CommandEmpty>
+          <CommandList className="max-h-none">
+            <CommandGroup heading="Ações">
+              {actions.map((a) => {
+                const checked = selectedActions.includes(a.id);
+                const label = actionLabelById(a.id);
+                return (
+                  <CommandItem key={a.id} value={label} className="flex items-center gap-2" onSelect={() => toggleAction(a.id)}>
+                    <Checkbox checked={checked} onCheckedChange={() => toggleAction(a.id)} />
+                    <span className="flex-1 truncate">{label}</span>
+                    {checked && <span className="text-xs text-muted-foreground">selecionada</span>}
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
       </PopoverContent>
     </Popover>
   );
@@ -719,7 +723,7 @@ const Finance = () => {
           setOpen(v);
         }}
       >
-        <DialogContent className="max-w-2xl p-0">
+        <DialogContent className="max-w-2xl p-0 overflow-visible">
           <div className="max-h-[80vh] overflow-y-auto p-6">
             <DialogHeader className="pb-2">
               <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
@@ -830,8 +834,9 @@ const Finance = () => {
 const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => {
   const [open, setOpen] = useState(false);
   const selected = items.find((i) => String(i.id) === String(value));
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -842,30 +847,36 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
           <Search className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="p-0 w-[min(92vw,520px)] max-h-[70vh] overflow-hidden">
-        <div className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-          <Command>
-            <CommandInput placeholder={placeholder} />
-            <CommandEmpty>Nenhuma opção encontrada.</CommandEmpty>
-            <CommandList className="max-h-none">
-              <CommandGroup>
-                {items.map((opt) => (
-                  <CommandItem
-                    key={String(opt.id)}
-                    value={opt.label}
-                    onSelect={() => {
-                      onChange(String(opt.id));
-                      setOpen(false);
-                    }}
-                    className="flex items-center gap-2"
-                  >
-                    <span className="truncate">{opt.label}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </div>
+
+      <PopoverContent
+        side="bottom"
+        align="start"
+        sideOffset={8}
+        collisionPadding={12}
+        className="z-[80] p-0 w-[min(92vw,520px)] max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+      >
+        <Command>
+          <CommandInput placeholder={placeholder} />
+          <CommandEmpty>Nenhuma opção encontrada.</CommandEmpty>
+          {/* o PopoverContent controla a altura/scroll */}
+          <CommandList className="max-h-none">
+            <CommandGroup>
+              {items.map((opt) => (
+                <CommandItem
+                  key={String(opt.id)}
+                  value={opt.label}
+                  onSelect={() => {
+                    onChange(String(opt.id));
+                    setOpen(false);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2"
+                >
+                  <span className="truncate">{opt.label}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
       </PopoverContent>
     </Popover>
   );
