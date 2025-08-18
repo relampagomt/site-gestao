@@ -1,3 +1,4 @@
+// frontend/src/admin/Materials.jsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
@@ -32,10 +33,19 @@ import ImagePreview from "@/components/ImagePreview.jsx";
 // Import the new ExportMenu component
 import ExportMenu from "@/components/export/ExportMenu";
 
-/* ==================== Datas (força DD/MM/AAAA) ==================== */
+/* ===== Helpers de Data e Normalização ===== */
+
 const TZ = "America/Cuiaba";
-const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
-const isDMY = (s) => /^\d{2}\/\d{2}\/\d{4}$/.test(String(s || ""));
+
+function isYMD(s) {
+  // YYYY-MM-DD
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
+}
+
+function isDMY(s) {
+  // DD/MM/YYYY
+  return /^\d{2}\/\d{2}\/\d{4}$/.test(String(s || ""));
+}
 
 function toYMDInCuiaba(value) {
   if (!value) return "";
@@ -63,242 +73,117 @@ function ymdToBR(ymd) {
 }
 
 function brToYMD(br) {
-  if (!br || !isDMY(br)) return "";
-  const [d, m, y] = br.split("/");
+  if (!br) return "";
+  const s = String(br).trim();
+  if (!isDMY(s)) return "";
+  const [d, m, y] = s.split("/");
   return `${y}-${m}-${d}`;
 }
+
+function cls(...xs) {
+  return xs.filter(Boolean).join(" ");
+}
+
+/* ============================ Component ============================ */
+
+const emptyForm = {
+  client_name: "",
+  responsible: "",
+  date: "", // YYYY-MM-DD
+  quantity: "",
+  notes: "",
+  material_sample_url: "",
+  protocol_url: "",
+};
 
 const Materials = () => {
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // busca / filtros simples
   const [q, setQ] = useState("");
-  const [month, setMonth] = useState("");
+  const [month, setMonth] = useState(""); // YYYY-MM
 
-  // Modal de cadastro/edição
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState("create");
-  const [form, setForm] = useState({
-    dateBr: "", quantity: "", clientName: "", responsible: "", notes: "",
-    sampleUrl: "", protocolUrl: ""
-  });
-  const [saving, setSaving] = useState(false);
-  const [uploadingSample, setUploadingSample] = useState(false);
-  const [uploadingProtocol, setUploadingProtocol] = useState(false);
-
-  // Modal de exclusão
-  const [openDelete, setOpenDelete] = useState(false);
-  const [rowToDelete, setRowToDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-
-  // Buscar materiais
-  const fetchMaterials = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await api.get("/materials");
-      setMaterials(Array.isArray(response.data) ? response.data : []);
-    } catch (err) {
-      console.error("Erro ao buscar materiais:", err);
-      setMaterials([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchMaterials();
-  }, [fetchMaterials]);
-
-  // Handlers do formulário
-  const onChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
-  };
-
-  const onDateBrChange = (e) => {
-    let v = e.target.value.replace(/\D/g, "");
-    if (v.length >= 3) v = v.slice(0, 2) + "/" + v.slice(2);
-    if (v.length >= 6) v = v.slice(0, 5) + "/" + v.slice(5, 9);
-    setForm(prev => ({ ...prev, dateBr: v }));
-  };
-
-  const openCreate = () => {
-    setMode("create");
-    setForm({
-      dateBr: "", quantity: "", clientName: "", responsible: "", notes: "",
-      sampleUrl: "", protocolUrl: ""
-    });
-    setOpen(true);
-  };
-
-  const openEdit = (material) => {
-    setMode("edit");
-    const ymd = toYMDInCuiaba(material.date);
-    setForm({
-      dateBr: ymdToBR(ymd),
-      quantity: String(material.quantity || ""),
-      clientName: material.client_name || material.clientName || "",
-      responsible: material.responsible || "",
-      notes: material.notes || "",
-      sampleUrl: material.material_sample_url || material.sampleUrl || "",
-      protocolUrl: material.protocol_url || material.protocolUrl || ""
-    });
-    setOpen(true);
-  };
-
-  const confirmDelete = (material) => {
-    setRowToDelete(material);
-    setOpenDelete(true);
-  };
-
-  // Upload handlers
-  const onSampleChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setUploadingSample(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await api.post("/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
-      setForm(prev => ({ ...prev, sampleUrl: response.data.url }));
-    } catch (err) {
-      console.error("Erro no upload da amostra:", err);
-      alert("Erro no upload da amostra.");
-    } finally {
-      setUploadingSample(false);
-    }
-  };
-
-  const onProtocolChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setUploadingProtocol(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await api.post("/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
-      setForm(prev => ({ ...prev, protocolUrl: response.data.url }));
-    } catch (err) {
-      console.error("Erro no upload do protocolo:", err);
-      alert("Erro no upload do protocolo.");
-    } finally {
-      setUploadingProtocol(false);
-    }
-  };
-
-  // Submissão do formulário
-  async function onSubmit(e) {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const payload = {
-        date: brToYMD(form.dateBr),
-        quantity: Number(form.quantity),
-        client_name: form.clientName,
-        responsible: form.responsible,
-        notes: form.notes,
-        material_sample_url: form.sampleUrl,
-        protocol_url: form.protocolUrl
-      };
-      
-      if (mode === "create") {
-        await api.post("/materials", payload);
-      } else {
-        const id = rowToDelete?.id ?? rowToDelete?._id ?? rowToDelete?.uuid;
-        await api.put(`/materials/${id}`, payload);
-      }
-      setOpen(false);
-      fetchMaterials();
-    } catch (err) {
-      console.error("Erro ao salvar material:", err);
-      alert("Erro ao salvar material.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function onDelete() {
-    if (!rowToDelete) return;
-    setDeleting(true);
-    try {
-      const id = rowToDelete.id ?? rowToDelete._id ?? rowToDelete.uuid;
-      if (!id) throw new Error("ID do registro não encontrado para exclusão.");
-      await api.delete(`/materials/${id}`);
-      setOpenDelete(false);
-      setRowToDelete(null);
-      fetchMaterials();
-    } catch (err) {
-      console.error("Erro ao excluir material:", err);
-      alert("Erro ao excluir material.");
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  /* ===================== FILTROS AVANÇADOS ===================== */
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [fClients, setFClients] = useState([]);
-  const [fResponsibles, setFResponsibles] = useState([]);
-  const [fHasSample, setFHasSample] = useState("");
-  const [fHasProtocol, setFHasProtocol] = useState("");
+  // filtros avançados
+  const [openFilters, setOpenFilters] = useState(false);
+  const [fClients, setFClients] = useState([]); // array de nomes (string)
+  const [fResponsibles, setFResponsibles] = useState([]); // array de nomes (string)
+  const [fHasSample, setFHasSample] = useState(""); // "", "sim", "nao"
+  const [fHasProtocol, setFHasProtocol] = useState(""); // "", "sim", "nao"
   const [fQtyMin, setFQtyMin] = useState("");
   const [fQtyMax, setFQtyMax] = useState("");
-  const [fStartBr, setFStartBr] = useState("");
-  const [fEndBr, setFEndBr] = useState("");
+  const [fStartBr, setFStartBr] = useState(""); // "DD/MM/YYYY"
+  const [fEndBr, setFEndBr] = useState(""); // "DD/MM/YYYY"
 
-  const uniqueClients = useMemo(() => {
-    const s = new Set();
-    materials.forEach((m) => {
+  // paginação simples (client-side)
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
+
+  // modal (criar/editar)
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("create"); // "create" | "edit"
+  const [saving, setSaving] = useState(false);
+  const [current, setCurrent] = useState({ ...emptyForm, id: null });
+
+  // modal delete
+  const [openDelete, setOpenDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [delId, setDelId] = useState(null);
+
+  // upload de imagem/arquivo
+  const [uploading, setUploading] = useState(false);
+
+  // efeitos
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      setLoading(true);
+      try {
+        const res = await api.get("/materials");
+        const list = Array.isArray(res.data) ? res.data : res.data?.items || [];
+        if (mounted) {
+          setMaterials(list);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar materiais:", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  /* ============== Derivados p/ filtros (combos) ============== */
+  const allClients = useMemo(() => {
+    const set = new Set();
+    (materials || []).forEach((m) => {
       const v = (m.client_name ?? m.clientName ?? "").trim();
-      if (v) s.add(v);
+      if (v) set.add(v);
     });
-    return Array.from(s).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [materials]);
 
-  const uniqueResponsibles = useMemo(() => {
-    const s = new Set();
-    materials.forEach((m) => {
+  const allResponsibles = useMemo(() => {
+    const set = new Set();
+    (materials || []).forEach((m) => {
       const v = (m.responsible ?? "").trim();
-      if (v) s.add(v);
+      if (v) set.add(v);
     });
-    return Array.from(s).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [materials]);
 
-  const toggle = (setter, value) =>
-    setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
-
-  const clearFilters = () => {
-    setFClients([]);
-    setFResponsibles([]);
-    setFHasSample("");
-    setFHasProtocol("");
-    setFQtyMin("");
-    setFQtyMax("");
-    setFStartBr("");
-    setFEndBr("");
-  };
-
-  const filtersCount =
-    (fClients.length ? 1 : 0) +
-    (fResponsibles.length ? 1 : 0) +
-    (fHasSample ? 1 : 0) +
-    (fHasProtocol ? 1 : 0) +
-    ((fStartBr || fEndBr) ? 1 : 0) +
-    ((fQtyMin || fQtyMax) ? 1 : 0);
-
-  // filtro + ordenação
+  /* ================== Filtro + Ordenação ================== */
   const filtered = useMemo(() => {
     let list = Array.isArray(materials) ? [...materials] : [];
 
     // normaliza data
-    list = list
-      .map((m) => ({ ...m, _ymd: toYMDInCuiaba(m.date) }))
-      .filter((m) => m._ymd);
+    list = list.map((m) => {
+      const _ymd = toYMDInCuiaba(m.date);
+      return { ...m, _ymd };
+    });
 
     // mês (mantido)
     if (month) list = list.filter((m) => m._ymd.slice(0, 7) === month);
@@ -330,12 +215,12 @@ const Materials = () => {
       const want = fHasProtocol === "sim";
       list = list.filter((m) => Boolean(m.protocol_url || m.protocolUrl) === want);
     }
-    if (fQtyMin !== "" || fQtyMax !== "") {
-      const min = fQtyMin === "" ? -Infinity : Number(fQtyMin);
-      const max = fQtyMax === "" ? Infinity : Number(fQtyMax);
+    if (fQtyMin || fQtyMax) {
+      const min = Number(fQtyMin || 0);
+      const max = fQtyMax ? Number(fQtyMax) : Number.MAX_SAFE_INTEGER;
       list = list.filter((m) => {
-        const qn = Number(m.quantity ?? 0);
-        return qn >= min && qn <= max;
+        const q = Number(m.quantity || 0);
+        return q >= min && q <= max;
       });
     }
     if (fStartBr || fEndBr) {
@@ -349,84 +234,220 @@ const Materials = () => {
     return list;
   }, [materials, q, month, fClients, fResponsibles, fHasSample, fHasProtocol, fQtyMin, fQtyMax, fStartBr, fEndBr]);
 
+  // === Resumos / Contadores (Total geral e por mês) ===
+  const normalizedAll = useMemo(() => {
+    if (!Array.isArray(materials)) return [];
+    return materials
+      .map((m) => ({ ...m, _ymd: toYMDInCuiaba(m.date) }))
+      .filter((m) => m._ymd);
+  }, [materials]);
+
+  const totalAll = useMemo(() => normalizedAll.length, [normalizedAll]);
+
+  const countsByMonth = useMemo(() => {
+    const acc = Object.create(null);
+    for (const m of normalizedAll) {
+      const key = m._ymd.slice(0, 7); // YYYY-MM
+      acc[key] = (acc[key] || 0) + 1;
+    }
+    return acc;
+  }, [normalizedAll]);
+
+  const currentMonthKey = useMemo(() => {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: TZ,
+      year: "numeric",
+      month: "2-digit",
+    });
+    return fmt.format(new Date()); // "YYYY-MM"
+  }, []);
+
+  const formatMonthLabel = useCallback((ym) => {
+    if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return "";
+    const [y, m] = ym.split("-");
+    const date = new Date(Number(y), Number(m) - 1, 1);
+    return new Intl.DateTimeFormat("pt-BR", {
+      month: "long",
+      year: "numeric",
+      timeZone: TZ,
+    }).format(date);
+  }, []);
+
+  const selectedMonthKey = month || currentMonthKey;
+  const totalSelectedMonth = countsByMonth[selectedMonthKey] || 0;
+
   // Prepare data for export
   const exportData = useMemo(() => {
-    return filtered.map((m) => {
-      const ymd = m._ymd ?? toYMDInCuiaba(m.date);
-      return {
-        data: ymdToBR(ymd),
-        cliente: m.client_name ?? m.clientName ?? "",
-        responsavel: m.responsible ?? "",
-        quantidade: m.quantity ?? "",
-        observacoes: m.notes ?? "",
-        amostra: (m.material_sample_url || m.sampleUrl) ? "Sim" : "—",
-        protocolo: (m.protocol_url || m.protocolUrl) ? "Sim" : "—",
-      };
-    });
+    return filtered.map((item) => ({
+      "Cliente": item.client_name || "",
+      "Responsável": item.responsible || "",
+      "Data": ymdToBR(item._ymd || toYMDInCuiaba(item.date) || ""),
+      "Quantidade": item.quantity ?? "",
+      "Observações": item.notes || "",
+      "Amostra (URL)": item.material_sample_url || "",
+      "Protocolo (URL)": item.protocol_url || "",
+    }));
   }, [filtered]);
 
-  const exportColumns = [
-    { key: 'data', header: 'Data' },
-    { key: 'cliente', header: 'Cliente' },
-    { key: 'responsavel', header: 'Responsável' },
-    { key: 'quantidade', header: 'Quantidade' },
-    { key: 'observacoes', header: 'Observações' },
-    { key: 'amostra', header: 'Amostra' },
-    { key: 'protocolo', header: 'Protocolo' },
-  ];
+  /* ================== Paginação ================== */
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [page, totalPages]);
 
-  const pdfOptions = {
-    title: 'Relatório de Materiais',
-    orientation: 'l', // landscape for more columns
-    filtersSummary: `Filtros aplicados: ${filtersCount > 0 ? 
-      [
-        month ? `Mês: ${month}` : '',
-        fClients.length > 0 ? `Clientes: ${fClients.join(', ')}` : '',
-        fResponsibles.length > 0 ? `Responsáveis: ${fResponsibles.join(', ')}` : '',
-        fHasSample ? `Amostra: ${fHasSample === 'sim' ? 'Com amostra' : 'Sem amostra'}` : '',
-        fHasProtocol ? `Protocolo: ${fHasProtocol === 'sim' ? 'Com protocolo' : 'Sem protocolo'}` : '',
-        (fQtyMin || fQtyMax) ? `Quantidade: ${fQtyMin || '0'} - ${fQtyMax || '∞'}` : '',
-        (fStartBr || fEndBr) ? `Período: ${fStartBr || '...'} - ${fEndBr || '...'}` : '',
-      ].filter(Boolean).join(' | ') : 'Nenhum filtro aplicado'
-    }`,
-    columnStyles: {
-      0: { cellWidth: 25 }, // Data
-      1: { cellWidth: 50 }, // Cliente
-      2: { cellWidth: 40 }, // Responsável
-      3: { cellWidth: 25 }, // Quantidade
-      4: { cellWidth: 60 }, // Observações
-      5: { cellWidth: 20 }, // Amostra
-      6: { cellWidth: 20 }, // Protocolo
+  const pageItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page]);
+
+  /* ================== Handlers CRUD ================== */
+
+  const openCreate = () => {
+    setMode("create");
+    setCurrent({ ...emptyForm, id: null });
+    setOpen(true);
+  };
+
+  const openEdit = (row) => {
+    setMode("edit");
+    setCurrent({
+      id: row.id,
+      client_name: row.client_name || "",
+      responsible: row.responsible || "",
+      date: row._ymd || toYMDInCuiaba(row.date) || "",
+      quantity: row.quantity ?? "",
+      notes: row.notes || "",
+      material_sample_url: row.material_sample_url || "",
+      protocol_url: row.protocol_url || "",
+    });
+    setOpen(true);
+  };
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payload = {
+        client_name: current.client_name?.trim() || "",
+        responsible: current.responsible?.trim() || "",
+        date: toYMDInCuiaba(current.date),
+        quantity: Number(current.quantity || 0),
+        notes: current.notes?.trim() || "",
+        material_sample_url: current.material_sample_url?.trim() || "",
+        protocol_url: current.protocol_url?.trim() || "",
+      };
+
+      if (mode === "create") {
+        const res = await api.post("/materials", payload);
+        const created = res.data || payload;
+        setMaterials((old) => [{ ...created }, ...old]);
+      } else {
+        await api.put(`/materials/${current.id}`, payload);
+        setMaterials((old) =>
+          old.map((m) => (m.id === current.id ? { ...m, ...payload } : m))
+        );
+      }
+      setOpen(false);
+    } catch (err) {
+      console.error("Erro ao salvar material:", err);
+    } finally {
+      setSaving(false);
     }
   };
 
-  return (
-    <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl md:text-2xl font-semibold">Materiais</h1>
-      </div>
+  const confirmDelete = (id) => {
+    setDelId(id);
+    setOpenDelete(true);
+  };
 
+  const onDelete = async () => {
+    if (!delId) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/materials/${delId}`);
+      setMaterials((old) => old.filter((m) => m.id !== delId));
+      setOpenDelete(false);
+    } catch (err) {
+      console.error("Erro ao excluir material:", err);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  /* ================== Upload Genérico (URL) ================== */
+  const uploadAnyFile = async (file) => {
+    // O backend deve aceitar este endpoint e retornar { url }
+    // Se não houver backend, você pode integrar com S3/Cloudinary ou Firebase Storage
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await api.post("/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data?.url || "";
+  };
+
+  /* ================== UI ================== */
+
+  const resetFilters = () => {
+    setQ("");
+    setMonth("");
+    setFClients([]);
+    setFResponsibles([]);
+    setFHasSample("");
+    setFHasProtocol("");
+    setFQtyMin("");
+    setFQtyMax("");
+    setFStartBr("");
+    setFEndBr("");
+  };
+
+  const filtersCount =
+    (fClients.length ? 1 : 0) +
+    (fResponsibles.length ? 1 : 0) +
+    (fHasSample ? 1 : 0) +
+    (fHasProtocol ? 1 : 0) +
+    ((fStartBr || fEndBr) ? 1 : 0) +
+    ((fQtyMin || fQtyMax) ? 1 : 0);
+
+  return (
+    <div className="space-y-4">
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <CardTitle className="text-lg md:text-xl font-semibold">Registros</CardTitle>
-              <CardDescription>Lista de materiais cadastrados</CardDescription>
+              <CardTitle className="text-xl">Materiais</CardTitle>
+              <CardDescription>Cadastro e gestão de materiais enviados</CardDescription>
             </div>
-            <div className="ml-auto">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={openCreate}>
+                <Plus className="mr-2 size-4" />
+                Novo Material
+              </Button>
+
+              {/* Export Menu */}
               <ExportMenu
                 data={exportData}
-                columns={exportColumns}
-                filename="materiais"
-                pdfOptions={pdfOptions}
+                fileBaseName={`materiais_${selectedMonthKey || "todos"}`}
+                buttonProps={{ variant: "outline", size: "sm" }}
               />
+
+              <Button
+                variant={openFilters || filtersCount ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setOpenFilters((v) => !v)}
+              >
+                <FilterIcon className="mr-2 size-4" />
+                Filtros {filtersCount ? <Badge variant="secondary" className="ml-2">{filtersCount}</Badge> : null}
+              </Button>
             </div>
           </div>
         </CardHeader>
+
         <CardContent className="space-y-4">
-          {/* Filtros + Exportações + Novo */}
-          <div className="flex flex-col xl:flex-row xl:items-center gap-2 lg:gap-3">
-            <div className="relative flex-1 w-full md:w-[320px]">
+          {/* Linha de busca e mês */}
+          <div className="flex flex-col md:flex-row gap-3">
+            <div className="relative md:w-1/2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 className="pl-9"
@@ -444,316 +465,31 @@ const Materials = () => {
                 type="month"
                 value={month}
                 onChange={(e) => setMonth(e.target.value)}
-                className="w-[130px]"
-                lang="pt-BR"
+                className="w-[180px]"
               />
-              {month && (
-                <Button variant="outline" size="sm" onClick={() => setMonth("")}>
-                  Limpar mês
-                </Button>
-              )}
             </div>
 
-            {/* ====== FILTROS AVANÇADOS (POPOVER) ====== */}
-            <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <FilterIcon className="size-4" />
-                  Filtros
-                  {filtersCount > 0 && <Badge variant="secondary">{filtersCount}</Badge>}
-                </Button>
-              </PopoverTrigger>
+            {/* Limpar filtros/Busca */}
+            <div className="flex-1 md:text-right">
+              <Button variant="ghost" size="sm" onClick={resetFilters}>
+                Limpar
+              </Button>
+            </div>
+          </div>
 
-              <PopoverContent
-                align="end"
-                side="bottom"
-                sideOffset={8}
-                collisionPadding={12}
-                className="w-[min(92vw,620px)] p-0"
-              >
-                {/* flex column: header fixo, body rolável, footer fixo */}
-                <div className="flex flex-col max-h-[calc(100vh-340px)]">
-                  <div className="px-4 py-3 border-b">
-                    <p className="text-sm font-medium">Filtrar materiais</p>
-                    <p className="text-xs text-muted-foreground">Refine os resultados com seletores.</p>
-                  </div>
+          {/* Resumo de Quantidades */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded-xl border bg-card p-4">
+              <p className="text-xs text-muted-foreground">Total (geral)</p>
+              <p className="text-2xl font-bold leading-tight">{totalAll}</p>
+            </div>
 
-                  {/* BODY */}
-                  <div
-                    className="p-4 grid md:grid-cols-2 gap-4 flex-1 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
-                    onWheel={(e) => e.stopPropagation()}
-                    onTouchMove={(e) => e.stopPropagation()}
-                  >
-                    {/* Clientes */}
-                    <div className="space-y-2 md:col-span-1">
-                      <Label>Clientes</Label>
-                      <div className="max-h-[32vh] overflow-y-auto pr-1">
-                        {uniqueClients.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">—</p>
-                        ) : uniqueClients.map((c) => (
-                          <label key={c} className="flex items-center gap-2 text-sm cursor-pointer">
-                            <Checkbox checked={fClients.includes(c)} onCheckedChange={() => toggle(setFClients, c)} />
-                            <span className="truncate">{c}</span>
-                          </label>
-                        ))}
-                      </div>
-                      {fClients.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {fClients.map((c) => (
-                            <Badge key={c} variant="secondary" className="gap-1">
-                              {c}
-                              <button type="button" onClick={() => toggle(setFClients, c)} className="ml-1 opacity-70 hover:opacity-100">
-                                <X className="size-3" />
-                              </button>
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Responsáveis */}
-                    <div className="space-y-2 md:col-span-1">
-                      <Label>Responsáveis</Label>
-                      <div className="max-h-[32vh] overflow-y-auto pr-1">
-                        {uniqueResponsibles.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">—</p>
-                        ) : uniqueResponsibles.map((r) => (
-                          <label key={r} className="flex items-center gap-2 text-sm cursor-pointer">
-                            <Checkbox checked={fResponsibles.includes(r)} onCheckedChange={() => toggle(setFResponsibles, r)} />
-                            <span className="truncate">{r}</span>
-                          </label>
-                        ))}
-                      </div>
-                      {fResponsibles.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {fResponsibles.map((r) => (
-                            <Badge key={r} variant="secondary" className="gap-1">
-                              {r}
-                              <button type="button" onClick={() => toggle(setFResponsibles, r)} className="ml-1 opacity-70 hover:opacity-100">
-                                <X className="size-3" />
-                              </button>
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <Separator className="md:col-span-2" />
-
-                    {/* Amostra / Protocolo */}
-                    <div className="space-y-2">
-                      <Label>Amostra</Label>
-                      <select
-                        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                        value={fHasSample}
-                        onChange={(e) => setFHasSample(e.target.value)}
-                      >
-                        <option value="">Todos</option>
-                        <option value="sim">Com amostra</option>
-                        <option value="nao">Sem amostra</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Protocolo</Label>
-                      <select
-                        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                        value={fHasProtocol}
-                        onChange={(e) => setFHasProtocol(e.target.value)}
-                      >
-                        <option value="">Todos</option>
-                        <option value="sim">Com protocolo</option>
-                        <option value="nao">Sem protocolo</option>
-                      </select>
-                    </div>
-
-                    {/* Quantidade */}
-                    <div className="space-y-2">
-                      <Label>Quantidade mínima</Label>
-                      <Input
-                        type="number"
-                        placeholder="Ex.: 1000"
-                        value={fQtyMin}
-                        onChange={(e) => setFQtyMin(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Quantidade máxima</Label>
-                      <Input
-                        type="number"
-                        placeholder="Ex.: 50000"
-                        value={fQtyMax}
-                        onChange={(e) => setFQtyMax(e.target.value)}
-                      />
-                    </div>
-
-                    {/* Período */}
-                    <div className="space-y-2">
-                      <Label>Data inicial</Label>
-                      <Input
-                        placeholder="DD/MM/AAAA"
-                        value={fStartBr}
-                        onChange={(e) => {
-                          let v = e.target.value.replace(/\D/g, "");
-                          if (v.length >= 3) v = v.slice(0, 2) + "/" + v.slice(2);
-                          if (v.length >= 6) v = v.slice(0, 5) + "/" + v.slice(5, 9);
-                          setFStartBr(v);
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Data final</Label>
-                      <Input
-                        placeholder="DD/MM/AAAA"
-                        value={fEndBr}
-                        onChange={(e) => {
-                          let v = e.target.value.replace(/\D/g, "");
-                          if (v.length >= 3) v = v.slice(0, 2) + "/" + v.slice(2);
-                          if (v.length >= 6) v = v.slice(0, 5) + "/" + v.slice(5, 9);
-                          setFEndBr(v);
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="px-4 py-3 border-t flex justify-between">
-                    <Button variant="ghost" size="sm" onClick={clearFilters}>Limpar filtros</Button>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setFiltersOpen(false)}>Fechar</Button>
-                      <Button size="sm" onClick={() => setFiltersOpen(false)}>Aplicar</Button>
-                    </div>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            {/* Novo */}
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="gap-2" onClick={openCreate}>
-                  <Plus className="size-4" />
-                  <span className="whitespace-nowrap">Novo</span>
-                </Button>
-              </DialogTrigger>
-
-              <DialogContent className="max-w-2xl p-0">
-                <div className="max-h-[80vh] overflow-y-auto p-6">
-                  <DialogHeader className="pb-2">
-                    <DialogTitle>{mode === "create" ? "Novo Material" : "Editar Material"}</DialogTitle>
-                    <DialogDescription>
-                      {mode === "create" ? "Cadastre um recebimento/coleta." : "Edite as informações do material."}
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <form onSubmit={onSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <Label>Data</Label>
-                        <Input
-                          name="dateBr"
-                          placeholder="DD/MM/AAAA"
-                          inputMode="numeric"
-                          value={form.dateBr}
-                          onChange={onDateBrChange}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label>Quantidade</Label>
-                        <Input
-                          type="number"
-                          name="quantity"
-                          placeholder="Ex.: 10000"
-                          value={form.quantity}
-                          onChange={onChange}
-                          required
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label>Cliente</Label>
-                        <Input
-                          name="clientName"
-                          placeholder="Nome do cliente"
-                          value={form.clientName}
-                          onChange={onChange}
-                          required
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label>Responsável pela coleta/recebimento</Label>
-                        <Input
-                          name="responsible"
-                          placeholder="Responsável"
-                          value={form.responsible}
-                          onChange={onChange}
-                          required
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label>Observações</Label>
-                        <Textarea name="notes" placeholder="Opcional" value={form.notes} onChange={onChange} />
-                      </div>
-                    </div>
-
-                    {/* Amostra do Material */}
-                    <div className="space-y-2">
-                      <Label>Amostra do Material</Label>
-                      <div className="flex items-center gap-3">
-                        <Input type="file" accept="image/*" onChange={onSampleChange} />
-                        <Button type="button" variant="outline" disabled className="gap-2">
-                          <UploadCloud className="size-4" />
-                          {uploadingSample ? "Enviando..." : "Upload"}
-                        </Button>
-                      </div>
-                      {form.sampleUrl && (
-                        <div className="relative inline-flex items-center gap-2 mt-2">
-                          <ImagePreview src={form.sampleUrl} alt="Amostra" size={96} />
-                          <button
-                            type="button"
-                            onClick={() => setForm(prev => ({ ...prev, sampleUrl: "" }))}
-                            className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Protocolo */}
-                    <div className="space-y-2">
-                      <Label>Protocolo</Label>
-                      <div className="flex items-center gap-3">
-                        <Input type="file" accept="image/*,application/pdf" onChange={onProtocolChange} />
-                        <Button type="button" variant="outline" disabled className="gap-2">
-                          <UploadCloud className="size-4" />
-                          {uploadingProtocol ? "Enviando..." : "Upload"}
-                        </Button>
-                      </div>
-                      {form.protocolUrl && (
-                        <div className="relative inline-flex items-center gap-2 mt-2">
-                          <ImagePreview src={form.protocolUrl} alt="Protocolo" size={96} />
-                          <button
-                            type="button"
-                            onClick={() => setForm(prev => ({ ...prev, protocolUrl: "" }))}
-                            className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
-                        Cancelar
-                      </Button>
-                      <Button type="submit" size="sm" disabled={saving}>
-                        {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
-                      </Button>
-                    </div>
-                  </form>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <div className="rounded-xl border bg-card p-4">
+              <p className="text-xs text-muted-foreground">
+                Total no mês {month ? "(selecionado)" : "(atual)"} — {formatMonthLabel(selectedMonthKey)}
+              </p>
+              <p className="text-2xl font-bold leading-tight">{totalSelectedMonth}</p>
+            </div>
           </div>
 
           {/* Tabela */}
@@ -761,73 +497,426 @@ const Materials = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-center">Data</TableHead>
-                  <TableHead className="text-center">Cliente</TableHead>
-                  <TableHead className="text-center">Responsável</TableHead>
-                  <TableHead className="text-center">Quantidade</TableHead>
-                  <TableHead className="text-center">Observações</TableHead>
-                  <TableHead className="text-center">Amostra</TableHead>
-                  <TableHead className="text-center">Protocolo</TableHead>
-                  <TableHead className="text-center">Ações</TableHead>
+                  <TableHead className="text-xs md:text-sm">Data</TableHead>
+                  <TableHead className="text-xs md:text-sm">Cliente</TableHead>
+                  <TableHead className="text-xs md:text-sm">Responsável</TableHead>
+                  <TableHead className="text-xs md:text-sm text-right">Qtd</TableHead>
+                  <TableHead className="text-xs md:text-sm">Amostra</TableHead>
+                  <TableHead className="text-xs md:text-sm">Protocolo</TableHead>
+                  <TableHead className="text-xs md:text-sm">Observações</TableHead>
+                  <TableHead className="text-xs md:text-sm w-[100px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-6">Carregando…</TableCell></TableRow>
-                ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-6">Nenhum registro</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
+                      Carregando...
+                    </TableCell>
+                  </TableRow>
+                ) : pageItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
+                      Nenhum material encontrado
+                    </TableCell>
+                  </TableRow>
                 ) : (
-                  filtered.map((m) => {
-                    const id = m.id ?? m._id ?? m.uuid;
-                    const ymd = m._ymd ?? toYMDInCuiaba(m.date);
-                    return (
-                      <TableRow key={id || `${m.client_name}-${m.date}-${m.quantity}`}>
-                        <TableCell className="text-center font-medium">{ymdToBR(ymd)}</TableCell>
-                        <TableCell className="text-center">{m.client_name ?? m.clientName ?? "—"}</TableCell>
-                        <TableCell className="text-center">{m.responsible ?? "—"}</TableCell>
-                        <TableCell className="text-center">{m.quantity ?? "—"}</TableCell>
-                        <TableCell className="text-center max-w-[200px] truncate">{m.notes ?? "—"}</TableCell>
-                        <TableCell className="text-center">
-                          {(m.material_sample_url || m.sampleUrl) ? (
-                            <ImagePreview src={m.material_sample_url || m.sampleUrl} alt="Amostra" size={32} />
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {(m.protocol_url || m.protocolUrl) ? (
-                            <ImagePreview src={m.protocol_url || m.protocolUrl} alt="Protocolo" size={32} />
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex justify-center gap-2">
-                            <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(m)}>
-                              <Edit className="size-4" /> Editar
-                            </Button>
-                            <Button size="sm" variant="destructive" className="gap-2" onClick={() => confirmDelete(m)}>
-                              <Trash2 className="size-4" /> Excluir
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                  pageItems.map((row) => (
+                    <TableRow key={row.id || `${row.client_name}-${row.date}`}>
+                      <TableCell className="align-top">{ymdToBR(row._ymd || toYMDInCuiaba(row.date))}</TableCell>
+                      <TableCell className="align-top">{row.client_name}</TableCell>
+                      <TableCell className="align-top">{row.responsible}</TableCell>
+                      <TableCell className="align-top text-right">{row.quantity}</TableCell>
+                      <TableCell className="align-top">
+                        {row.material_sample_url ? (
+                          <ImagePreview url={row.material_sample_url} />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="align-top">
+                        {row.protocol_url ? (
+                          <a
+                            href={row.protocol_url}
+                            className="text-xs text-primary underline hover:no-underline"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Abrir
+                          </a>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="align-top max-w-[260px]">
+                        <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words">
+                          {row.notes || "—"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="align-top text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="icon" className="size-8" onClick={() => openEdit(row)}>
+                            <Edit className="size-4" />
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="size-8"
+                            onClick={() => confirmDelete(row.id)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
           </div>
+
+          {/* Paginação */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Exibindo <b>{pageItems.length}</b> de <b>{total}</b>
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                Anterior
+              </Button>
+              <div className="text-xs text-muted-foreground">
+                Página <b>{page}</b> / <b>{totalPages}</b>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Próxima
+              </Button>
+            </div>
+          </div>
+
+          {/* Filtros Avançados */}
+          {openFilters && (
+            <div className="rounded-xl border p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-sm">Filtros avançados</h4>
+                <Button variant="ghost" size="sm" onClick={() => setOpenFilters(false)}>
+                  Fechar
+                </Button>
+              </div>
+              <Separator />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {/* Clientes */}
+                <div>
+                  <Label className="text-xs">Clientes</Label>
+                  <ComboMulti
+                    options={allClients}
+                    values={fClients}
+                    onChange={setFClients}
+                    placeholder="Selecione clientes"
+                  />
+                </div>
+
+                {/* Responsáveis */}
+                <div>
+                  <Label className="text-xs">Responsáveis</Label>
+                  <ComboMulti
+                    options={allResponsibles}
+                    values={fResponsibles}
+                    onChange={setFResponsibles}
+                    placeholder="Selecione responsáveis"
+                  />
+                </div>
+
+                {/* Amostra */}
+                <div>
+                  <Label className="text-xs">Possui Amostra?</Label>
+                  <div className="flex items-center gap-3 mt-2">
+                    <label className="flex items-center gap-2 text-xs">
+                      <Checkbox
+                        checked={fHasSample === "sim"}
+                        onCheckedChange={(v) => setFHasSample(v ? "sim" : (fHasSample === "sim" ? "" : fHasSample))}
+                      />
+                      Sim
+                    </label>
+                    <label className="flex items-center gap-2 text-xs">
+                      <Checkbox
+                        checked={fHasSample === "nao"}
+                        onCheckedChange={(v) => setFHasSample(v ? "nao" : (fHasSample === "nao" ? "" : fHasSample))}
+                      />
+                      Não
+                    </label>
+                  </div>
+                </div>
+
+                {/* Protocolo */}
+                <div>
+                  <Label className="text-xs">Possui Protocolo?</Label>
+                  <div className="flex items-center gap-3 mt-2">
+                    <label className="flex items-center gap-2 text-xs">
+                      <Checkbox
+                        checked={fHasProtocol === "sim"}
+                        onCheckedChange={(v) => setFHasProtocol(v ? "sim" : (fHasProtocol === "sim" ? "" : fHasProtocol))}
+                      />
+                      Sim
+                    </label>
+                    <label className="flex items-center gap-2 text-xs">
+                      <Checkbox
+                        checked={fHasProtocol === "nao"}
+                        onCheckedChange={(v) => setFHasProtocol(v ? "nao" : (fHasProtocol === "nao" ? "" : fHasProtocol))}
+                      />
+                      Não
+                    </label>
+                  </div>
+                </div>
+
+                {/* Quantidade Min/Max */}
+                <div>
+                  <Label className="text-xs">Quantidade (mín.)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={fQtyMin}
+                    onChange={(e) => setFQtyMin(e.target.value)}
+                    placeholder="0"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Quantidade (máx.)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={fQtyMax}
+                    onChange={(e) => setFQtyMax(e.target.value)}
+                    placeholder="1000"
+                    className="mt-1"
+                  />
+                </div>
+
+                {/* Período (Data BR) */}
+                <div>
+                  <Label className="text-xs">Início (DD/MM/AAAA)</Label>
+                  <Input
+                    placeholder="01/01/2025"
+                    value={fStartBr}
+                    onChange={(e) => setFStartBr(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Fim (DD/MM/AAAA)</Label>
+                  <Input
+                    placeholder="31/12/2025"
+                    value={fEndBr}
+                    onChange={(e) => setFEndBr(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-muted-foreground">
+                  {filtersCount ? `${filtersCount} filtro(s) ativo(s)` : "Sem filtros ativos"}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => {
+                    setFClients([]);
+                    setFResponsibles([]);
+                    setFHasSample("");
+                    setFHasProtocol("");
+                    setFQtyMin("");
+                    setFQtyMax("");
+                    setFStartBr("");
+                    setFEndBr("");
+                  }}>
+                    Limpar
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setOpenFilters(false)}>
+                    Aplicar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Dialog de exclusão */}
-      <Dialog open={openDelete} onOpenChange={setOpenDelete}>
-        <DialogContent className="max-w-sm">
+      {/* Modal Criar/Editar */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Excluir material?</DialogTitle>
-            <DialogDescription>Esta ação não pode ser desfeita.</DialogDescription>
+            <DialogTitle>{mode === "create" ? "Novo Material" : "Editar Material"}</DialogTitle>
+            <DialogDescription>Preencha as informações do material</DialogDescription>
           </DialogHeader>
+
+          <div className="pt-2">
+            <form onSubmit={onSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Cliente</Label>
+                  <Input
+                    value={current.client_name}
+                    onChange={(e) => setCurrent((c) => ({ ...c, client_name: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs">Responsável</Label>
+                  <Input
+                    value={current.responsible}
+                    onChange={(e) => setCurrent((c) => ({ ...c, responsible: e.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs">Data</Label>
+                  <Input
+                    type="date"
+                    value={current.date}
+                    onChange={(e) => setCurrent((c) => ({ ...c, date: e.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs">Quantidade</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={current.quantity}
+                    onChange={(e) => setCurrent((c) => ({ ...c, quantity: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Observações</Label>
+                <Textarea
+                  value={current.notes}
+                  onChange={(e) => setCurrent((c) => ({ ...c, notes: e.target.value }))}
+                  rows={4}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs flex items-center gap-2">
+                    Amostra (URL)
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button type="button" size="xs" variant="outline" className="h-6 px-2">
+                          <UploadCloud className="size-3 mr-1" />
+                          Upload
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72">
+                        <UploadWidget
+                          onUploaded={(url) => setCurrent((c) => ({ ...c, material_sample_url: url }))}
+                          uploading={uploading}
+                          setUploading={setUploading}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </Label>
+                  {current.material_sample_url ? (
+                    <div className="flex items-center gap-2 mt-1">
+                      <ImagePreview url={current.material_sample_url} />
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                        onClick={() => setCurrent((c) => ({ ...c, material_sample_url: "" }))}
+                        title="Remover"
+                      >
+                        <X className="size-3" />
+                        Remover
+                      </button>
+                    </div>
+                  ) : (
+                    <Input
+                      placeholder="https://..."
+                      value={current.material_sample_url}
+                      onChange={(e) => setCurrent((c) => ({ ...c, material_sample_url: e.target.value }))}
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <Label className="text-xs flex items-center gap-2">
+                    Protocolo (URL)
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button type="button" size="xs" variant="outline" className="h-6 px-2">
+                          <UploadCloud className="size-3 mr-1" />
+                          Upload
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72">
+                        <UploadWidget
+                          onUploaded={(url) => setCurrent((c) => ({ ...c, protocol_url: url }))}
+                          uploading={uploading}
+                          setUploading={setUploading}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </Label>
+                  {current.protocol_url ? (
+                    <div className="flex items-center gap-2 mt-1">
+                      <a
+                        href={current.protocol_url}
+                        className="text-xs text-primary underline hover:no-underline"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Abrir protocolo
+                      </a>
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                        onClick={() => setCurrent((c) => ({ ...c, protocol_url: "" }))}
+                        title="Remover"
+                      >
+                        <X className="size-3" />
+                        Remover
+                      </button>
+                    </div>
+                  ) : (
+                    <Input
+                      placeholder="https://..."
+                      value={current.protocol_url}
+                      onChange={(e) => setCurrent((c) => ({ ...c, protocol_url: e.target.value }))}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Delete */}
+      <Dialog open={openDelete} onOpenChange={setOpenDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir material</DialogTitle>
+            <DialogDescription>Esta ação não poderá ser desfeita.</DialogDescription>
+          </DialogHeader>
+          <p className="text-sm">
+            Tem certeza que deseja excluir este registro?
+          </p>
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setOpenDelete(false)}>Cancelar</Button>
             <Button variant="destructive" size="sm" onClick={onDelete} disabled={deleting}>
@@ -840,5 +929,111 @@ const Materials = () => {
   );
 };
 
-export default Materials;
+/* ================== Components Auxiliares ================== */
 
+const UploadWidget = ({ onUploaded, uploading, setUploading }) => {
+  const [file, setFile] = useState(null);
+  const [error, setError] = useState("");
+
+  const handleUpload = async () => {
+    if (!file) return;
+    try {
+      setError("");
+      setUploading(true);
+      const url = await fakeUpload(file); // substitua por uploadAnyFile(file) se tiver o backend pronto
+      onUploaded(url);
+      setFile(null);
+    } catch (err) {
+      console.error(err);
+      setError("Falha no upload. Tente novamente.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const fakeUpload = async (f) => {
+    // Apenas simula e retorna blob local para visualização
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(f);
+    });
+  };
+
+  return (
+    <div className="space-y-2">
+      <Input
+        type="file"
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
+      />
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <div className="flex gap-2">
+        <Button size="sm" type="button" disabled={!file || uploading} onClick={handleUpload}>
+          {uploading ? "Enviando..." : "Enviar"}
+        </Button>
+        {file ? (
+          <Button
+            size="sm"
+            type="button"
+            variant="ghost"
+            onClick={() => setFile(null)}
+            className="text-muted-foreground hover:text-foreground"
+            title="Limpar seleção"
+          >
+            <X className="size-3" />
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
+const ComboMulti = ({ options, values, onChange, placeholder }) => {
+  const [open, setOpen] = useState(false);
+  const toggle = (opt) => {
+    const set = new Set(values || []);
+    if (set.has(opt)) set.delete(opt);
+    else set.add(opt);
+    onChange(Array.from(set));
+  };
+  const clear = () => onChange([]);
+
+  return (
+    <div className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full justify-between"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="truncate">{values?.length ? `${values.length} selecionado(s)` : (placeholder || "Selecionar")}</span>
+        <FilterIcon className="size-4 opacity-70" />
+      </Button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
+          <div className="p-2 max-h-64 overflow-auto">
+            <div className="flex justify-end">
+              <Button size="xs" variant="ghost" onClick={clear}>Limpar</Button>
+            </div>
+            <div className="mt-1 space-y-1">
+              {options.map((opt) => {
+                const checked = values.includes(opt);
+                return (
+                  <label key={opt} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-accent cursor-pointer">
+                    <Checkbox checked={checked} onCheckedChange={() => toggle(opt)} />
+                    <span className="truncate">{opt}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex justify-end p-2 border-t">
+            <Button size="sm" onClick={() => setOpen(false)}>OK</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Materials;
