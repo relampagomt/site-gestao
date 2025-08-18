@@ -325,7 +325,7 @@ const Finance = () => {
     }
   };
 
-  // Actions selector (filtro)
+  // Actions selector (filtro) — (mantido como estava)
   const [actionsOpen, setActionsOpen] = useState(false);
   const toggleAction = (id) =>
     setSelectedActions((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -628,9 +628,7 @@ const Finance = () => {
           setOpen(v);
         }}
       >
-        {/* centralizado; largura responsiva; sem overflow escondido */}
         <DialogContent className="w-[95vw] sm:max-w-2xl p-0">
-          {/* rolagem só no corpo do modal */}
           <div className="max-h-[80vh] overflow-y-auto p-6">
             <DialogHeader className="pb-2">
               <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
@@ -733,13 +731,18 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
         </Button>
       </PopoverTrigger>
 
-      {/* >>> AJUSTE EXIGIDO: alinhamento central do dropdown <<< */}
+      {/* ↓↓↓ AJUSTE: centralizado e “mais para baixo” (meio da tela) ↓↓↓ */}
       <PopoverContent
         side="bottom"
         align="center"
         sideOffset={8}
         collisionPadding={16}
-        className="z-[100] p-0 w-[min(92vw,520px)]"
+        className="
+          z-[100] p-0 w-[min(92vw,520px)]
+          data-[side=bottom]:translate-y-8
+          sm:data-[side=bottom]:translate-y-12
+          md:data-[side=bottom]:translate-y-24
+        "
       >
         <div
           className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
