@@ -1,3 +1,4 @@
+// frontend/src/admin/Finance.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '@/services/api';
 
@@ -9,7 +10,7 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { Checkbox } from '@/components/ui/checkbox.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog.jsx';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command.jsx';
 
@@ -38,7 +39,7 @@ import {
   Legend,
 } from 'recharts';
 
-// Import the new ExportMenu component
+// Export (CSV/XLSX/PDF) menu
 import ExportMenu from '@/components/export/ExportMenu';
 
 /* =============== Helpers =============== */
@@ -76,6 +77,8 @@ const emptyForm = {
   category: '',
   notes: '',
   action_id: '',
+  client_id: '',
+  material_id: '',
 };
 
 const TX_PATH = '/transactions';
@@ -83,6 +86,8 @@ const TX_PATH = '/transactions';
 const Finance = () => {
   const [transactions, setTransactions] = useState([]);
   const [actions, setActions] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Modal states
@@ -101,16 +106,22 @@ const Finance = () => {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [txRes, actRes] = await Promise.all([
+      const [txRes, actRes, cliRes, matRes] = await Promise.all([
         api.get(TX_PATH).catch(() => ({ data: [] })),
         api.get('/actions').catch(() => ({ data: [] })),
+        api.get('/clients').catch(() => ({ data: [] })),      // <- clientes
+        api.get('/materials').catch(() => ({ data: [] })),    // <- materiais
       ]);
       setTransactions(Array.isArray(txRes.data) ? txRes.data : []);
       setActions(Array.isArray(actRes.data) ? actRes.data : []);
+      setClients(Array.isArray(cliRes.data) ? cliRes.data : (cliRes.data?.items || []));
+      setMaterials(Array.isArray(matRes.data) ? matRes.data : (matRes.data?.items || []));
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
       setTransactions([]);
       setActions([]);
+      setClients([]);
+      setMaterials([]);
     } finally {
       setLoading(false);
     }
@@ -120,6 +131,24 @@ const Finance = () => {
     loadAll();
   }, []);
 
+  // Label resolvers (garantem nomes na tabela/export e nos selects)
+  const actionLabelById = (id) => {
+    const a = actions.find((x) => String(x.id) === String(id));
+    return a ? (a.client_name || a.company_name || a.title || `Ação ${a.id}`) : '';
+  };
+  const clientLabelById = (id) => {
+    const c = clients.find((x) => String(x.id) === String(id));
+    return c ? (c.name || c.full_name || c.company_name || c.client_name || `Cliente ${c.id}`) : '';
+  };
+  const materialLabelById = (id) => {
+    const m = materials.find((x) => String(x.id) === String(id));
+    if (!m) return '';
+    const date = isoToBR(String(m.date || '').slice(0, 10));
+    const client = m.client_name || m.client || '';
+    const qty = (m.quantity ?? '') !== '' ? ` • Qtd: ${m.quantity}` : '';
+    return [client, date].filter(Boolean).join(' — ') + qty;
+  };
+
   // Filtered data
   const filtered = useMemo(() => {
     let list = [...transactions];
@@ -128,7 +157,7 @@ const Finance = () => {
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((t) =>
-        [t.category, t.notes, String(t.amount)]
+        [t.category, t.notes, String(t.amount), actionLabelById(t.action_id), clientLabelById(t.client_id), materialLabelById(t.material_id)]
           .filter(Boolean)
           .some((field) => String(field).toLowerCase().includes(q))
       );
@@ -148,7 +177,7 @@ const Finance = () => {
       });
     }
 
-    // Actions filter
+    // Actions filter (mantido)
     if (selectedActions.length > 0) {
       const actionSet = new Set(selectedActions);
       list = list.filter((t) => actionSet.has(t.action_id));
@@ -162,7 +191,7 @@ const Finance = () => {
     });
 
     return list;
-  }, [transactions, search, typeFilter, monthFilter, selectedActions]);
+  }, [transactions, search, typeFilter, monthFilter, selectedActions, actions, clients, materials]);
 
   // Month options for filter
   const monthOptions = useMemo(() => {
@@ -250,6 +279,8 @@ const Finance = () => {
       category: tx.category || '',
       notes: tx.notes || '',
       action_id: tx.action_id || '',
+      client_id: tx.client_id || '',
+      material_id: tx.material_id || '',
     });
     setOpen(true);
   };
@@ -271,7 +302,12 @@ const Finance = () => {
         category: form.category || '',
         notes: form.notes || '',
         action_id: form.action_id || null,
-        actionId: form.action_id || null, // compat
+        client_id: form.client_id || null,
+        material_id: form.material_id || null,
+        // chaves de compatibilidade, caso o backend use camelCase
+        actionId: form.action_id || null,
+        clientId: form.client_id || null,
+        materialId: form.material_id || null,
       };
 
       if (editing?.id) {
@@ -303,7 +339,7 @@ const Finance = () => {
     }
   };
 
-  // Actions selector
+  // Actions selector (filtro de lista)
   const [actionsOpen, setActionsOpen] = useState(false);
   const toggleAction = (id) =>
     setSelectedActions((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -325,7 +361,7 @@ const Finance = () => {
               <CommandGroup heading="Ações">
                 {actions.map((a) => {
                   const checked = selectedActions.includes(a.id);
-                  const label = a.client_name || a.company_name || `Ação ${a.id}`;
+                  const label = actionLabelById(a.id);
                   return (
                     <CommandItem key={a.id} value={label} className="flex items-center gap-2" onSelect={() => toggleAction(a.id)}>
                       <Checkbox checked={checked} onCheckedChange={() => toggleAction(a.id)} />
@@ -348,34 +384,33 @@ const Finance = () => {
   const saldo = totalEntrada - totalSaida;
 
   // Prepare data for export
-  const actionLabelById = (id) => {
-    const ac = actions.find((a) => a.id === id);
-    return ac ? ac.client_name || ac.company_name || `Ação ${ac.id}` : '';
-  };
-
   const exportData = useMemo(() => {
     return filtered.map((t) => ({
       data: isoToBR(String(t.date || '').slice(0, 10)) || '',
       tipo: t.type || '',
       categoria: t.category || '',
       acao: actionLabelById(t.action_id),
+      cliente: clientLabelById(t.client_id),
+      material: materialLabelById(t.material_id),
       valor: Number(t.amount || 0),
       observacoes: t.notes || '',
     }));
-  }, [filtered, actions]);
+  }, [filtered, actions, clients, materials]);
 
   const exportColumns = [
     { key: 'data', header: 'Data' },
     { key: 'tipo', header: 'Tipo' },
     { key: 'categoria', header: 'Categoria' },
     { key: 'acao', header: 'Ação' },
+    { key: 'cliente', header: 'Cliente' },
+    { key: 'material', header: 'Material' },
     { key: 'valor', header: 'Valor' },
     { key: 'observacoes', header: 'Observações' },
   ];
 
   const pdfOptions = {
     title: 'Relatório Financeiro',
-    orientation: 'l', // landscape for more columns
+    orientation: 'l',
     filtersSummary: `Filtros aplicados: ${
       [
         search ? `Busca: "${search}"` : '',
@@ -385,15 +420,28 @@ const Finance = () => {
       ].filter(Boolean).join(' | ') || 'Nenhum filtro aplicado'
     }`,
     columnStyles: {
-      0: { cellWidth: 25 }, // Data
-      1: { cellWidth: 25 }, // Tipo
-      2: { cellWidth: 50 }, // Categoria
-      3: { cellWidth: 60 }, // Ação
-      4: { cellWidth: 30 }, // Valor
-      5: { cellWidth: 80 }, // Observações
+      0: { cellWidth: 22 }, // Data
+      1: { cellWidth: 22 }, // Tipo
+      2: { cellWidth: 38 }, // Categoria
+      3: { cellWidth: 46 }, // Ação
+      4: { cellWidth: 46 }, // Cliente
+      5: { cellWidth: 60 }, // Material
+      6: { cellWidth: 26 }, // Valor
+      7: { cellWidth: 70 }, // Observações
     },
     footerContent: `Totais do período: Entradas: ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`
   };
+
+  // Itens para selects do formulário
+  const actionItems = useMemo(() => actions.map(a => ({ id: a.id, label: actionLabelById(a.id) })), [actions]);
+  const clientItems = useMemo(() => clients.map(c => ({
+    id: c.id,
+    label: clientLabelById(c.id),
+  })), [clients]);
+  const materialItems = useMemo(() => materials.map(m => ({
+    id: m.id,
+    label: materialLabelById(m.id),
+  })), [materials]);
 
   return (
     <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
@@ -591,6 +639,8 @@ const Finance = () => {
                   <TableHead className="text-center">Tipo</TableHead>
                   <TableHead className="text-center">Categoria</TableHead>
                   <TableHead className="text-center">Ação</TableHead>
+                  <TableHead className="text-center">Cliente</TableHead>
+                  <TableHead className="text-center">Material</TableHead>
                   <TableHead className="text-center">Valor</TableHead>
                   <TableHead className="text-center">Obs.</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
@@ -599,21 +649,28 @@ const Finance = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-8">
                       Carregando…
                     </TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-8">
                       Nenhuma transação encontrada.
                     </TableCell>
                   </TableRow>
                 ) : (
                   filtered.map((t) => {
                     const actionLabel = actionLabelById(t.action_id);
-                    const typeColor = t.type === 'entrada' ? 'default' : t.type === 'saida' ? 'destructive' : 'secondary';
-                    
+                    const clientLabel = clientLabelById(t.client_id);
+                    const materialLabel = materialLabelById(t.material_id);
+                    const typeColor =
+                      t.type === 'entrada'
+                        ? 'default'
+                        : t.type === 'saida'
+                        ? 'destructive'
+                        : 'secondary';
+
                     return (
                       <TableRow key={t.id}>
                         <TableCell className="text-center">{isoToBR(String(t.date || '').slice(0, 10))}</TableCell>
@@ -622,6 +679,8 @@ const Finance = () => {
                         </TableCell>
                         <TableCell className="text-center">{t.category || '—'}</TableCell>
                         <TableCell className="text-center">{actionLabel || '—'}</TableCell>
+                        <TableCell className="text-center">{clientLabel || '—'}</TableCell>
+                        <TableCell className="text-center">{materialLabel || '—'}</TableCell>
                         <TableCell className="text-center font-medium">{BRL(t.amount)}</TableCell>
                         <TableCell className="text-center">{t.notes || '—'}</TableCell>
                         <TableCell className="text-center">
@@ -644,21 +703,29 @@ const Finance = () => {
             </Table>
           </div>
           <p className="text-xs text-muted-foreground mt-3 px-6 pb-6">
-            Total: <strong>{filtered.length}</strong> transação(ões) | 
-            Entradas: <strong>{BRL(totalEntrada)}</strong> | 
-            Saídas: <strong>{BRL(totalSaida)}</strong> | 
+            Total: <strong>{filtered.length}</strong> transação(ões) |{' '}
+            Entradas: <strong>{BRL(totalEntrada)}</strong> |{' '}
+            Saídas: <strong>{BRL(totalSaida)}</strong> |{' '}
             Saldo: <strong className={saldo >= 0 ? 'text-green-600' : 'text-red-600'}>{BRL(saldo)}</strong>
           </p>
         </CardContent>
       </Card>
 
       {/* Create/Edit Modal */}
-      <Dialog open={open} onOpenChange={(v) => { if (!v) { setEditing(null); setForm(emptyForm); } setOpen(v); }}>
-        <DialogContent className="max-w-lg p-0">
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) { setEditing(null); setForm(emptyForm); }
+          setOpen(v);
+        }}
+      >
+        <DialogContent className="max-w-2xl p-0">
           <div className="max-h-[80vh] overflow-y-auto p-6">
             <DialogHeader className="pb-2">
               <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
-              <DialogDescription>Registre ou atualize uma entrada, saída ou despesa.</DialogDescription>
+              <DialogDescription>
+                Registre ou atualize uma entrada, saída ou despesa. Você pode vincular (opcionalmente) a uma Ação, a um Cliente e a um Material.
+              </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={submit} className="space-y-4">
@@ -699,21 +766,35 @@ const Finance = () => {
                   <Input name="category" value={form.category} onChange={onChange} placeholder="Ex.: Mídia, Produção..." />
                 </div>
 
-                <div className="md:col-span-2">
-                  <Label>Ação vinculada (opcional)</Label>
-                  <select
-                    name="action_id"
-                    value={form.action_id || ''}
-                    onChange={(e) => setForm((f) => ({ ...f, action_id: e.target.value || null }))}
-                    className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                  >
-                    <option value="">—</option>
-                    {actions.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.client_name || a.company_name || `Ação ${a.id}`}
-                      </option>
-                    ))}
-                  </select>
+                {/* Vinculações opcionais */}
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <Label>Ação (opcional)</Label>
+                    <SearchSelect
+                      items={[{ id: '', label: '—' }, ...actionItems]}
+                      value={String(form.action_id || '')}
+                      onChange={(v) => setForm((f) => ({ ...f, action_id: v || '' }))}
+                      placeholder="Buscar ação..."
+                    />
+                  </div>
+                  <div>
+                    <Label>Cliente (opcional)</Label>
+                    <SearchSelect
+                      items={[{ id: '', label: '—' }, ...clientItems]}
+                      value={String(form.client_id || '')}
+                      onChange={(v) => setForm((f) => ({ ...f, client_id: v || '' }))}
+                      placeholder="Buscar cliente..."
+                    />
+                  </div>
+                  <div>
+                    <Label>Material (opcional)</Label>
+                    <SearchSelect
+                      items={[{ id: '', label: '—' }, ...materialItems]}
+                      value={String(form.material_id || '')}
+                      onChange={(v) => setForm((f) => ({ ...f, material_id: v || '' }))}
+                      placeholder="Buscar material..."
+                    />
+                  </div>
                 </div>
 
                 <div className="md:col-span-2">
@@ -723,7 +804,12 @@ const Finance = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm); }}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm); }}
+                >
                   Cancelar
                 </Button>
                 <Button type="submit" size="sm" disabled={saving}>
@@ -738,5 +824,51 @@ const Finance = () => {
   );
 };
 
-export default Finance;
+/* ------------------------- Componentes Auxiliares ------------------------- */
 
+// Combobox de busca (Popover + Command) para selects grandes
+const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => {
+  const [open, setOpen] = useState(false);
+  const selected = items.find((i) => String(i.id) === String(value));
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full justify-between"
+        >
+          <span className="truncate">{selected ? selected.label : '—'}</span>
+          <Search className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="p-0 w-[min(92vw,520px)] max-h-[70vh] overflow-hidden">
+        <div className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+          <Command>
+            <CommandInput placeholder={placeholder} />
+            <CommandEmpty>Nenhuma opção encontrada.</CommandEmpty>
+            <CommandList className="max-h-none">
+              <CommandGroup>
+                {items.map((opt) => (
+                  <CommandItem
+                    key={String(opt.id)}
+                    value={opt.label}
+                    onSelect={() => {
+                      onChange(String(opt.id));
+                      setOpen(false);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <span className="truncate">{opt.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+export default Finance;

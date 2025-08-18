@@ -10,7 +10,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog.jsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
 import { Textarea } from "@/components/ui/textarea.jsx";
@@ -30,23 +29,20 @@ import {
 import api from "@/services/api";
 import ImagePreview from "@/components/ImagePreview.jsx";
 
-// Import the new ExportMenu component
+// Export
 import ExportMenu from "@/components/export/ExportMenu";
 
 /* ===== Helpers de Data e Normalização ===== */
 
 const TZ = "America/Cuiaba";
+const fmtInt = new Intl.NumberFormat("pt-BR");
 
 function isYMD(s) {
-  // YYYY-MM-DD
   return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
 }
-
 function isDMY(s) {
-  // DD/MM/YYYY
   return /^\d{2}\/\d{2}\/\d{4}$/.test(String(s || ""));
 }
-
 function toYMDInCuiaba(value) {
   if (!value) return "";
   const s = String(value).trim();
@@ -65,13 +61,11 @@ function toYMDInCuiaba(value) {
   });
   return fmt.format(d);
 }
-
 function ymdToBR(ymd) {
   if (!ymd || !isYMD(ymd)) return "";
   const [y, m, d] = ymd.split("-");
   return `${d}/${m}/${y}`;
 }
-
 function brToYMD(br) {
   if (!br) return "";
   const s = String(br).trim();
@@ -79,7 +73,6 @@ function brToYMD(br) {
   const [d, m, y] = s.split("/");
   return `${y}-${m}-${d}`;
 }
-
 function cls(...xs) {
   return xs.filter(Boolean).join(" ");
 }
@@ -114,6 +107,10 @@ const Materials = () => {
   const [fQtyMax, setFQtyMax] = useState("");
   const [fStartBr, setFStartBr] = useState(""); // "DD/MM/YYYY"
   const [fEndBr, setFEndBr] = useState(""); // "DD/MM/YYYY"
+
+  // agrupamento/resumo
+  const [groupBy, setGroupBy] = useState("nenhum"); // 'nenhum' | 'mes' | 'ano'
+  const [yearFocus, setYearFocus] = useState("todos"); // usado quando groupBy==='mes'
 
   // paginação simples (client-side)
   const [page, setPage] = useState(1);
@@ -185,7 +182,7 @@ const Materials = () => {
       return { ...m, _ymd };
     });
 
-    // mês (mantido)
+    // mês único (atajo)
     if (month) list = list.filter((m) => m._ymd.slice(0, 7) === month);
 
     // busca por digitação
@@ -234,33 +231,52 @@ const Materials = () => {
     return list;
   }, [materials, q, month, fClients, fResponsibles, fHasSample, fHasProtocol, fQtyMin, fQtyMax, fStartBr, fEndBr]);
 
-  // === Resumos / Contadores (Total geral e por mês) ===
-  const normalizedAll = useMemo(() => {
-    if (!Array.isArray(materials)) return [];
-    return materials
-      .map((m) => ({ ...m, _ymd: toYMDInCuiaba(m.date) }))
-      .filter((m) => m._ymd);
-  }, [materials]);
+  /* ================== RESUMOS DINÂMICOS (baseado em FILTERED) ================== */
 
-  const totalAll = useMemo(() => normalizedAll.length, [normalizedAll]);
+  // Totais gerais (pós-filtro)
+  const totalRegistrosFiltrados = filtered.length;
+  const totalQtdFiltrada = useMemo(
+    () => filtered.reduce((sum, m) => sum + Number(m.quantity || 0), 0),
+    [filtered]
+  );
 
-  const countsByMonth = useMemo(() => {
-    const acc = Object.create(null);
-    for (const m of normalizedAll) {
-      const key = m._ymd.slice(0, 7); // YYYY-MM
-      acc[key] = (acc[key] || 0) + 1;
-    }
-    return acc;
-  }, [normalizedAll]);
-
-  const currentMonthKey = useMemo(() => {
-    const fmt = new Intl.DateTimeFormat("en-CA", {
-      timeZone: TZ,
-      year: "numeric",
-      month: "2-digit",
+  // Agrupar por mês (YYYY-MM) com contagem e soma de Qtd
+  const byMonth = useMemo(() => {
+    const map = new Map(); // key: 'YYYY-MM' -> {count, qty}
+    filtered.forEach((m) => {
+      if (!m._ymd) return;
+      const ym = m._ymd.slice(0, 7);
+      const prev = map.get(ym) || { count: 0, qty: 0 };
+      prev.count += 1;
+      prev.qty += Number(m.quantity || 0);
+      map.set(ym, prev);
     });
-    return fmt.format(new Date()); // "YYYY-MM"
-  }, []);
+    return Array.from(map.entries())
+      .map(([ym, v]) => ({ ym, ...v }))
+      .sort((a, b) => a.ym.localeCompare(b.ym)); // crescente
+  }, [filtered]);
+
+  // Agrupar por ano (YYYY) com contagem e soma de Qtd
+  const byYear = useMemo(() => {
+    const map = new Map(); // key: 'YYYY' -> {count, qty}
+    filtered.forEach((m) => {
+      if (!m._ymd) return;
+      const y = m._ymd.slice(0, 4);
+      const prev = map.get(y) || { count: 0, qty: 0 };
+      prev.count += 1;
+      prev.qty += Number(m.quantity || 0);
+      map.set(y, prev);
+    });
+    return Array.from(map.entries())
+      .map(([year, v]) => ({ year, ...v }))
+      .sort((a, b) => a.year.localeCompare(b.year)); // crescente
+  }, [filtered]);
+
+  // Opções de ano para foco quando "Agrupar por mês"
+  const yearOptions = useMemo(() => {
+    const ys = new Set(byMonth.map((m) => m.ym.slice(0, 4)));
+    return ["todos", ...Array.from(ys).sort()];
+  }, [byMonth]);
 
   const formatMonthLabel = useCallback((ym) => {
     if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return "";
@@ -273,8 +289,18 @@ const Materials = () => {
     }).format(date);
   }, []);
 
-  const selectedMonthKey = month || currentMonthKey;
-  const totalSelectedMonth = countsByMonth[selectedMonthKey] || 0;
+  // Mês focado (cards clicáveis setam esse state)
+  const setMonthFilterFromCard = (ym) => {
+    setMonth(ym);
+    // desmarca período avançado para evitar conflito visual (opcional):
+    // setFStartBr(""); setFEndBr("");
+  };
+
+  // ByMonth filtrado por anoFocus (quando groupBy === 'mes')
+  const byMonthForUI = useMemo(() => {
+    if (yearFocus === "todos") return byMonth;
+    return byMonth.filter((m) => m.ym.startsWith(String(yearFocus)));
+  }, [byMonth, yearFocus]);
 
   // Prepare data for export
   const exportData = useMemo(() => {
@@ -377,8 +403,6 @@ const Materials = () => {
 
   /* ================== Upload Genérico (URL) ================== */
   const uploadAnyFile = async (file) => {
-    // O backend deve aceitar este endpoint e retornar { url }
-    // Se não houver backend, você pode integrar com S3/Cloudinary ou Firebase Storage
     const formData = new FormData();
     formData.append("file", file);
     const res = await api.post("/upload", formData, {
@@ -408,7 +432,8 @@ const Materials = () => {
     (fHasSample ? 1 : 0) +
     (fHasProtocol ? 1 : 0) +
     ((fStartBr || fEndBr) ? 1 : 0) +
-    ((fQtyMin || fQtyMax) ? 1 : 0);
+    ((fQtyMin || fQtyMax) ? 1 : 0) +
+    (month ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -425,10 +450,10 @@ const Materials = () => {
                 Novo Material
               </Button>
 
-              {/* Export Menu */}
+              {/* Export */}
               <ExportMenu
                 data={exportData}
-                fileBaseName={`materiais_${selectedMonthKey || "todos"}`}
+                fileBaseName={`materiais_${month || "filtrado"}`}
                 buttonProps={{ variant: "outline", size: "sm" }}
               />
 
@@ -457,7 +482,7 @@ const Materials = () => {
               />
             </div>
 
-            {/* Filtro por mês (mantido) */}
+            {/* Filtro por mês (atalho) */}
             <div className="flex items-center gap-2">
               <Label htmlFor="filter-month" className="text-xs md:text-sm whitespace-nowrap">Mês</Label>
               <Input
@@ -467,30 +492,127 @@ const Materials = () => {
                 onChange={(e) => setMonth(e.target.value)}
                 className="w-[180px]"
               />
+              {month ? (
+                <Button variant="ghost" size="sm" onClick={() => setMonth("")}>Limpar mês</Button>
+              ) : null}
             </div>
 
             {/* Limpar filtros/Busca */}
             <div className="flex-1 md:text-right">
               <Button variant="ghost" size="sm" onClick={resetFilters}>
-                Limpar
+                Limpar todos
               </Button>
             </div>
           </div>
 
-          {/* Resumo de Quantidades */}
+          {/* Controles de Agrupamento */}
+          <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
+            <div className="flex items-center gap-2">
+              <Label className="text-xs md:text-sm">Agrupar por</Label>
+              <select
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value)}
+                className="border rounded-md px-3 py-2 text-sm bg-background"
+              >
+                <option value="nenhum">Nenhum</option>
+                <option value="mes">Mês</option>
+                <option value="ano">Ano</option>
+              </select>
+            </div>
+
+            {groupBy === "mes" && (
+              <div className="flex items-center gap-2">
+                <Label className="text-xs md:text-sm">Ano</Label>
+                <select
+                  value={yearFocus}
+                  onChange={(e) => setYearFocus(e.target.value)}
+                  className="border rounded-md px-3 py-2 text-sm bg-background"
+                >
+                  {yearOptions.map((y) => (
+                    <option key={y} value={y}>
+                      {y === "todos" ? "Todos" : y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Resumo (dinâmico, pós-filtros) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="rounded-xl border bg-card p-4">
-              <p className="text-xs text-muted-foreground">Total (geral)</p>
-              <p className="text-2xl font-bold leading-tight">{totalAll}</p>
+              <p className="text-xs text-muted-foreground">Registros (após filtros)</p>
+              <p className="text-2xl font-bold leading-tight">{fmtInt.format(totalRegistrosFiltrados)}</p>
             </div>
 
             <div className="rounded-xl border bg-card p-4">
-              <p className="text-xs text-muted-foreground">
-                Total no mês {month ? "(selecionado)" : "(atual)"} — {formatMonthLabel(selectedMonthKey)}
-              </p>
-              <p className="text-2xl font-bold leading-tight">{totalSelectedMonth}</p>
+              <p className="text-xs text-muted-foreground">Qtd total (soma de “Qtd”, após filtros)</p>
+              <p className="text-2xl font-bold leading-tight">{fmtInt.format(totalQtdFiltrada)}</p>
             </div>
           </div>
+
+          {/* Quebras por MÊS / ANO (sempre baseadas em FILTERED) */}
+          {groupBy === "mes" && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Totais por mês (clique para filtrar pelo mês)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                {byMonthForUI.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Sem dados para o agrupamento.</div>
+                ) : (
+                  byMonthForUI.map(({ ym, count, qty }) => (
+                    <button
+                      key={ym}
+                      type="button"
+                      onClick={() => setMonthFilterFromCard(ym)}
+                      className="rounded-xl border bg-card p-4 text-left hover:shadow-sm transition"
+                      title="Aplicar filtro por mês"
+                    >
+                      <div className="text-xs text-muted-foreground">{formatMonthLabel(ym)}</div>
+                      <div className="mt-1 text-sm">
+                        Registros: <b>{fmtInt.format(count)}</b>
+                      </div>
+                      <div className="text-sm">
+                        Qtd: <b>{fmtInt.format(qty)}</b>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {groupBy === "ano" && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Totais por ano (clique para filtrar período)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                {byYear.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Sem dados para o agrupamento.</div>
+                ) : (
+                  byYear.map(({ year, count, qty }) => (
+                    <button
+                      key={year}
+                      type="button"
+                      onClick={() => {
+                        setMonth(""); // limpa o atalho de mês
+                        setFStartBr(`01/01/${year}`);
+                        setFEndBr(`31/12/${year}`);
+                      }}
+                      className="rounded-xl border bg-card p-4 text-left hover:shadow-sm transition"
+                      title="Aplicar filtro por ano"
+                    >
+                      <div className="text-xs text-muted-foreground">{year}</div>
+                      <div className="mt-1 text-sm">
+                        Registros: <b>{fmtInt.format(count)}</b>
+                      </div>
+                      <div className="text-sm">
+                        Qtd: <b>{fmtInt.format(qty)}</b>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Tabela */}
           <div className="overflow-x-auto rounded-xl border bg-card">
@@ -526,7 +648,7 @@ const Materials = () => {
                       <TableCell className="align-top">{ymdToBR(row._ymd || toYMDInCuiaba(row.date))}</TableCell>
                       <TableCell className="align-top">{row.client_name}</TableCell>
                       <TableCell className="align-top">{row.responsible}</TableCell>
-                      <TableCell className="align-top text-right">{row.quantity}</TableCell>
+                      <TableCell className="align-top text-right">{fmtInt.format(Number(row.quantity || 0))}</TableCell>
                       <TableCell className="align-top">
                         {row.material_sample_url ? (
                           <ImagePreview url={row.material_sample_url} />
@@ -578,7 +700,7 @@ const Materials = () => {
           {/* Paginação */}
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
-              Exibindo <b>{pageItems.length}</b> de <b>{total}</b>
+              Exibindo <b>{pageItems.length}</b> de <b>{total}</b> — Qtd total exibida: <b>{fmtInt.format(totalQtdFiltrada)}</b>
             </p>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
@@ -733,6 +855,7 @@ const Materials = () => {
                     setFQtyMax("");
                     setFStartBr("");
                     setFEndBr("");
+                    setMonth("");
                   }}>
                     Limpar
                   </Button>
@@ -952,7 +1075,6 @@ const UploadWidget = ({ onUploaded, uploading, setUploading }) => {
   };
 
   const fakeUpload = async (f) => {
-    // Apenas simula e retorna blob local para visualização
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
