@@ -339,7 +339,6 @@ const Finance = () => {
         </Button>
       </PopoverTrigger>
 
-      {/* Popover amplo com rolagem fluida */}
       <PopoverContent
         side="bottom"
         align="start"
@@ -347,30 +346,32 @@ const Finance = () => {
         collisionPadding={16}
         className="z-[100] p-0 w-[min(92vw,560px)]"
       >
-        <Command>
-          <CommandInput placeholder="Buscar ação..." />
-          <CommandEmpty>Nenhuma ação encontrada.</CommandEmpty>
-          <CommandList className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
-            <CommandGroup heading="Ações">
-              {actions.map((a) => {
-                const checked = selectedActions.includes(a.id);
-                const label = actionLabelById(a.id);
-                return (
-                  <CommandItem
-                    key={a.id}
-                    value={label}
-                    className="flex items-center gap-2"
-                    onSelect={() => toggleAction(a.id)}
-                  >
-                    <Checkbox checked={checked} onCheckedChange={() => toggleAction(a.id)} />
-                    <span className="flex-1 truncate">{label}</span>
-                    {checked && <span className="text-xs text-muted-foreground">selecionada</span>}
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+        <div
+          className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
+          onWheel={(e) => e.stopPropagation()}
+          onWheelCapture={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
+          <Command>
+            <CommandInput placeholder="Buscar ação..." />
+            <CommandEmpty>Nenhuma ação encontrada.</CommandEmpty>
+            <CommandList className="max-h-none">
+              <CommandGroup heading="Ações">
+                {actions.map((a) => {
+                  const checked = selectedActions.includes(a.id);
+                  const label = actionLabelById(a.id);
+                  return (
+                    <CommandItem key={a.id} value={label} className="flex items-center gap-2" onSelect={() => toggleAction(a.id)}>
+                      <Checkbox checked={checked} onCheckedChange={() => toggleAction(a.id)} />
+                      <span className="flex-1 truncate">{label}</span>
+                      {checked && <span className="text-xs text-muted-foreground">selecionada</span>}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </div>
       </PopoverContent>
     </Popover>
   );
@@ -627,16 +628,8 @@ const Finance = () => {
           setOpen(v);
         }}
       >
-        {/* Centralização forçada via style, independe de CSS externo */}
-        <DialogContent
-          className="w-[95vw] sm:max-w-2xl p-0"
-          style={{
-            position: 'fixed',
-            left: '50%',
-            top: '50%',
-            transform: 'translate(-50%, -50%)',
-          }}
-        >
+        {/* centralizado; largura responsiva; sem overflow escondido */}
+        <DialogContent className="w-[95vw] sm:max-w-2xl p-0">
           {/* rolagem só no corpo do modal */}
           <div className="max-h-[80vh] overflow-y-auto p-6">
             <DialogHeader className="pb-2">
@@ -740,32 +733,39 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
         </Button>
       </PopoverTrigger>
 
-      {/* Popover amplo com rolagem fluida */}
+      {/* >>> AJUSTE EXIGIDO: alinhamento central do dropdown <<< */}
       <PopoverContent
         side="bottom"
-        align="start"
+        align="center"
         sideOffset={8}
         collisionPadding={16}
         className="z-[100] p-0 w-[min(92vw,520px)]"
       >
-        <Command>
-          <CommandInput placeholder={placeholder} />
-          <CommandEmpty>Nenhuma opção encontrada.</CommandEmpty>
-          <CommandList className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
-            <CommandGroup>
-              {items.map((opt) => (
-                <CommandItem
-                  key={String(opt.id)}
-                  value={opt.label}
-                  onSelect={() => { onChange(String(opt.id)); setOpen(false); }}
-                  className="flex items-center gap-2 px-3 py-2"
-                >
-                  <span className="truncate">{opt.label}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+        <div
+          className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
+          onWheel={(e) => e.stopPropagation()}
+          onWheelCapture={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
+          <Command>
+            <CommandInput placeholder={placeholder} />
+            <CommandEmpty>Nenhuma opção encontrada.</CommandEmpty>
+            <CommandList className="max-h-none">
+              <CommandGroup>
+                {items.map((opt) => (
+                  <CommandItem
+                    key={String(opt.id)}
+                    value={opt.label}
+                    onSelect={() => { onChange(String(opt.id)); setOpen(false); }}
+                    className="flex items-center gap-2 px-3 py-2"
+                  >
+                    <span className="truncate">{opt.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </div>
       </PopoverContent>
     </Popover>
   );
