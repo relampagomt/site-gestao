@@ -109,8 +109,8 @@ const Finance = () => {
       const [txRes, actRes, cliRes, matRes] = await Promise.all([
         api.get(TX_PATH).catch(() => ({ data: [] })),
         api.get('/actions').catch(() => ({ data: [] })),
-        api.get('/clients').catch(() => ({ data: [] })),      // clientes
-        api.get('/materials').catch(() => ({ data: [] })),    // materiais
+        api.get('/clients').catch(() => ({ data: [] })),      // <- clientes
+        api.get('/materials').catch(() => ({ data: [] })),    // <- materiais
       ]);
       setTransactions(Array.isArray(txRes.data) ? txRes.data : []);
       setActions(Array.isArray(actRes.data) ? actRes.data : []);
@@ -131,7 +131,7 @@ const Finance = () => {
     loadAll();
   }, []);
 
-  // Label resolvers
+  // Label resolvers (garantem nomes na tabela/export e nos selects)
   const actionLabelById = (id) => {
     const a = actions.find((x) => String(x.id) === String(id));
     return a ? (a.client_name || a.company_name || a.title || `Ação ${a.id}`) : '';
@@ -153,6 +153,7 @@ const Finance = () => {
   const filtered = useMemo(() => {
     let list = [...transactions];
 
+    // Search filter
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((t) =>
@@ -162,10 +163,12 @@ const Finance = () => {
       );
     }
 
+    // Type filter
     if (typeFilter !== 'todos') {
       list = list.filter((t) => t.type === typeFilter);
     }
 
+    // Month filter
     if (monthFilter !== 'todos') {
       const [year, month] = monthFilter.split('-');
       list = list.filter((t) => {
@@ -174,11 +177,13 @@ const Finance = () => {
       });
     }
 
+    // Actions filter (mantido)
     if (selectedActions.length > 0) {
       const actionSet = new Set(selectedActions);
       list = list.filter((t) => actionSet.has(t.action_id));
     }
 
+    // Sort by date desc
     list.sort((a, b) => {
       const aDate = String(a.date || '0000-01-01');
       const bDate = String(b.date || '0000-01-01');
@@ -188,7 +193,7 @@ const Finance = () => {
     return list;
   }, [transactions, search, typeFilter, monthFilter, selectedActions, actions, clients, materials]);
 
-  // Month options
+  // Month options for filter
   const monthOptions = useMemo(() => {
     const months = new Set();
     transactions.forEach((t) => {
@@ -205,7 +210,7 @@ const Finance = () => {
       });
   }, [transactions]);
 
-  // Charts
+  // Charts data
   const categoryChart = useMemo(() => {
     const counts = {};
     filtered.forEach((t) => {
@@ -299,6 +304,7 @@ const Finance = () => {
         action_id: form.action_id || null,
         client_id: form.client_id || null,
         material_id: form.material_id || null,
+        // chaves de compatibilidade
         actionId: form.action_id || null,
         clientId: form.client_id || null,
         materialId: form.material_id || null,
@@ -346,8 +352,13 @@ const Finance = () => {
           <Layers className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="p-0 w-[min(92vw,560px)] max-h-[70vh] overflow-hidden">
-        <div className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+      <PopoverContent
+        side="bottom"
+        align="start"
+        sideOffset={8}
+        className="p-0 w-[min(92vw,560px)] max-h-[70vh] overflow-hidden"
+      >
+        <div className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
           <Command>
             <CommandInput placeholder="Buscar ação..." />
             <CommandEmpty>Nenhuma ação encontrada.</CommandEmpty>
@@ -377,7 +388,7 @@ const Finance = () => {
   const totalSaida = filtered.filter((t) => t.type !== 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
   const saldo = totalEntrada - totalSaida;
 
-  // Export
+  // Prepare data for export
   const exportData = useMemo(() => {
     return filtered.map((t) => ({
       data: isoToBR(String(t.date || '').slice(0, 10)) || '',
@@ -426,7 +437,7 @@ const Finance = () => {
     footerContent: `Totais do período: Entradas: ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`
   };
 
-  // Items para selects do formulário
+  // Itens para selects do formulário
   const actionItems = useMemo(() => actions.map(a => ({ id: a.id, label: actionLabelById(a.id) })), [actions]);
   const clientItems = useMemo(() => clients.map(c => ({
     id: c.id,
@@ -713,14 +724,14 @@ const Finance = () => {
           setOpen(v);
         }}
       >
-        {/* ↓↓↓ CENTRALIZADO NO VIEWPORT + largura responsiva ↓↓↓ */}
+        {/* Centralização forçada + largura responsiva.
+           O style inline garante o centro em qualquer tema/override. */}
         <DialogContent
-          className="
-            w-[min(92vw,800px)] sm:max-w-2xl p-0
-            !left-1/2 !top-1/2 -translate-x-1/2 -translate-y-1/2
-          "
+          style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
+          className="w-[min(92vw,800px)] sm:max-w-2xl p-0"
         >
-          <div className="max-h-[80vh] overflow-y-auto p-6">
+          {/* Rolagem suave dentro do modal */}
+          <div className="max-h-[80vh] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] p-6">
             <DialogHeader className="pb-2">
               <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
               <DialogDescription>
@@ -842,8 +853,14 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
           <Search className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="p-0 w-[min(92vw,520px)] max-h-[70vh] overflow-hidden">
-        <div className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+      <PopoverContent
+        side="bottom"
+        align="start"
+        sideOffset={8}
+        className="p-0 w-[min(92vw,520px)] max-h-[70vh] overflow-hidden"
+      >
+        {/* Container com rolagem fluida (touch, trackpad, mouse) */}
+        <div className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
           <Command>
             <CommandInput placeholder={placeholder} />
             <CommandEmpty>Nenhuma opção encontrada.</CommandEmpty>
