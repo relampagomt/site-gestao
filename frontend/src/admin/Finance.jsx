@@ -741,7 +741,7 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
           z-[100] p-0 w-[min(92vw,520px)]
           data-[side=bottom]:translate-y-8
           sm:data-[side=bottom]:translate-y-12
-          md:data-[side=bottom]:translate-y-24
+          md:data-[side=bottom]:translate-y-30
         "
       >
         <div
