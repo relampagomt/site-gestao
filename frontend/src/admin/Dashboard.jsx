@@ -7,6 +7,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell
 } from 'recharts';
 import api from '@/services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#2563eb', '#7c3aed', '#0ea5e9', '#22c55e', '#f97316', '#e11d48'];
 
@@ -127,6 +128,7 @@ function buildPieDataFromMap(map, opts = {}) {
 
 /* ================= componente ================= */
 const Dashboard = () => {
+  const { user, isAdmin } = useAuth();
   const [stats, setStats] = useState({
     totalClients: 0,
     totalMaterials: 0,
@@ -243,22 +245,27 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold tracking-tight mb-4">Dashboard</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl md:text-2xl font-semibold">Dashboard</h1>
+      </div>
 
       {/* Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Clientes</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">
-              {stats.loading ? <div className="animate-pulse bg-gray-200 h-6 w-16 rounded" /> : stats.totalClients.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground">Clientes cadastrados</p>
-          </CardContent>
-        </Card>
+        {/* Client card - Admin only */}
+        {isAdmin() && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total de Clientes</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl sm:text-2xl font-bold">
+                {stats.loading ? <div className="animate-pulse bg-gray-200 h-6 w-16 rounded" /> : stats.totalClients.toLocaleString()}
+              </div>
+              <p className="text-xs text-muted-foreground">Clientes cadastrados</p>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -350,33 +357,35 @@ const Dashboard = () => {
 
       {/* ===== DUAS PIZZAS ===== */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-        {/* Pizza 1: Segmentos (Clientes) */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Segmentos (Clientes)</CardTitle>
-            <CardDescription>Percentual por segmento cadastrado nos clientes</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={clientsSegmentsPie}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={90}
-                  labelLine={false}
-                  dataKey="value"
-                  label={pieLabel}
-                >
-                  {clientsSegmentsPie.map((entry, idx) => (
-                    <Cell key={`cseg-${idx}`} fill={entry.color || COLORS[idx % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(v, n, p) => [v, p?.payload?.name]} />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        {/* Pizza 1: Segmentos (Clientes) - Admin only */}
+        {isAdmin() && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base sm:text-lg">Segmentos (Clientes)</CardTitle>
+              <CardDescription>Percentual por segmento cadastrado nos clientes</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={clientsSegmentsPie}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={90}
+                    labelLine={false}
+                    dataKey="value"
+                    label={pieLabel}
+                  >
+                    {clientsSegmentsPie.map((entry, idx) => (
+                      <Cell key={`cseg-${idx}`} fill={entry.color || COLORS[idx % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v, n, p) => [v, p?.payload?.name]} />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Pizza 2: Tipos de Ação */}
         <Card>

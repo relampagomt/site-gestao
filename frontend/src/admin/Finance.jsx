@@ -1,4 +1,3 @@
-// frontend/src/admin/Finance.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '@/services/api';
 
@@ -23,12 +22,6 @@ import {
   Search,
   Edit,
   Trash2,
-  // === Ícones para Exportar ===
-  FileDown,
-  FileSpreadsheet,
-  FileJson,
-  ClipboardCopy,
-  FileText,
 } from 'lucide-react';
 
 import {
@@ -45,6 +38,9 @@ import {
   Legend,
 } from 'recharts';
 
+// Import the new ExportMenu component
+import ExportMenu from '@/components/export/ExportMenu';
+
 /* =============== Helpers =============== */
 const BRL = (n) =>
   `R$ ${Number(n || 0)
@@ -52,173 +48,183 @@ const BRL = (n) =>
     .replace('.', ',')
     .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
 
-const COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#2563eb', '#7c3aed'];
-
-const monthLabel = (ym) => {
-  const [y, m] = ym.split('-').map(Number);
-  const d = new Date(y, (m || 1) - 1, 1);
-  return d
-    .toLocaleString('pt-BR', { month: 'short' })
-    .replace('.', '')
-    .replace(/^\w/, (c) => c.toUpperCase());
+const maskBR = (v) => {
+  let clean = v.replace(/\D/g, '');
+  if (clean.length >= 3) clean = clean.slice(0, 2) + '/' + clean.slice(2);
+  if (clean.length >= 6) clean = clean.slice(0, 5) + '/' + clean.slice(5, 9);
+  return clean;
 };
-const monthLabelFull = (ym) => {
-  const [y, m] = ym.split('-').map(Number);
-  const d = new Date(y, (m || 1) - 1, 1);
-  const mon = d
-    .toLocaleString('pt-BR', { month: 'short' })
-    .replace('.', '')
-    .replace(/^\w/, (c) => c.toUpperCase());
-  return `${mon}/${y}`;
-};
-
-/* ======== Datas BR ↔ ISO ======== */
-const isDMY = (s) => /^\d{2}\/\d{2}\/\d{4}$/.test(String(s || ''));
-const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
 
 const isoToBR = (iso) => {
-  if (!isYMD(iso)) return '';
-  const [y, m, d] = iso.split('-');
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-');
   return `${d}/${m}/${y}`;
 };
 
 const brToISO = (br) => {
-  if (!isDMY(br)) return '';
+  if (!br || !/^\d{2}\/\d{2}\/\d{4}/.test(br)) return '';
   const [d, m, y] = br.split('/');
   return `${y}-${m}-${d}`;
 };
 
-const maskBR = (v) => {
-  const d = String(v || '').replace(/\D/g, '').slice(0, 8);
-  const p1 = d.slice(0, 2);
-  const p2 = d.slice(2, 4);
-  const p3 = d.slice(4, 8);
-  return [p1, p2, p3].filter(Boolean).join('/');
+const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+const emptyForm = {
+  type: 'entrada',
+  dateBr: '',
+  amount: '',
+  category: '',
+  notes: '',
+  action_id: '',
 };
 
-/* ======== Endpoint ======== */
 const TX_PATH = '/transactions';
 
-/* =============== Página =============== */
 const Finance = () => {
-  const [loading, setLoading] = useState(false);
-  const [actions, setActions] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [actions, setActions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // filtros
-  const [q, setQ] = useState('');
-  const [selectedActions, setSelectedActions] = useState([]); // ids
-  const [monthFilter, setMonthFilter] = useState(''); // '' = todos, senão 'YYYY-MM'
-
-  // modal criar/editar
+  // Modal states
   const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(null); // objeto da transação sendo editada ou null
-
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const todayBR = isoToBR(todayISO);
-
-  const emptyForm = {
-    type: 'entrada', // entrada | saida | despesa
-    dateBr: todayBR,
-    amount: '',
-    category: '',
-    notes: '',
-    action_id: '',
-  };
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
 
-  /* -------- Load -------- */
+  // Filters
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('todos');
+  const [monthFilter, setMonthFilter] = useState('todos');
+  const [selectedActions, setSelectedActions] = useState([]);
+
+  // Load data
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [aRes, tRes] = await Promise.all([
-        api.get('/actions').catch(() => ({ data: [] })),
+      const [txRes, actRes] = await Promise.all([
         api.get(TX_PATH).catch(() => ({ data: [] })),
+        api.get('/actions').catch(() => ({ data: [] })),
       ]);
-      const arr = (d) => (Array.isArray(d) ? d : d?.items || d?.data || d?.results || []);
-      setActions(arr(aRes.data));
-      setTransactions(arr(tRes.data));
+      setTransactions(Array.isArray(txRes.data) ? txRes.data : []);
+      setActions(Array.isArray(actRes.data) ? actRes.data : []);
     } catch (err) {
-      console.error('Erro ao carregar finanças:', err);
+      console.error('Erro ao carregar dados:', err);
+      setTransactions([]);
+      setActions([]);
     } finally {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     loadAll();
   }, []);
 
-  /* -------- Month options (puxa dos lançamentos) -------- */
-  const monthOptions = useMemo(() => {
-    const set = new Set();
-    transactions.forEach((t) => {
-      const ymd = String(t.date || '').slice(0, 10);
-      if (isYMD(ymd)) set.add(ymd.slice(0, 7));
-    });
-    const arr = Array.from(set.values()).sort((a, b) => b.localeCompare(a)); // desc
-    return arr.map((k) => ({ key: k, label: monthLabelFull(k) }));
-  }, [transactions]);
-
-  /* -------- Filtered -------- */
+  // Filtered data
   const filtered = useMemo(() => {
-    let list = Array.isArray(transactions) ? [...transactions] : [];
+    let list = [...transactions];
 
-    if (monthFilter) {
+    // Search filter
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((t) =>
+        [t.category, t.notes, String(t.amount)]
+          .filter(Boolean)
+          .some((field) => String(field).toLowerCase().includes(q))
+      );
+    }
+
+    // Type filter
+    if (typeFilter !== 'todos') {
+      list = list.filter((t) => t.type === typeFilter);
+    }
+
+    // Month filter
+    if (monthFilter !== 'todos') {
+      const [year, month] = monthFilter.split('-');
       list = list.filter((t) => {
-        const ymd = String(t.date || '').slice(0, 10);
-        return isYMD(ymd) && ymd.startsWith(monthFilter);
+        const tDate = String(t.date || '').slice(0, 7); // YYYY-MM
+        return tDate === `${year}-${month}`;
       });
     }
 
-    if (selectedActions.length) list = list.filter((t) => selectedActions.includes(t.action_id));
+    // Actions filter
+    if (selectedActions.length > 0) {
+      const actionSet = new Set(selectedActions);
+      list = list.filter((t) => actionSet.has(t.action_id));
+    }
 
-    const k = q.trim().toLowerCase();
-    if (k)
-      list = list.filter((t) =>
-        [t.category, t.type, t.notes, t.amount].filter(Boolean).some((v) => String(v).toLowerCase().includes(k)),
-      );
-
-    list.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
-    return list;
-  }, [transactions, selectedActions, q, monthFilter]);
-
-  /* -------- Charts data -------- */
-  const monthly = useMemo(() => {
-    const buckets = new Map(); // yyyy-mm => {month, entrada, saida}
-    filtered.forEach((t) => {
-      const ymd = String(t.date || '').slice(0, 10);
-      if (!isYMD(ymd)) return;
-      const key = ymd.slice(0, 7);
-      if (!buckets.has(key)) buckets.set(key, { month: monthLabel(key), entrada: 0, saida: 0 });
-      const row = buckets.get(key);
-      const amt = Number(t.amount || 0);
-      if (t.type === 'entrada') row.entrada += amt;
-      else row.saida += amt;
+    // Sort by date desc
+    list.sort((a, b) => {
+      const aDate = String(a.date || '0000-01-01');
+      const bDate = String(b.date || '0000-01-01');
+      return bDate.localeCompare(aDate);
     });
-    return Array.from(buckets.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([, v]) => v);
+
+    return list;
+  }, [transactions, search, typeFilter, monthFilter, selectedActions]);
+
+  // Month options for filter
+  const monthOptions = useMemo(() => {
+    const months = new Set();
+    transactions.forEach((t) => {
+      const dateStr = String(t.date || '').slice(0, 7); // YYYY-MM
+      if (/^\d{4}-\d{2}$/.test(dateStr)) months.add(dateStr);
+    });
+    return Array.from(months)
+      .sort()
+      .reverse()
+      .map((ym) => {
+        const [y, m] = ym.split('-');
+        const monthName = new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        return { value: ym, label: monthName };
+      });
+  }, [transactions]);
+
+  // Charts data
+  const categoryChart = useMemo(() => {
+    const counts = {};
+    filtered.forEach((t) => {
+      const cat = t.category || 'Sem categoria';
+      counts[cat] = (counts[cat] || 0) + Number(t.amount || 0);
+    });
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
   }, [filtered]);
 
-  const actionsStatusChart = useMemo(() => {
-    const counts = { aguardando: 0, andamento: 0, concluída: 0, cancelada: 0 };
+  const monthlyChart = useMemo(() => {
+    const months = {};
+    filtered.forEach((t) => {
+      const month = String(t.date || '').slice(0, 7);
+      if (!months[month]) months[month] = { entrada: 0, saida: 0, despesa: 0 };
+      months[month][t.type || 'entrada'] += Number(t.amount || 0);
+    });
+    return Object.entries(months)
+      .map(([month, data]) => ({ month, ...data }))
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .slice(-6);
+  }, [filtered]);
+
+  const actionsChart = useMemo(() => {
+    const actionCounts = {};
     actions.forEach((a) => {
-      const s = String(a.status || (a.active ? 'andamento' : 'aguardando')).toLowerCase();
-      if (s.includes('cancel')) counts.cancelada += 1;
-      else if (s.includes('conclu')) counts.concluída += 1;
-      else if (s.includes('andam') || a.active) counts.andamento += 1;
-      else counts.aguardando += 1;
+      const status = String(a.status || (a.active ? 'andamento' : 'aguardando')).toLowerCase();
+      if (status.includes('cancel')) actionCounts.cancelada = (actionCounts.cancelada || 0) + 1;
+      else if (status.includes('conclu')) actionCounts.concluída = (actionCounts.concluída || 0) + 1;
+      else if (status.includes('andam') || a.active) actionCounts.andamento = (actionCounts.andamento || 0) + 1;
+      else actionCounts.aguardando = (actionCounts.aguardando || 0) + 1;
     });
     return [
-      { name: 'Aguardando', value: counts.aguardando, color: '#f59e0b' },
-      { name: 'Andamento', value: counts.andamento, color: '#2563eb' },
-      { name: 'Concluída', value: counts.concluída, color: '#16a34a' },
-      { name: 'Cancelada', value: counts.cancelada, color: '#dc2626' },
+      { name: 'Aguardando', value: actionCounts.aguardando || 0, color: '#f59e0b' },
+      { name: 'Andamento', value: actionCounts.andamento || 0, color: '#2563eb' },
+      { name: 'Concluída', value: actionCounts.concluída || 0, color: '#16a34a' },
+      { name: 'Cancelada', value: actionCounts.cancelada || 0, color: '#dc2626' },
     ].filter((d) => d.value > 0);
   }, [actions]);
 
-  /* -------- Form handlers -------- */
+  // Form handlers
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
@@ -297,7 +303,7 @@ const Finance = () => {
     }
   };
 
-  /* -------- Popover: selecionar ações -------- */
+  // Actions selector
   const [actionsOpen, setActionsOpen] = useState(false);
   const toggleAction = (id) =>
     setSelectedActions((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -336,156 +342,67 @@ const Finance = () => {
     </Popover>
   );
 
-  /* -------- Totais -------- */
+  // Totals
   const totalEntrada = filtered.filter((t) => t.type === 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
   const totalSaida = filtered.filter((t) => t.type !== 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
   const saldo = totalEntrada - totalSaida;
 
-  /* =================== EXPORTAÇÕES (CSV/JSON/Copiar/PDF) =================== */
-  const headers = ['Data', 'Tipo', 'Categoria', 'Ação', 'Valor', 'Observações'];
-
+  // Prepare data for export
   const actionLabelById = (id) => {
     const ac = actions.find((a) => a.id === id);
-    return ac ? ac.client_name || ac.company_name || `Ação ${ac.id}` : '—';
+    return ac ? ac.client_name || ac.company_name || `Ação ${ac.id}` : '';
   };
 
-  const toRow = (t) => [
-    isoToBR(String(t.date || '').slice(0, 10)) || '',
-    t.type || '',
-    t.category || '',
-    actionLabelById(t.action_id),
-    Number(t.amount || 0), // valor numérico (CSV fica mais útil)
-    t.notes || '',
+  const exportData = useMemo(() => {
+    return filtered.map((t) => ({
+      data: isoToBR(String(t.date || '').slice(0, 10)) || '',
+      tipo: t.type || '',
+      categoria: t.category || '',
+      acao: actionLabelById(t.action_id),
+      valor: Number(t.amount || 0),
+      observacoes: t.notes || '',
+    }));
+  }, [filtered, actions]);
+
+  const exportColumns = [
+    { key: 'data', header: 'Data' },
+    { key: 'tipo', header: 'Tipo' },
+    { key: 'categoria', header: 'Categoria' },
+    { key: 'acao', header: 'Ação' },
+    { key: 'valor', header: 'Valor' },
+    { key: 'observacoes', header: 'Observações' },
   ];
 
-  const csvEscape = (v) => {
-    const s = String(v ?? '');
-    if (/[;"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
+  const pdfOptions = {
+    title: 'Relatório Financeiro',
+    orientation: 'l', // landscape for more columns
+    filtersSummary: `Filtros aplicados: ${
+      [
+        search ? `Busca: "${search}"` : '',
+        typeFilter !== 'todos' ? `Tipo: ${typeFilter}` : '',
+        monthFilter !== 'todos' ? `Mês: ${monthOptions.find(m => m.value === monthFilter)?.label || monthFilter}` : '',
+        selectedActions.length > 0 ? `Ações: ${selectedActions.length} selecionada(s)` : '',
+      ].filter(Boolean).join(' | ') || 'Nenhum filtro aplicado'
+    }`,
+    columnStyles: {
+      0: { cellWidth: 25 }, // Data
+      1: { cellWidth: 25 }, // Tipo
+      2: { cellWidth: 50 }, // Categoria
+      3: { cellWidth: 60 }, // Ação
+      4: { cellWidth: 30 }, // Valor
+      5: { cellWidth: 80 }, // Observações
+    },
+    footerContent: `Totais do período: Entradas: ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`
   };
 
-  const buildCSV = (rows) => {
-    // Usa ; (padrão BR) e BOM para Excel reconhecer UTF-8
-    const data = [headers, ...rows].map((r) => r.map(csvEscape).join(';')).join('\n');
-    return '\uFEFF' + data;
-  };
-
-  const downloadFile = (name, content, mime) => {
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportCSV = () => {
-    const rows = filtered.map(toRow);
-    const csv = buildCSV(rows);
-    downloadFile('financas.csv', csv, 'text/csv;charset=utf-8;');
-  };
-
-  const handleCopyCSV = async () => {
-    try {
-      const rows = filtered.map(toRow);
-      const csv = buildCSV(rows);
-      await navigator.clipboard.writeText(csv);
-      alert('CSV copiado para a área de transferência.');
-    } catch {
-      alert('Não foi possível copiar. Tente exportar como arquivo CSV.');
-    }
-  };
-
-  const handleExportJSON = () => {
-    const json = JSON.stringify(filtered, null, 2);
-    downloadFile('financas.json', json, 'application/json;charset=utf-8;');
-  };
-
-  const handleExportPDF = async () => {
-    if (!filtered.length) {
-      alert('Não há dados para exportar.');
-      return;
-    }
-    try {
-      const { jsPDF } = await import('jspdf');
-      const autoTable = (await import('jspdf-autotable')).default;
-
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-
-      // Cabeçalho
-      const title = 'Relatório Financeiro';
-      const subtitle = new Date().toLocaleString('pt-BR');
-      doc.setFontSize(14);
-      doc.text(title, 40, 32);
-      doc.setFontSize(10);
-      doc.text(`Gerado em: ${subtitle}`, 40, 48);
-
-      const rows = filtered.map((t) => {
-        const r = toRow(t);
-        // Formata valor no PDF como moeda BRL legível
-        r[4] = BRL(r[4]);
-        return r;
-      });
-
-      autoTable(doc, {
-        head: [headers],
-        body: rows,
-        startY: 64,
-        styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
-        headStyles: { fillColor: [239, 68, 68], textColor: [255, 255, 255], halign: 'center' },
-        columnStyles: {
-          0: { cellWidth: 70 },  // Data
-          1: { cellWidth: 70 },  // Tipo
-          2: { cellWidth: 150 }, // Categoria
-          3: { cellWidth: 200 }, // Ação
-          4: { cellWidth: 90 },  // Valor
-          5: { cellWidth: 240 }, // Observações
-        },
-        margin: { top: 32, right: 24, bottom: 80, left: 24 }, // deixa espaço p/ totais
-        didDrawPage: (data) => {
-          // Rodapé com numeração
-          const pageCount = doc.getNumberOfPages();
-          const str = `Página ${data.pageNumber} de ${pageCount}`;
-          doc.setFontSize(9);
-          doc.text(
-            str,
-            doc.internal.pageSize.getWidth() - 24 - doc.getTextWidth(str),
-            doc.internal.pageSize.getHeight() - 14
-          );
-        },
-      });
-
-      // Totais (fixo no fim)
-      const pageW = doc.internal.pageSize.getWidth();
-      const pageH = doc.internal.pageSize.getHeight();
-      const blockW = 320;
-      const x = pageW - blockW - 24;
-      const y = pageH - 64;
-
-      doc.setFontSize(10);
-      doc.text('Totais do período filtrado', x, y);
-      doc.setFontSize(12);
-      doc.text(`Entradas: ${BRL(totalEntrada)}`, x, y + 18);
-      doc.text(`Saídas/Despesas: ${BRL(totalSaida)}`, x, y + 36);
-      doc.text(`Saldo: ${BRL(saldo)}`, x, y + 54);
-
-      doc.save('financas.pdf');
-    } catch (err) {
-      console.error('Falha ao exportar PDF:', err);
-      alert('Para exportar em PDF, instale: npm i jspdf jspdf-autotable');
-    }
-  };
-
-  /* -------- Render -------- */
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold tracking-tight mb-4">Finanças</h2>
+    <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl md:text-2xl font-semibold">Finanças</h1>
+      </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Entradas</CardTitle>
@@ -504,180 +421,169 @@ const Finance = () => {
           </CardHeader>
           <CardContent>
             <div className="text-xl sm:text-2xl font-bold">{BRL(totalSaida)}</div>
-            <p className="text-xs text-muted-foreground">Pagamentos e custos</p>
+            <p className="text-xs text-muted-foreground">Gastos registrados</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Saldo</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-600" />
+            <TrendingUp className={`h-4 w-4 ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`} />
           </CardHeader>
           <CardContent>
-            <div className={`text-xl sm:text-2xl font-bold ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>{BRL(saldo)}</div>
+            <div className={`text-xl sm:text-2xl font-bold ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {BRL(saldo)}
+            </div>
             <p className="text-xs text-muted-foreground">Entradas - Saídas</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filtros + Novo lançamento + Exportar */}
-      <Card>
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Category Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Gastos por Categoria</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={categoryChart}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {categoryChart.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={`hsl(${index * 45}, 70%, 60%)`} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => BRL(value)} />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Monthly Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Fluxo Mensal</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={monthlyChart}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(value) => BRL(value)} />
+                <Legend />
+                <Bar dataKey="entrada" stackId="a" fill="#16a34a" name="Entradas" />
+                <Bar dataKey="saida" stackId="a" fill="#dc2626" name="Saídas" />
+                <Bar dataKey="despesa" stackId="a" fill="#f59e0b" name="Despesas" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters and Actions */}
+      <Card className="mb-4">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Lançamentos</CardTitle>
-          <CardDescription>Controle de entradas, saídas e despesas</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg md:text-xl font-semibold">Transações</CardTitle>
+              <CardDescription>Gerencie entradas, saídas e despesas</CardDescription>
+            </div>
+            <div className="ml-auto">
+              <ExportMenu
+                data={exportData}
+                columns={exportColumns}
+                filename="financas"
+                pdfOptions={pdfOptions}
+              />
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-2 mb-4">
-            <div className="relative flex-1">
+        <CardContent className="space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
+            {/* Search */}
+            <div className="relative flex-1 w-full md:w-[320px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="Buscar por categoria, valor, observação..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
+                placeholder="Buscar transações..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
             </div>
 
-            {/* Filtro por mês */}
-            <div className="w-full md:w-[220px]">
+            {/* Type Filter */}
+            <div className="w-full sm:w-auto">
               <select
-                className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="w-56 md:w-64 max-w-full border rounded-md px-3 py-2 text-sm bg-background"
+              >
+                <option value="todos">Todos os tipos</option>
+                <option value="entrada">Entrada</option>
+                <option value="saida">Saída</option>
+                <option value="despesa">Despesa</option>
+              </select>
+            </div>
+
+            {/* Month Filter */}
+            <div className="w-full sm:w-auto">
+              <select
                 value={monthFilter}
                 onChange={(e) => setMonthFilter(e.target.value)}
+                className="w-56 md:w-64 max-w-full border rounded-md px-3 py-2 text-sm bg-background"
               >
-                <option value="">Todos os meses</option>
+                <option value="todos">Todos os meses</option>
                 {monthOptions.map((m) => (
-                  <option key={m.key} value={m.key}>
+                  <option key={m.value} value={m.value}>
                     {m.label}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Filtro por ações */}
-            <div className="w-full md:w-[340px]">
+            {/* Actions Filter */}
+            <div className="w-full sm:w-auto">
               <ActionsSelector />
             </div>
 
-            {/* Exportar */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="gap-2 min-h-[36px]">
-                  <FileDown className="size-4" />
-                  Exportar
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" side="bottom" sideOffset={8} className="w-56 p-2">
-                <div className="flex flex-col gap-1">
-                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportCSV}>
-                    <FileSpreadsheet className="size-4" /> Exportar CSV (planilha)
-                  </Button>
-                  <Button variant="ghost" className="justify-start gap-2" onClick={handleCopyCSV}>
-                    <ClipboardCopy className="size-4" /> Copiar CSV
-                  </Button>
-                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportJSON}>
-                    <FileJson className="size-4" /> Exportar JSON
-                  </Button>
-                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportPDF}>
-                    <FileText className="size-4" /> Exportar PDF
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+            {/* Clear Filters */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearch('');
+                setTypeFilter('todos');
+                setMonthFilter('todos');
+                setSelectedActions([]);
+              }}
+            >
+              Limpar Filtros
+            </Button>
 
-            {/* Criar/Editar */}
-            <Dialog open={open} onOpenChange={(v) => { if (!v) { setEditing(null); setForm(emptyForm); } setOpen(v); }}>
-              <DialogTrigger asChild>
-                <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
-                  <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
-                  <span className="whitespace-nowrap">{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</span>
-                </Button>
-              </DialogTrigger>
-
-              <DialogContent className="max-w-lg p-0">
-                <div className="max-h-[80vh] overflow-y-auto p-6">
-                  <DialogHeader className="pb-2">
-                    <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
-                    <DialogDescription>Registre ou atualize uma entrada, saída ou despesa.</DialogDescription>
-                  </DialogHeader>
-
-                  <form onSubmit={submit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <Label>Tipo</Label>
-                        <select
-                          name="type"
-                          value={form.type}
-                          onChange={onChange}
-                          className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                        >
-                          <option value="entrada">Entrada</option>
-                          <option value="saida">Saída</option>
-                          <option value="despesa">Despesa</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <Label>Data</Label>
-                        <Input
-                          name="dateBr"
-                          placeholder="DD/MM/AAAA"
-                          inputMode="numeric"
-                          value={form.dateBr}
-                          onChange={onDateBRChange}
-                          required
-                        />
-                      </div>
-
-                      <div>
-                        <Label>Valor</Label>
-                        <Input type="number" step="0.01" name="amount" value={form.amount} onChange={onChange} required />
-                      </div>
-
-                      <div>
-                        <Label>Categoria</Label>
-                        <Input name="category" value={form.category} onChange={onChange} placeholder="Ex.: Mídia, Produção..." />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <Label>Ação vinculada (opcional)</Label>
-                        <select
-                          name="action_id"
-                          value={form.action_id || ''}
-                          onChange={(e) => setForm((f) => ({ ...f, action_id: e.target.value || null }))}
-                          className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                        >
-                          <option value="">—</option>
-                          {actions.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.client_name || a.company_name || `Ação ${a.id}`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <Label>Observações</Label>
-                        <Textarea name="notes" rows={3} value={form.notes} onChange={onChange} />
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-2">
-                      <Button type="button" variant="outline" onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm); }}>
-                        Cancelar
-                      </Button>
-                      <Button type="submit" disabled={saving}>
-                        {saving ? 'Salvando...' : 'Salvar'}
-                      </Button>
-                    </div>
-                  </form>
-                </div>
-              </DialogContent>
-            </Dialog>
+            {/* Create Button */}
+            <Button size="sm" className="gap-2" onClick={openCreate}>
+              <Plus className="size-4" />
+              Novo Lançamento
+            </Button>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Tabela */}
-          <div className="overflow-x-auto">
+      {/* Table */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto rounded-xl border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -699,36 +605,33 @@ const Finance = () => {
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      Nenhum lançamento encontrado
+                    <TableCell colSpan={7} className="text-center py-8">
+                      Nenhuma transação encontrada.
                     </TableCell>
                   </TableRow>
                 ) : (
                   filtered.map((t) => {
-                    const ac = actions.find((a) => a.id === t.action_id);
-                    const label = ac ? ac.client_name || ac.company_name || `Ação ${ac.id}` : '—';
+                    const actionLabel = actionLabelById(t.action_id);
+                    const typeColor = t.type === 'entrada' ? 'default' : t.type === 'saida' ? 'destructive' : 'secondary';
+                    
                     return (
-                      <TableRow key={t.id || `${t.date}-${t.amount}-${t.category}`}>
-                        <TableCell className="text-center">{isoToBR(String(t.date || '').slice(0, 10)) || '—'}</TableCell>
+                      <TableRow key={t.id}>
+                        <TableCell className="text-center">{isoToBR(String(t.date || '').slice(0, 10))}</TableCell>
                         <TableCell className="text-center">
-                          <Badge variant={t.type === 'entrada' ? 'secondary' : 'outline'} className="capitalize">
-                            {t.type}
-                          </Badge>
+                          <Badge variant={typeColor} className="capitalize">{t.type}</Badge>
                         </TableCell>
                         <TableCell className="text-center">{t.category || '—'}</TableCell>
-                        <TableCell className="text-center">{label}</TableCell>
-                        <TableCell className="text-center">{BRL(t.amount)}</TableCell>
-                        <TableCell className="text-center">
-                          {t.notes ? <span className="line-clamp-1 max-w-[260px] inline-block">{t.notes}</span> : '—'}
-                        </TableCell>
+                        <TableCell className="text-center">{actionLabel || '—'}</TableCell>
+                        <TableCell className="text-center font-medium">{BRL(t.amount)}</TableCell>
+                        <TableCell className="text-center">{t.notes || '—'}</TableCell>
                         <TableCell className="text-center">
                           <div className="flex justify-center gap-2">
-                            <Button size="sm" variant="secondary" className="min-h-[32px] gap-1" onClick={() => openEdit(t)}>
-                              <Edit className="h-4 w-4" />
+                            <Button variant="outline" size="sm" className="gap-2" onClick={() => openEdit(t)}>
+                              <Edit className="size-4" />
                               Editar
                             </Button>
-                            <Button size="sm" variant="destructive" className="min-h-[32px] gap-1" onClick={() => handleDelete(t.id)}>
-                              <Trash2 className="h-4 w-4" />
+                            <Button variant="destructive" size="sm" className="gap-2" onClick={() => handleDelete(t.id)}>
+                              <Trash2 className="size-4" />
                               Excluir
                             </Button>
                           </div>
@@ -740,62 +643,100 @@ const Finance = () => {
               </TableBody>
             </Table>
           </div>
+          <p className="text-xs text-muted-foreground mt-3 px-6 pb-6">
+            Total: <strong>{filtered.length}</strong> transação(ões) | 
+            Entradas: <strong>{BRL(totalEntrada)}</strong> | 
+            Saídas: <strong>{BRL(totalSaida)}</strong> | 
+            Saldo: <strong className={saldo >= 0 ? 'text-green-600' : 'text-red-600'}>{BRL(saldo)}</strong>
+          </p>
         </CardContent>
       </Card>
 
-      {/* Gráficos */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {/* Fluxo de Caixa: barras agrupadas */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Fluxo de Caixa por Mês</CardTitle>
-            <CardDescription>Entradas x Saídas</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={monthly}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip formatter={(v, k) => [BRL(v), k === 'entrada' ? 'Entradas' : 'Saídas']} />
-                <Legend />
-                <Bar dataKey="entrada" name="Entradas" fill="#16a34a" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="saida" name="Saídas" fill="#dc2626" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      {/* Create/Edit Modal */}
+      <Dialog open={open} onOpenChange={(v) => { if (!v) { setEditing(null); setForm(emptyForm); } setOpen(v); }}>
+        <DialogContent className="max-w-lg p-0">
+          <div className="max-h-[80vh] overflow-y-auto p-6">
+            <DialogHeader className="pb-2">
+              <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+              <DialogDescription>Registre ou atualize uma entrada, saída ou despesa.</DialogDescription>
+            </DialogHeader>
 
-        {/* Status das Ações */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Status das Ações</CardTitle>
-            <CardDescription>Ativas/Andamento, Concluídas, Aguardando e Canceladas</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={actionsStatusChart}
-                  cx="50%"
-                  cy="50%"
-                  dataKey="value"
-                  outerRadius={90}
-                  labelLine={false}
-                  label={({ name, percent }) => (percent > 0.05 ? `${name} ${(percent * 100).toFixed(0)}%` : '')}
-                >
-                  {actionsStatusChart.map((e, i) => (
-                    <Cell key={e.name} fill={e.color || COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+            <form onSubmit={submit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label>Tipo</Label>
+                  <select
+                    name="type"
+                    value={form.type}
+                    onChange={onChange}
+                    className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="entrada">Entrada</option>
+                    <option value="saida">Saída</option>
+                    <option value="despesa">Despesa</option>
+                  </select>
+                </div>
+
+                <div>
+                  <Label>Data</Label>
+                  <Input
+                    name="dateBr"
+                    placeholder="DD/MM/AAAA"
+                    inputMode="numeric"
+                    value={form.dateBr}
+                    onChange={onDateBRChange}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label>Valor</Label>
+                  <Input type="number" step="0.01" name="amount" value={form.amount} onChange={onChange} required />
+                </div>
+
+                <div>
+                  <Label>Categoria</Label>
+                  <Input name="category" value={form.category} onChange={onChange} placeholder="Ex.: Mídia, Produção..." />
+                </div>
+
+                <div className="md:col-span-2">
+                  <Label>Ação vinculada (opcional)</Label>
+                  <select
+                    name="action_id"
+                    value={form.action_id || ''}
+                    onChange={(e) => setForm((f) => ({ ...f, action_id: e.target.value || null }))}
+                    className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="">—</option>
+                    {actions.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.client_name || a.company_name || `Ação ${a.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <Label>Observações</Label>
+                  <Textarea name="notes" rows={3} value={form.notes} onChange={onChange} />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm); }}>
+                  Cancelar
+                </Button>
+                <Button type="submit" size="sm" disabled={saving}>
+                  {saving ? 'Salvando...' : 'Salvar'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 export default Finance;
+

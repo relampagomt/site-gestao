@@ -1,4 +1,3 @@
-// frontend/src/admin/Actions.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
 import { useAuth } from "../contexts/AuthContext";
@@ -19,10 +18,12 @@ import ImagePreview from "@/components/ImagePreview.jsx";
 import {
   Plus, Edit, Trash2, Search, Calendar as CalendarIcon, Layers, X,
   CheckCircle, Loader2, Clock, UploadCloud, Filter as FilterIcon,
-  FileDown, FileSpreadsheet, FileJson, ClipboardCopy, FileText
 } from "lucide-react";
 
 import { formatDateBR } from "@/utils/dates.js";
+
+// Import the new ExportMenu component
+import ExportMenu from "@/components/export/ExportMenu";
 
 /* ========= Tipos de ação ========= */
 const ACTION_OPTIONS = [
@@ -49,153 +50,148 @@ const ensureArrayTypes = (item) => {
   return [];
 };
 
-// status <-> active (compat)
-const deriveStatusFromItem = (item) => {
-  const s = String(item?.status || "").toLowerCase();
-  if (s === "aguardando" || s === "andamento" || s === "concluída" || s === "concluida")
-    return s === "concluida" ? "concluída" : s;
-  if (typeof item?.active === "boolean") return item.active ? "andamento" : "aguardando";
-  return "aguardando";
-};
-const activeFromStatus = (status) => status === "andamento";
+const periodOptions = ["Manhã", "Tarde", "Noite"];
 
-// Datas em BR <-> ISO
-const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
-const isDMY = (s) => /^\d{2}\/\d{2}\/\d{4}$/.test(String(s || ""));
-const ymdToBR = (ymd) => (isYMD(ymd) ? `${ymd.slice(8,10)}/${ymd.slice(5,7)}/${ymd.slice(0,4)}` : "");
+const ymdToBR = (ymd) => {
+  if (!ymd || !/^\d{4}-\d{2}-\d{2}/.test(ymd)) return "";
+  const [y, m, d] = ymd.slice(0, 10).split("-");
+  return `${d}/${m}/${y}`;
+};
+
 const brToYMD = (br) => {
-  if (!isDMY(br)) return "";
+  if (!br || !/^\d{2}\/\d{2}\/\d{4}/.test(br)) return "";
   const [d, m, y] = br.split("/");
   return `${y}-${m}-${d}`;
 };
-const maskBR = (v) => {
-  const d = String(v || "").replace(/\D/g, "").slice(0, 8);
-  const p1 = d.slice(0, 2);
-  const p2 = d.slice(2, 4);
-  const p3 = d.slice(4, 8);
-  return [p1, p2, p3].filter(Boolean).join("/");
+
+const deriveStatusFromItem = (item) => {
+  if (item?.status) return item.status;
+  return item?.active === false ? "concluido" : "aguardando";
 };
 
-// Upload (igual Materiais)
-async function uploadFile(file) {
-  if (!file) return "";
-  const fd = new FormData();
-  fd.append("file", file);
-  const { data } = await api.post("/upload", fd, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
-  return data?.url || data?.secure_url || data?.location || "";
-}
-
-/* ========= Estado inicial ========= */
-const initialForm = {
-  client_name: "",
-  company_name: "",
-  types: [],
-  startBr: "",
-  endBr: "",
-  day_periods: [],
-  material_qty: "",
-  material_photo_url: "",
-  notes: "",
-  status: "aguardando",
+const activeFromStatus = (status) => {
+  return status !== "concluido";
 };
 
-const periodOptions = ["manhã", "tarde", "noite"];
-
-/* ========= Componente ========= */
 const Actions = () => {
   const { user } = useAuth();
-  const isAdmin = String(user?.role || user?.claims?.role || "").toLowerCase() === "admin";
-
-  const [loading, setLoading] = useState(false);
   const [actions, setActions] = useState([]);
-  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
 
-  // dialogs
+  // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editing, setEditing] = useState(null);
 
-  // upload state
+  // Form state
+  const [form, setForm] = useState({
+    client_name: "",
+    company_name: "",
+    types: [],
+    startBr: "",
+    endBr: "",
+    day_periods: [],
+    material_qty: "",
+    material_photo_url: "",
+    notes: "",
+    status: "aguardando",
+  });
+
   const [uploadingMaterial, setUploadingMaterial] = useState(false);
 
-  const [form, setForm] = useState({ ...initialForm });
+  // Filter states
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [fClients, setFClients] = useState([]);
+  const [fCompanies, setFCompanies] = useState([]);
+  const [fTypes, setFTypes] = useState([]);
+  const [fPeriods, setFPeriods] = useState([]);
+  const [fStatus, setFStatus] = useState([]);
+  const [fStartBr, setFStartBr] = useState("");
+  const [fEndBr, setFEndBr] = useState("");
 
-  /* -------- Load -------- */
+  // Load actions
   const loadActions = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const { data } = await api.get("/actions");
-      const list = Array.isArray(data) ? data : data?.actions || [];
-      setActions(list);
+      const response = await api.get("/actions");
+      setActions(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       console.error("Erro ao carregar ações:", err);
+      setActions([]);
     } finally {
       setLoading(false);
     }
   };
-  useEffect(() => { loadActions(); }, []);
 
-  /* =================== FILTROS =================== */
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [fStatus, setFStatus] = useState("");
-  const [fTypes, setFTypes] = useState([]);
-  const [fPeriods, setFPeriods] = useState([]);
-  const [fStartBr, setFStartBr] = useState("");
-  const [fEndBr, setFEndBr] = useState("");
+  useEffect(() => {
+    loadActions();
+  }, []);
 
-  const toggleFilterType = (t) => setFTypes((prev) => prev.includes(t) ? prev.filter((i) => i !== t) : [...prev, t]);
-  const toggleFilterPeriod = (p) => setFPeriods((prev) => prev.includes(p) ? prev.filter((i) => i !== p) : [...prev, p]);
-  const onFilterDateChange = (setter) => (e) => setter(maskBR(e.target.value));
-  const clearFilters = () => { setFStatus(""); setFTypes([]); setFPeriods([]); setFStartBr(""); setFEndBr(""); };
-  const filtersCount = (fStatus ? 1 : 0) + (fTypes.length ? 1 : 0) + (fPeriods.length ? 1 : 0) + ((fStartBr || fEndBr) ? 1 : 0);
+  // Form handlers
+  const onChange = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
-  /* -------- Filter -------- */
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const startF = brToYMD(fStartBr);
-    const endF = brToYMD(fEndBr);
-    let base = actions;
-
-    if (q) {
-      base = base.filter((a) => {
-        const typesBlob = ensureArrayTypes(a).join(" ").toLowerCase();
-        const statusBlob = deriveStatusFromItem(a);
-        const blob = `${a.client_name} ${a.company_name} ${a.notes} ${typesBlob} ${statusBlob}`.toLowerCase();
-        return blob.includes(q);
-      });
-    }
-    if (fStatus) base = base.filter((a) => deriveStatusFromItem(a) === fStatus);
-    if (fTypes.length > 0) base = base.filter((a) => fTypes.some((t) => ensureArrayTypes(a).includes(t)));
-    if (fPeriods.length > 0) base = base.filter((a) => {
-      const arr = Array.isArray(a.day_periods) ? a.day_periods : [];
-      return fPeriods.some((p) => arr.includes(p));
+  const resetForm = () => {
+    setForm({
+      client_name: "",
+      company_name: "",
+      types: [],
+      startBr: "",
+      endBr: "",
+      day_periods: [],
+      material_qty: "",
+      material_photo_url: "",
+      notes: "",
+      status: "aguardando",
     });
-    if (startF || endF) {
-      base = base.filter((a) => {
-        const s = a.start_date || a.end_date || "";
-        const e = a.end_date || a.start_date || "";
-        if (!s || !e) return false;
-        if (startF && e < startF) return false;
-        if (endF && s > endF) return false;
-        return true;
+  };
+
+  const onDateChange = (field) => (e) => {
+    let v = e.target.value.replace(/\D/g, "");
+    if (v.length >= 3) v = v.slice(0, 2) + "/" + v.slice(2);
+    if (v.length >= 6) v = v.slice(0, 5) + "/" + v.slice(5, 9);
+    onChange(field, v);
+  };
+
+  const toggleType = (type) => {
+    setForm((prev) => ({
+      ...prev,
+      types: prev.types.includes(type)
+        ? prev.types.filter((t) => t !== type)
+        : [...prev.types, type],
+    }));
+  };
+
+  const togglePeriod = (period) => {
+    setForm((prev) => ({
+      ...prev,
+      day_periods: prev.day_periods.includes(period)
+        ? prev.day_periods.filter((p) => p !== period)
+        : [...prev.day_periods, period],
+    }));
+  };
+
+  // Upload handler
+  const uploadFile = async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await api.post("/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
+      return response.data?.url || null;
+    } catch (err) {
+      console.error("Erro no upload:", err);
+      return null;
     }
-    return base;
-  }, [actions, query, fStatus, fTypes, fPeriods, fStartBr, fEndBr]);
+  };
 
-  /* -------- Form helpers -------- */
-  const resetForm = () => setForm({ ...initialForm });
-  const onChange = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
-  const onDateChange = (k) => (e) => onChange(k, maskBR(e.target.value));
-  const toggleType = (type) => setForm((prev) => ({ ...prev, types: prev.types.includes(type) ? prev.types.filter((t) => t !== type) : [...prev.types, type] }));
-  const togglePeriod = (period) => setForm((prev) => ({ ...prev, day_periods: prev.day_periods.includes(period) ? prev.day_periods.filter((p) => p !== period) : [...prev.day_periods, period] }));
-
-  // Upload imediato da amostra
   const onMaterialChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     setUploadingMaterial(true);
     try {
       const url = await uploadFile(file);
@@ -209,157 +205,7 @@ const Actions = () => {
     }
   };
 
-  /* =================== EXPORTS (CSV/JSON/Copy/PDF) =================== */
-  const headers = [
-    "Cliente",
-    "Empresa",
-    "Tipos",
-    "Períodos",
-    "Início",
-    "Término",
-    "Quantidade de material",
-    "Status",
-    "Observações",
-    "Foto (URL)"
-  ];
-
-  const toRow = (a) => {
-    const types = ensureArrayTypes(a).join(" | ");
-    const periods = Array.isArray(a?.day_periods) ? a.day_periods.join(" | ") : "";
-    const start = a.start_date ? formatDateBR(a.start_date) : "";
-    const end = a.end_date ? formatDateBR(a.end_date) : "";
-    const status = deriveStatusFromItem(a);
-    return [
-      a.client_name || "",
-      a.company_name || "",
-      types,
-      periods,
-      start,
-      end,
-      a.material_qty ?? "",
-      status,
-      a.notes || "",
-      a.material_photo_url || ""
-    ];
-  };
-
-  const csvEscape = (v) => {
-    const s = String(v ?? "");
-    // usando ; como separador (compat BR). Excel abre normal.
-    if (/[;"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
-  };
-
-  const buildCSV = (rows) => {
-    const data = [headers, ...rows].map(r => r.map(csvEscape).join(";")).join("\n");
-    // BOM p/ Excel reconhecer UTF-8
-    return "\uFEFF" + data;
-  };
-
-  const downloadFile = (name, content, mime) => {
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportCSV = () => {
-    const rows = filtered.map(toRow);
-    const csv = buildCSV(rows);
-    downloadFile("acoes.csv", csv, "text/csv;charset=utf-8;");
-  };
-
-  const handleCopyCSV = async () => {
-    try {
-      const rows = filtered.map(toRow);
-      const csv = buildCSV(rows);
-      await navigator.clipboard.writeText(csv);
-      alert("CSV copiado para a área de transferência.");
-    } catch {
-      alert("Não foi possível copiar. Tente exportar como arquivo CSV.");
-    }
-  };
-
-  const handleExportJSON = () => {
-    const json = JSON.stringify(filtered, null, 2);
-    downloadFile("acoes.json", json, "application/json;charset=utf-8;");
-  };
-
-  // ===== PDF =====
-  const handleExportPDF = async () => {
-    if (!filtered.length) {
-      alert("Não há dados para exportar.");
-      return;
-    }
-    try {
-      // import dinâmico para evitar quebrar SSR/build em ambientes sem o pacote instalado
-      const { jsPDF } = await import("jspdf");
-      const autoTable = (await import("jspdf-autotable")).default;
-
-      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-
-      // Cabeçalho
-      const title = "Relatório de Ações";
-      const subtitle = new Date().toLocaleString("pt-BR");
-      doc.setFontSize(14);
-      doc.text(title, 40, 32);
-      doc.setFontSize(10);
-      doc.text(`Gerado em: ${subtitle}`, 40, 48);
-
-      const rows = filtered.map(toRow);
-
-      autoTable(doc, {
-        head: [headers],
-        body: rows,
-        startY: 64,
-        styles: {
-          fontSize: 8,
-          cellPadding: 4,
-          overflow: "linebreak",
-        },
-        headStyles: {
-          fillColor: [239, 68, 68], // vermelho suave (shadcn vibe)
-          textColor: [255, 255, 255],
-          halign: "center",
-        },
-        bodyStyles: {
-          valign: "middle",
-        },
-        columnStyles: {
-          0: { cellWidth: 120 }, // Cliente
-          1: { cellWidth: 120 }, // Empresa
-          2: { cellWidth: 160 }, // Tipos
-          3: { cellWidth: 80 },  // Períodos
-          4: { cellWidth: 70 },  // Início
-          5: { cellWidth: 70 },  // Término
-          6: { cellWidth: 80 },  // Quantidade
-          7: { cellWidth: 80 },  // Status
-          8: { cellWidth: 160 }, // Observações
-          9: { cellWidth: 160 }, // Foto (URL)
-        },
-        margin: { top: 32, right: 24, bottom: 24, left: 24 },
-        didDrawPage: (data) => {
-          // rodapé simples com numeração
-          const pageCount = doc.getNumberOfPages();
-          const str = `Página ${data.pageNumber} de ${pageCount}`;
-          doc.setFontSize(9);
-          doc.text(str, doc.internal.pageSize.getWidth() - 24 - doc.getTextWidth(str), doc.internal.pageSize.getHeight() - 14);
-        },
-      });
-
-      doc.save("acoes.pdf");
-    } catch (err) {
-      console.error("Falha ao exportar PDF:", err);
-      alert("Para exportar em PDF, instale as dependências: npm i jspdf jspdf-autotable");
-    }
-  };
-
-  /* -------- Create -------- */
+  // CRUD operations
   const handleCreate = async (e) => {
     e.preventDefault();
     const startISO = brToYMD(form.startBr);
@@ -392,7 +238,6 @@ const Actions = () => {
     }
   };
 
-  /* -------- Edit -------- */
   const openEdit = (item) => {
     setEditing(item);
     setForm({
@@ -444,7 +289,6 @@ const Actions = () => {
     }
   };
 
-  /* -------- Delete -------- */
   const handleDelete = async (id) => {
     if (!window.confirm("Tem certeza que deseja excluir esta ação?")) return;
     try {
@@ -456,7 +300,177 @@ const Actions = () => {
     }
   };
 
-  /* -------- TypeSelector (scroll fix) -------- */
+  // Filter helpers
+  const uniqueClients = useMemo(() => {
+    const set = new Set();
+    actions.forEach((a) => {
+      const v = (a.client_name || "").trim();
+      if (v) set.add(v);
+    });
+    return Array.from(set).sort();
+  }, [actions]);
+
+  const uniqueCompanies = useMemo(() => {
+    const set = new Set();
+    actions.forEach((a) => {
+      const v = (a.company_name || "").trim();
+      if (v) set.add(v);
+    });
+    return Array.from(set).sort();
+  }, [actions]);
+
+  const toggleFilter = (setter, value) => {
+    setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
+  };
+
+  const toggleFilterType = (type) => toggleFilter(setFTypes, type);
+
+  const onFilterDateChange = (setter) => (e) => {
+    let v = e.target.value.replace(/\D/g, "");
+    if (v.length >= 3) v = v.slice(0, 2) + "/" + v.slice(2);
+    if (v.length >= 6) v = v.slice(0, 5) + "/" + v.slice(5, 9);
+    setter(v);
+  };
+
+  const clearFilters = () => {
+    setFClients([]);
+    setFCompanies([]);
+    setFTypes([]);
+    setFPeriods([]);
+    setFStatus([]);
+    setFStartBr("");
+    setFEndBr("");
+  };
+
+  const filtersCount =
+    (fClients.length ? 1 : 0) +
+    (fCompanies.length ? 1 : 0) +
+    (fTypes.length ? 1 : 0) +
+    (fPeriods.length ? 1 : 0) +
+    (fStatus.length ? 1 : 0) +
+    ((fStartBr || fEndBr) ? 1 : 0);
+
+  // Filtered data
+  const filtered = useMemo(() => {
+    let list = Array.isArray(actions) ? [...actions] : [];
+
+    // Search query
+    const k = q.trim().toLowerCase();
+    if (k) {
+      list = list.filter((a) => {
+        const types = ensureArrayTypes(a).join(" ");
+        const periods = Array.isArray(a.day_periods) ? a.day_periods.join(" ") : "";
+        return [a.client_name, a.company_name, types, periods, a.notes]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(k));
+      });
+    }
+
+    // Advanced filters
+    if (fClients.length > 0) {
+      const set = new Set(fClients);
+      list = list.filter((a) => set.has((a.client_name || "").trim()));
+    }
+    if (fCompanies.length > 0) {
+      const set = new Set(fCompanies);
+      list = list.filter((a) => set.has((a.company_name || "").trim()));
+    }
+    if (fTypes.length > 0) {
+      const set = new Set(fTypes);
+      list = list.filter((a) => ensureArrayTypes(a).some((t) => set.has(t)));
+    }
+    if (fPeriods.length > 0) {
+      const set = new Set(fPeriods);
+      list = list.filter((a) => Array.isArray(a.day_periods) && a.day_periods.some((p) => set.has(p)));
+    }
+    if (fStatus.length > 0) {
+      const set = new Set(fStatus);
+      list = list.filter((a) => set.has(deriveStatusFromItem(a)));
+    }
+    if (fStartBr || fEndBr) {
+      const start = brToYMD(fStartBr) || "0000-01-01";
+      const end = brToYMD(fEndBr) || "9999-12-31";
+      list = list.filter((a) => {
+        const aStart = a.start_date ? a.start_date.slice(0, 10) : "0000-01-01";
+        const aEnd = a.end_date ? a.end_date.slice(0, 10) : "9999-12-31";
+        return aStart <= end && aEnd >= start;
+      });
+    }
+
+    // Sort by start date desc
+    list.sort((a, b) => {
+      const aDate = a.start_date || "0000-01-01";
+      const bDate = b.start_date || "0000-01-01";
+      return bDate.localeCompare(aDate);
+    });
+
+    return list;
+  }, [actions, q, fClients, fCompanies, fTypes, fPeriods, fStatus, fStartBr, fEndBr]);
+
+  // Prepare data for export
+  const exportData = useMemo(() => {
+    return filtered.map((a) => {
+      const types = ensureArrayTypes(a).join(" | ");
+      const periods = Array.isArray(a?.day_periods) ? a.day_periods.join(" | ") : "";
+      const start = a.start_date ? formatDateBR(a.start_date) : "";
+      const end = a.end_date ? formatDateBR(a.end_date) : "";
+      const status = deriveStatusFromItem(a);
+      return {
+        cliente: a.client_name || "",
+        empresa: a.company_name || "",
+        tipos: types,
+        periodos: periods,
+        inicio: start,
+        termino: end,
+        quantidade_material: a.material_qty ?? "",
+        status: status,
+        observacoes: a.notes || "",
+        foto_url: a.material_photo_url || ""
+      };
+    });
+  }, [filtered]);
+
+  const exportColumns = [
+    { key: 'cliente', header: 'Cliente' },
+    { key: 'empresa', header: 'Empresa' },
+    { key: 'tipos', header: 'Tipos' },
+    { key: 'periodos', header: 'Períodos' },
+    { key: 'inicio', header: 'Início' },
+    { key: 'termino', header: 'Término' },
+    { key: 'quantidade_material', header: 'Quantidade de material' },
+    { key: 'status', header: 'Status' },
+    { key: 'observacoes', header: 'Observações' },
+    { key: 'foto_url', header: 'Foto (URL)' },
+  ];
+
+  const pdfOptions = {
+    title: 'Relatório de Ações',
+    orientation: 'l', // landscape for more columns
+    filtersSummary: `Filtros aplicados: ${filtersCount > 0 ? 
+      [
+        fClients.length > 0 ? `Clientes: ${fClients.join(', ')}` : '',
+        fCompanies.length > 0 ? `Empresas: ${fCompanies.join(', ')}` : '',
+        fTypes.length > 0 ? `Tipos: ${fTypes.join(', ')}` : '',
+        fPeriods.length > 0 ? `Períodos: ${fPeriods.join(', ')}` : '',
+        fStatus.length > 0 ? `Status: ${fStatus.join(', ')}` : '',
+        (fStartBr || fEndBr) ? `Período: ${fStartBr || '...'} - ${fEndBr || '...'}` : '',
+      ].filter(Boolean).join(' | ') : 'Nenhum filtro aplicado'
+    }`,
+    columnStyles: {
+      0: { cellWidth: 40 }, // Cliente
+      1: { cellWidth: 40 }, // Empresa
+      2: { cellWidth: 60 }, // Tipos
+      3: { cellWidth: 30 }, // Períodos
+      4: { cellWidth: 25 }, // Início
+      5: { cellWidth: 25 }, // Término
+      6: { cellWidth: 30 }, // Quantidade
+      7: { cellWidth: 30 }, // Status
+      8: { cellWidth: 50 }, // Observações
+      9: { cellWidth: 50 }, // Foto URL
+    }
+  };
+
+  // TypeSelector component
   const [typesPopoverOpen, setTypesPopoverOpen] = useState(false);
   const TypeSelector = () => (
     <Popover open={typesPopoverOpen} onOpenChange={setTypesPopoverOpen}>
@@ -498,10 +512,10 @@ const Actions = () => {
                 <p className="text-xs font-semibold text-muted-foreground mb-2">{group.group}</p>
                 <div className="space-y-2">
                   {group.items.map((opt) => {
-                    const checked = form.types.includes(opt);
+                    const isSelected = form.types.includes(opt);
                     return (
                       <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
-                        <Checkbox checked={checked} onCheckedChange={() => toggleType(opt)} />
+                        <Checkbox checked={isSelected} onCheckedChange={() => toggleType(opt)} />
                         <span>{opt}</span>
                       </label>
                     );
@@ -511,48 +525,54 @@ const Actions = () => {
               </div>
             ))}
           </div>
-
-          <div className="flex justify-end gap-2 pt-3">
-            <Button variant="outline" onClick={() => setTypesPopoverOpen(false)}>Fechar</Button>
-            <Button onClick={() => setTypesPopoverOpen(false)}>Aplicar</Button>
-          </div>
         </div>
       </PopoverContent>
     </Popover>
   );
 
-  /* ===================== RENDER ===================== */
   return (
-    <div className="admin-page-container admin-space-y-6">
-      <Card className="admin-card">
-        <CardHeader className="admin-card-header admin-page-header">
-          <div>
-            <CardTitle className="admin-page-title">Ações</CardTitle>
-            <CardDescription className="admin-card-description">
-              Cadastre e gerencie ações promocionais e de distribuição.
-            </CardDescription>
-          </div>
+    <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl md:text-2xl font-semibold">Ações</h1>
+      </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 opacity-60" />
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg md:text-xl font-semibold">Registros</CardTitle>
+              <CardDescription>Lista de ações cadastradas</CardDescription>
+            </div>
+            <div className="ml-auto">
+              <ExportMenu
+                data={exportData}
+                columns={exportColumns}
+                filename="acoes"
+                pdfOptions={pdfOptions}
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Toolbar */}
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
+            <div className="relative flex-1 w-full md:w-[320px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por cliente, empresa, tipo, status ou observação"
-                className="pl-9 w-full sm:w-[260px]"
+                className="pl-9"
+                placeholder="Buscar ações..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
               />
             </div>
 
-            {/* ====== FILTROS ====== */}
+            {/* Filters */}
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" size="sm" className="gap-2">
                   <FilterIcon className="size-4" />
                   Filtros
-                  {filtersCount > 0 && (
-                    <Badge variant="secondary" className="ml-1">{filtersCount}</Badge>
-                  )}
+                  {filtersCount > 0 && <Badge variant="secondary">{filtersCount}</Badge>}
                 </Button>
               </PopoverTrigger>
 
@@ -561,74 +581,36 @@ const Actions = () => {
                 side="bottom"
                 sideOffset={8}
                 collisionPadding={12}
-                className="w-[min(92vw,560px)] p-0"
+                className="w-[min(92vw,620px)] p-0"
               >
-                {/* container FLEX controla a altura máxima; body faz o scroll */}
-                <div className="flex flex-col max-h-[calc(100vh-340px)]">
+                <div className="flex flex-col max-h-[calc(100vh-120px)]">
                   <div className="px-4 py-3 border-b">
                     <p className="text-sm font-medium">Filtrar ações</p>
                     <p className="text-xs text-muted-foreground">Refine os resultados com seletores.</p>
                   </div>
 
-                  {/* BODY ROLÁVEL */}
                   <div
-                    className="p-4 grid md:grid-cols-2 gap-4 flex-1 overflow-y-auto overscroll-contain touch-pan-y pr-2 [-webkit-overflow-scrolling:touch]"
+                    className="p-4 grid md:grid-cols-2 gap-4 flex-1 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
                     onWheel={(e) => e.stopPropagation()}
                     onTouchMove={(e) => e.stopPropagation()}
                   >
-                    {/* Status */}
+                    {/* Clientes */}
                     <div className="space-y-2">
-                      <Label>Status</Label>
-                      <select
-                        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                        value={fStatus}
-                        onChange={(e) => setFStatus(e.target.value)}
-                      >
-                        <option value="">Todos</option>
-                        <option value="aguardando">Aguardando</option>
-                        <option value="andamento">Andamento</option>
-                        <option value="concluída">Concluída</option>
-                      </select>
-                    </div>
-
-                    {/* Períodos */}
-                    <div className="space-y-2">
-                      <Label>Períodos do dia</Label>
-                      <div className="flex flex-wrap gap-4">
-                        {periodOptions.map((p) => (
-                          <label key={p} className="flex items-center gap-2 cursor-pointer">
-                            <Checkbox checked={fPeriods.includes(p)} onCheckedChange={() => toggleFilterPeriod(p)} />
-                            <span className="text-sm">{p}</span>
+                      <Label>Clientes</Label>
+                      <div className="max-h-[32vh] overflow-y-auto pr-1">
+                        {uniqueClients.map((c) => (
+                          <label key={c} className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox checked={fClients.includes(c)} onCheckedChange={() => toggleFilter(setFClients, c)} />
+                            <span className="truncate">{c}</span>
                           </label>
                         ))}
                       </div>
-                    </div>
-
-                    {/* Tipos */}
-                    <div className="space-y-2 md:col-span-2">
-                      <Label>Tipo(s) de ação</Label>
-                      <div className="grid sm:grid-cols-2 gap-2">
-                        {ACTION_OPTIONS.map((group) => (
-                          <div key={group.group} className="sm:col-span-2">
-                            <p className="text-xs font-semibold text-muted-foreground mb-2">{group.group}</p>
-                            <div className="grid sm:grid-cols-2 gap-2">
-                              {group.items.map((opt) => (
-                                <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
-                                  <Checkbox checked={fTypes.includes(opt)} onCheckedChange={() => toggleFilterType(opt)} />
-                                  <span>{opt}</span>
-                                </label>
-                              ))}
-                            </div>
-                            <Separator className="my-3" />
-                          </div>
-                        ))}
-                      </div>
-                      {fTypes.length > 0 && (
+                      {fClients.length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {fTypes.map((t) => (
-                            <Badge key={t} variant="secondary" className="gap-1">
-                              {t}
-                              <button type="button" onClick={() => toggleFilterType(t)} className="ml-1 opacity-70 hover:opacity-100">
+                          {fClients.map((c) => (
+                            <Badge key={c} variant="secondary" className="gap-1">
+                              {c}
+                              <button type="button" onClick={() => toggleFilter(setFClients, c)} className="ml-1 opacity-70 hover:opacity-100">
                                 <X className="size-3" />
                               </button>
                             </Badge>
@@ -637,7 +619,82 @@ const Actions = () => {
                       )}
                     </div>
 
-                    {/* Intervalo de datas */}
+                    {/* Empresas */}
+                    <div className="space-y-2">
+                      <Label>Empresas</Label>
+                      <div className="max-h-[32vh] overflow-y-auto pr-1">
+                        {uniqueCompanies.map((c) => (
+                          <label key={c} className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox checked={fCompanies.includes(c)} onCheckedChange={() => toggleFilter(setFCompanies, c)} />
+                            <span className="truncate">{c}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {fCompanies.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {fCompanies.map((c) => (
+                            <Badge key={c} variant="secondary" className="gap-1">
+                              {c}
+                              <button type="button" onClick={() => toggleFilter(setFCompanies, c)} className="ml-1 opacity-70 hover:opacity-100">
+                                <X className="size-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status */}
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <div className="space-y-2">
+                        {["aguardando", "andamento", "concluido"].map((s) => (
+                          <label key={s} className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox checked={fStatus.includes(s)} onCheckedChange={() => toggleFilter(setFStatus, s)} />
+                            <span className="capitalize">{s}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {fStatus.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {fStatus.map((s) => (
+                            <Badge key={s} variant="secondary" className="gap-1">
+                              {s}
+                              <button type="button" onClick={() => toggleFilter(setFStatus, s)} className="ml-1 opacity-70 hover:opacity-100">
+                                <X className="size-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Períodos */}
+                    <div className="space-y-2">
+                      <Label>Períodos do dia</Label>
+                      <div className="space-y-2">
+                        {periodOptions.map((p) => (
+                          <label key={p} className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox checked={fPeriods.includes(p)} onCheckedChange={() => toggleFilter(setFPeriods, p)} />
+                            <span>{p}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {fPeriods.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {fPeriods.map((p) => (
+                            <Badge key={p} variant="secondary" className="gap-1">
+                              {p}
+                              <button type="button" onClick={() => toggleFilter(setFPeriods, p)} className="ml-1 opacity-70 hover:opacity-100">
+                                <X className="size-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Date range */}
                     <div className="space-y-2">
                       <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início (de)</Label>
                       <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={fStartBr} onChange={onFilterDateChange(setFStartBr)} />
@@ -649,47 +706,21 @@ const Actions = () => {
                   </div>
 
                   <div className="px-4 py-3 border-t flex justify-between">
-                    <Button variant="ghost" onClick={clearFilters}>Limpar filtros</Button>
+                    <Button variant="ghost" size="sm" onClick={clearFilters}>Limpar filtros</Button>
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => setFiltersOpen(false)}>Fechar</Button>
-                      <Button onClick={() => setFiltersOpen(false)}>Aplicar</Button>
+                      <Button variant="outline" size="sm" onClick={() => setFiltersOpen(false)}>Fechar</Button>
+                      <Button size="sm" onClick={() => setFiltersOpen(false)}>Aplicar</Button>
                     </div>
                   </div>
                 </div>
               </PopoverContent>
             </Popover>
 
-            {/* ====== EXPORTAÇÕES ====== */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="gap-2">
-                  <FileDown className="size-4" />
-                  Exportar
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" side="bottom" sideOffset={8} className="w-56 p-2">
-                <div className="flex flex-col gap-1">
-                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportCSV}>
-                    <FileSpreadsheet className="size-4" /> Exportar CSV
-                  </Button>
-                  <Button variant="ghost" className="justify-start gap-2" onClick={handleCopyCSV}>
-                    <ClipboardCopy className="size-4" /> Copiar CSV
-                  </Button>
-                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportJSON}>
-                    <FileJson className="size-4" /> Exportar JSON
-                  </Button>
-                  <Button variant="ghost" className="justify-start gap-2" onClick={handleExportPDF}>
-                    <FileText className="size-4" /> Exportar PDF
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            {/* Modal CRIAR */}
+            {/* Create Action */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
-                <Button className="admin-btn-primary">
-                  <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+                <Button size="sm" className="gap-2">
+                  <Plus className="size-4" />
                   <span className="whitespace-nowrap">Nova Ação</span>
                 </Button>
               </DialogTrigger>
@@ -757,7 +788,6 @@ const Actions = () => {
                         <Input id="material_qty" type="number" min={0} value={form.material_qty} onChange={(e) => onChange("material_qty", e.target.value)} />
                       </div>
 
-                      {/* Upload igual Materiais */}
                       <div className="space-y-2 md:col-span-2">
                         <Label>Amostra do material (imagem)</Label>
                         <div className="flex items-center gap-3">
@@ -787,7 +817,6 @@ const Actions = () => {
                         <Textarea id="notes" rows={3} value={form.notes} onChange={(e) => onChange("notes", e.target.value)} />
                       </div>
 
-                      {/* STATUS */}
                       <div className="space-y-1.5 md:col-span-2">
                         <Label htmlFor="status">Status</Label>
                         <select
@@ -798,109 +827,96 @@ const Actions = () => {
                         >
                           <option value="aguardando">Aguardando</option>
                           <option value="andamento">Andamento</option>
-                          <option value="concluída">Concluída</option>
+                          <option value="concluido">Concluído</option>
                         </select>
                       </div>
                     </div>
 
-                    <div className="pt-2 mt-4 border-t flex justify-end gap-2">
-                      <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-                      <Button type="submit" disabled={uploadingMaterial}>Salvar</Button>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setIsCreateOpen(false)}>
+                        Cancelar
+                      </Button>
+                      <Button type="submit" size="sm">
+                        Salvar
+                      </Button>
                     </div>
                   </form>
                 </div>
               </DialogContent>
             </Dialog>
           </div>
-        </CardHeader>
 
-        {/* Tabela */}
-        <CardContent>
-          <div className="rounded-md border">
-            <div className="overflow-x-auto">
-              <Table className="min-w-[1080px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-center">Cliente</TableHead>
-                    <TableHead className="text-center">Empresa</TableHead>
-                    <TableHead className="text-center">Tipos</TableHead>
-                    <TableHead className="text-center">Validade</TableHead>
-                    <TableHead className="text-center">Material</TableHead>
-                    <TableHead className="text-center">Quantidade</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-center">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">Carregando...</TableCell>
-                    </TableRow>
-                  ) : filtered.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Nenhuma ação encontrada.</TableCell>
-                    </TableRow>
-                  ) : (
-                    filtered.map((a) => {
-                      const types = ensureArrayTypes(a);
-                      const range = (a.start_date || a.end_date)
-                        ? `${formatDateBR(a.start_date)} — ${formatDateBR(a.end_date)}`
-                        : "—";
-                      const status = deriveStatusFromItem(a);
+          {/* Table */}
+          <div className="overflow-x-auto rounded-xl border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-center">Cliente</TableHead>
+                  <TableHead className="text-center">Empresa</TableHead>
+                  <TableHead className="text-center">Tipos</TableHead>
+                  <TableHead className="text-center">Períodos</TableHead>
+                  <TableHead className="text-center">Início</TableHead>
+                  <TableHead className="text-center">Término</TableHead>
+                  <TableHead className="text-center">Qtd. Material</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow><TableCell colSpan={9} className="text-center py-6">Carregando…</TableCell></TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow><TableCell colSpan={9} className="text-center py-6">Nenhum registro</TableCell></TableRow>
+                ) : (
+                  filtered.map((a) => {
+                    const types = ensureArrayTypes(a);
+                    const periods = Array.isArray(a.day_periods) ? a.day_periods : [];
+                    const status = deriveStatusFromItem(a);
+                    const statusColor = status === "concluido" ? "default" : status === "andamento" ? "secondary" : "outline";
 
-                      return (
-                        <TableRow key={a.id}>
-                          <TableCell className="text-center font-medium">{a.client_name || "—"}</TableCell>
-                          <TableCell className="text-center">{a.company_name || "—"}</TableCell>
-                          <TableCell className="text-center">
-                            <div className="flex justify-center flex-wrap gap-1">
-                              {types.slice(0, 3).map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
-                              {types.length > 3 && <Badge variant="outline">+{types.length - 3}</Badge>}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">{range}</TableCell>
-                          <TableCell className="text-center">
-                            {a.material_photo_url ? (
-                              <div className="flex justify-center">
-                                <ImagePreview src={a.material_photo_url} alt="Amostra do material" size={48} />
-                              </div>
-                            ) : <span className="text-xs text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell className="text-center">{a.material_qty ?? "—"}</TableCell>
-                          <TableCell className="text-center">
-                            {status === "aguardando" && (
-                              <span className="inline-flex items-center gap-1 text-amber-600">
-                                <Clock className="size-4" /> Aguardando
-                              </span>
-                            )}
-                            {status === "andamento" && (
-                              <span className="inline-flex items-center gap-1 text-blue-600">
-                                <Loader2 className="size-4 animate-spin-slow" /> Andamento
-                              </span>
-                            )}
-                            {status === "concluída" && (
-                              <span className="inline-flex items-center gap-1 text-green-600">
-                                <CheckCircle className="size-4" /> Concluída
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <div className="flex justify-center gap-2 flex-wrap">
-                              <Button size="sm" variant="secondary" onClick={() => openEdit(a)} className="gap-1 min-h-[36px]">
-                                <Edit className="size-4" /> Editar
-                              </Button>
-                              <Button size="sm" variant="destructive" onClick={() => handleDelete(a.id)} className="gap-1 min-h-[36px]">
-                                <Trash2 className="size-4" /> Excluir
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                    return (
+                      <TableRow key={a.id}>
+                        <TableCell className="text-center font-medium">{a.client_name || "—"}</TableCell>
+                        <TableCell className="text-center">{a.company_name || "—"}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex flex-wrap gap-1 justify-center">
+                            {types.slice(0, 2).map((t) => (
+                              <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
+                            ))}
+                            {types.length > 2 && <Badge variant="outline" className="text-xs">+{types.length - 2}</Badge>}
+                            {types.length === 0 && <span className="text-muted-foreground">—</span>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex flex-wrap gap-1 justify-center">
+                            {periods.map((p) => (
+                              <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
+                            ))}
+                            {periods.length === 0 && <span className="text-muted-foreground">—</span>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">{a.start_date ? formatDateBR(a.start_date) : "—"}</TableCell>
+                        <TableCell className="text-center">{a.end_date ? formatDateBR(a.end_date) : "—"}</TableCell>
+                        <TableCell className="text-center">{a.material_qty ?? "—"}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={statusColor} className="capitalize">{status}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex justify-center gap-2">
+                            <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(a)}>
+                              <Edit className="size-4" /> Editar
+                            </Button>
+                            <Button size="sm" variant="destructive" className="gap-2" onClick={() => handleDelete(a.id)}>
+                              <Trash2 className="size-4" /> Excluir
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
           </div>
           <p className="text-xs text-muted-foreground mt-3">
             Total: <strong>{filtered.length}</strong> ação(ões)
@@ -908,7 +924,7 @@ const Actions = () => {
         </CardContent>
       </Card>
 
-      {/* Modal EDITAR */}
+      {/* Edit Modal */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) { setEditing(null); resetForm(); } }}>
         <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
           <div className="px-5 pt-5 pb-3 border-b">
@@ -1012,20 +1028,18 @@ const Actions = () => {
                   >
                     <option value="aguardando">Aguardando</option>
                     <option value="andamento">Andamento</option>
-                    <option value="concluída">Concluída</option>
+                    <option value="concluido">Concluído</option>
                   </select>
                 </div>
               </div>
 
-              <div className="pt-2 mt-4 border-t flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => { setIsEditOpen(false); setEditing(null); resetForm(); }}
-                >
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setIsEditOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={uploadingMaterial}>Salvar</Button>
+                <Button type="submit" size="sm">
+                  Atualizar
+                </Button>
               </div>
             </form>
           </div>
@@ -1036,3 +1050,4 @@ const Actions = () => {
 };
 
 export default Actions;
+

@@ -30,17 +30,32 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor para 401
+// Interceptor para 401, 403 e 5xx
 api.interceptors.response.use(
   (resp) => resp,
   (error) => {
-    if (error?.response?.status === 401) {
+    const status = error?.response?.status;
+    const message = error?.response?.data?.message || error?.message || 'Erro desconhecido';
+    
+    if (status === 401) {
+      // Token inválido ou expirado
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       if (!location.pathname.includes('/login')) {
         location.href = '/login';
       }
+    } else if (status === 403) {
+      // Acesso negado - usuário não tem permissão
+      console.warn('Acesso negado:', message);
+      // Você pode mostrar uma notificação aqui se tiver um sistema de toast
+      // toast.error(message);
+    } else if (status >= 500) {
+      // Erro interno do servidor
+      console.error('Erro interno do servidor:', message);
+      // Você pode mostrar uma notificação aqui se tiver um sistema de toast
+      // toast.error('Erro interno do servidor. Tente novamente mais tarde.');
     }
+    
     return Promise.reject(error);
   }
 );

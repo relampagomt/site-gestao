@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button.jsx";
 import { cn } from "@/lib/utils";
 import { useAuth } from "../contexts/AuthContext";
+import HealthBanner from "../components/HealthBanner";
 
 function SideItem({ to, icon: Icon, label, end = false, collapsed = false }) {
   return (
@@ -57,16 +58,35 @@ export default function AdminLayout() {
   }, [collapsed]);
 
   const menu = useMemo(
-    () => [
-      { to: "/admin", label: "Dashboard", icon: Home, end: true },
-      { to: "/admin/clients", label: "Clientes", icon: Users },
-      { to: "/admin/materials", label: "Materiais", icon: Package },
-      { to: "/admin/actions", label: "Ações", icon: ClipboardList },
-      { to: "/admin/finance", label: "Finanças", icon: Wallet },
-      { to: "/admin/vacancies", label: "Vagas", icon: Briefcase },
-      { to: "/admin/users", label: "Usuários", icon: UserCog }, // diferenciado
-    ],
-    []
+    () => {
+      const baseMenu = [
+        { to: "/admin", label: "Dashboard", icon: Home, end: true },
+        { to: "/admin/materials", label: "Materiais", icon: Package },
+        { to: "/admin/actions", label: "Ações", icon: ClipboardList },
+        { to: "/admin/vacancies", label: "Vagas", icon: Briefcase },
+      ];
+
+      // Admin-only menu items
+      const adminOnlyMenu = [
+        { to: "/admin/clients", label: "Clientes", icon: Users },
+        { to: "/admin/finance", label: "Finanças", icon: Wallet },
+        { to: "/admin/users", label: "Usuários", icon: UserCog },
+      ];
+
+      // If user is admin, show all menu items
+      if (user?.role === 'admin') {
+        return [
+          ...baseMenu.slice(0, 1), // Dashboard
+          ...adminOnlyMenu.slice(0, 1), // Clients
+          ...baseMenu.slice(1), // Materials, Actions, Vacancies
+          ...adminOnlyMenu.slice(1), // Finance, Users
+        ];
+      }
+
+      // If user is supervisor, show only base menu items
+      return baseMenu;
+    },
+    [user?.role]
   );
 
   const onLogout = async () => {
@@ -222,7 +242,8 @@ export default function AdminLayout() {
             </div>
           </header>
 
-          <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+          <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
+            <HealthBanner />
             <Outlet />
           </div>
         </main>

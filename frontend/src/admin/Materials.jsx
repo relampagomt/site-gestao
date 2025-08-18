@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
@@ -25,12 +25,12 @@ import {
   UploadCloud,
   X,
   Filter as FilterIcon,
-  FileDown,         // CSV
-  FileSpreadsheet,  // Excel
-  FileText          // PDF
 } from "lucide-react";
 import api from "@/services/api";
 import ImagePreview from "@/components/ImagePreview.jsx";
+
+// Import the new ExportMenu component
+import ExportMenu from "@/components/export/ExportMenu";
 
 /* ==================== Datas (força DD/MM/AAAA) ==================== */
 const TZ = "America/Cuiaba";
@@ -53,180 +53,166 @@ function toYMDInCuiaba(value) {
     month: "2-digit",
     day: "2-digit",
   });
-  const parts = fmt.formatToParts(d);
-  const y = parts.find((p) => p.type === "year")?.value || "0000";
-  const m = parts.find((p) => p.type === "month")?.value || "01";
-  const dd = parts.find((p) => p.type === "day")?.value || "01";
-  return `${y}-${m}-${dd}`;
+  return fmt.format(d);
 }
+
 function ymdToBR(ymd) {
-  const s = String(ymd || "").slice(0, 10);
-  if (!isYMD(s)) return "";
-  const [y, m, d] = s.split("-");
+  if (!ymd || !isYMD(ymd)) return "";
+  const [y, m, d] = ymd.split("-");
   return `${d}/${m}/${y}`;
 }
+
 function brToYMD(br) {
-  if (!isDMY(br)) return "";
+  if (!br || !isDMY(br)) return "";
   const [d, m, y] = br.split("/");
   return `${y}-${m}-${d}`;
 }
-function maskBR(v) {
-  const d = String(v || "").replace(/\D/g, "").slice(0, 8);
-  const p1 = d.slice(0, 2);
-  const p2 = d.slice(2, 4);
-  const p3 = d.slice(4, 8);
-  return [p1, p2, p3].filter(Boolean).join("/");
-}
-/* ================================================================== */
 
 const Materials = () => {
   const [materials, setMaterials] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  // busca e mês (mantidos)
+  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [month, setMonth] = useState("");
 
-  // modal (create/edit)
+  // Modal de cadastro/edição
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("create");
+  const [form, setForm] = useState({
+    dateBr: "", quantity: "", clientName: "", responsible: "", notes: "",
+    sampleUrl: "", protocolUrl: ""
+  });
   const [saving, setSaving] = useState(false);
-
-  // dialog excluir
-  const [openDelete, setOpenDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [rowToDelete, setRowToDelete] = useState(null);
-
-  // formulário
-  const todayYMD = toYMDInCuiaba(new Date());
-  const emptyForm = {
-    id: null,
-    dateBr: ymdToBR(todayYMD),
-    quantity: "",
-    clientName: "",
-    responsible: "",
-    notes: "",
-    sampleUrl: null,
-    protocolUrl: null,
-  };
-  const [form, setForm] = useState(emptyForm);
-
   const [uploadingSample, setUploadingSample] = useState(false);
   const [uploadingProtocol, setUploadingProtocol] = useState(false);
 
-  async function fetchMaterials() {
+  // Modal de exclusão
+  const [openDelete, setOpenDelete] = useState(false);
+  const [rowToDelete, setRowToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Buscar materiais
+  const fetchMaterials = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/materials");
-      setMaterials(Array.isArray(data) ? data : data?.items ?? []);
-    } catch (e) {
-      console.error("Erro ao carregar materials:", e);
+      const response = await api.get("/materials");
+      setMaterials(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      console.error("Erro ao buscar materiais:", err);
+      setMaterials([]);
     } finally {
       setLoading(false);
     }
-  }
-  useEffect(() => { fetchMaterials(); }, []);
+  }, []);
 
-  async function uploadFile(file) {
-    const fd = new FormData();
-    fd.append("file", file);
-    const { data } = await api.post("/upload", fd, {
-      headers: { "Content-Type": "multipart/form-data" },
+  useEffect(() => {
+    fetchMaterials();
+  }, [fetchMaterials]);
+
+  // Handlers do formulário
+  const onChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const onDateBrChange = (e) => {
+    let v = e.target.value.replace(/\D/g, "");
+    if (v.length >= 3) v = v.slice(0, 2) + "/" + v.slice(2);
+    if (v.length >= 6) v = v.slice(0, 5) + "/" + v.slice(5, 9);
+    setForm(prev => ({ ...prev, dateBr: v }));
+  };
+
+  const openCreate = () => {
+    setMode("create");
+    setForm({
+      dateBr: "", quantity: "", clientName: "", responsible: "", notes: "",
+      sampleUrl: "", protocolUrl: ""
     });
-    return data?.url;
-  }
+    setOpen(true);
+  };
 
-  async function onSampleChange(e) {
+  const openEdit = (material) => {
+    setMode("edit");
+    const ymd = toYMDInCuiaba(material.date);
+    setForm({
+      dateBr: ymdToBR(ymd),
+      quantity: String(material.quantity || ""),
+      clientName: material.client_name || material.clientName || "",
+      responsible: material.responsible || "",
+      notes: material.notes || "",
+      sampleUrl: material.material_sample_url || material.sampleUrl || "",
+      protocolUrl: material.protocol_url || material.protocolUrl || ""
+    });
+    setOpen(true);
+  };
+
+  const confirmDelete = (material) => {
+    setRowToDelete(material);
+    setOpenDelete(true);
+  };
+
+  // Upload handlers
+  const onSampleChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
     setUploadingSample(true);
     try {
-      const url = await uploadFile(file);
-      setForm((f) => ({ ...f, sampleUrl: url }));
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await api.post("/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      setForm(prev => ({ ...prev, sampleUrl: response.data.url }));
     } catch (err) {
       console.error("Erro no upload da amostra:", err);
-      alert("Falha ao enviar a amostra. Tente novamente.");
+      alert("Erro no upload da amostra.");
     } finally {
       setUploadingSample(false);
     }
-  }
-  async function onProtocolChange(e) {
+  };
+
+  const onProtocolChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
     setUploadingProtocol(true);
     try {
-      const url = await uploadFile(file);
-      setForm((f) => ({ ...f, protocolUrl: url }));
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await api.post("/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      setForm(prev => ({ ...prev, protocolUrl: response.data.url }));
     } catch (err) {
       console.error("Erro no upload do protocolo:", err);
-      alert("Falha ao enviar o protocolo. Tente novamente.");
+      alert("Erro no upload do protocolo.");
     } finally {
       setUploadingProtocol(false);
     }
-  }
+  };
 
-  function onChange(e) {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
-  }
-  function onDateBrChange(e) {
-    setForm((f) => ({ ...f, dateBr: maskBR(e.target.value) }));
-  }
-
-  function openCreate() {
-    setMode("create");
-    setForm(emptyForm);
-    setOpen(true);
-  }
-  function openEdit(row) {
-    const ymd = toYMDInCuiaba(row?.date);
-    setMode("edit");
-    setForm({
-      id: row.id ?? row._id ?? row.uuid ?? null,
-      dateBr: ymdToBR(ymd),
-      quantity: row.quantity ?? "",
-      clientName: row.client_name ?? row.clientName ?? "",
-      responsible: row.responsible ?? "",
-      notes: row.notes ?? "",
-      sampleUrl: row.material_sample_url ?? row.sampleUrl ?? null,
-      protocolUrl: row.protocol_url ?? row.protocolUrl ?? null,
-    });
-    setOpen(true);
-  }
-  function confirmDelete(row) {
-    setRowToDelete(row);
-    setOpenDelete(true);
-  }
-
+  // Submissão do formulário
   async function onSubmit(e) {
     e.preventDefault();
-    const ymd = brToYMD(form.dateBr);
-    if (!ymd) return alert("Informe uma data válida no formato DD/MM/AAAA.");
-    if (!form.clientName?.trim()) return alert("Informe o cliente.");
-    if (!form.responsible?.trim()) return alert("Informe o responsável.");
-
     setSaving(true);
     try {
       const payload = {
-        date: ymd,
-        quantity: Number(form.quantity || 0),
+        date: brToYMD(form.dateBr),
+        quantity: Number(form.quantity),
         client_name: form.clientName,
         responsible: form.responsible,
-        notes: form.notes || "",
-        material_sample_url: form.sampleUrl || null,
-        protocol_url: form.protocolUrl || null,
+        notes: form.notes,
+        material_sample_url: form.sampleUrl,
+        protocol_url: form.protocolUrl
       };
-
+      
       if (mode === "create") {
         await api.post("/materials", payload);
       } else {
-        const id = form.id;
-        if (!id) throw new Error("ID do registro não encontrado para edição.");
+        const id = rowToDelete?.id ?? rowToDelete?._id ?? rowToDelete?.uuid;
         await api.put(`/materials/${id}`, payload);
       }
-
       setOpen(false);
-      setForm(emptyForm);
       fetchMaterials();
     } catch (err) {
       console.error("Erro ao salvar material:", err);
@@ -254,16 +240,16 @@ const Materials = () => {
     }
   }
 
-  /* ===================== FILTROS (NOVO) ===================== */
+  /* ===================== FILTROS AVANÇADOS ===================== */
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [fClients, setFClients] = useState([]);
   const [fResponsibles, setFResponsibles] = useState([]);
-  const [fHasSample, setFHasSample] = useState("");   // '', 'sim', 'nao'
-  const [fHasProtocol, setFHasProtocol] = useState(""); // '', 'sim', 'nao'
-  const [fStartBr, setFStartBr] = useState("");
-  const [fEndBr, setFEndBr] = useState("");
+  const [fHasSample, setFHasSample] = useState("");
+  const [fHasProtocol, setFHasProtocol] = useState("");
   const [fQtyMin, setFQtyMin] = useState("");
   const [fQtyMax, setFQtyMax] = useState("");
+  const [fStartBr, setFStartBr] = useState("");
+  const [fEndBr, setFEndBr] = useState("");
 
   const uniqueClients = useMemo(() => {
     const s = new Set();
@@ -283,20 +269,18 @@ const Materials = () => {
     return Array.from(s).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [materials]);
 
-  const toggle = (arrSetter, value) =>
-    arrSetter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
-
-  const onFilterDateChange = (setter) => (e) => setter(maskBR(e.target.value));
+  const toggle = (setter, value) =>
+    setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
 
   const clearFilters = () => {
     setFClients([]);
     setFResponsibles([]);
     setFHasSample("");
     setFHasProtocol("");
-    setFStartBr("");
-    setFEndBr("");
     setFQtyMin("");
     setFQtyMax("");
+    setFStartBr("");
+    setFEndBr("");
   };
 
   const filtersCount =
@@ -365,127 +349,88 @@ const Materials = () => {
     return list;
   }, [materials, q, month, fClients, fResponsibles, fHasSample, fHasProtocol, fQtyMin, fQtyMax, fStartBr, fEndBr]);
 
-  /* ===================== EXPORTAÇÕES ===================== */
-
-  // utilitário para baixar um Blob
-  const downloadBlob = (blob, filename) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
-  const nowStamp = () => {
-    const d = new Date();
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
-  };
-
-  // linhas padronizadas (respeita a lista FILTRADA)
-  const tableRows = useMemo(() => {
+  // Prepare data for export
+  const exportData = useMemo(() => {
     return filtered.map((m) => {
       const ymd = m._ymd ?? toYMDInCuiaba(m.date);
       return {
-        Data: ymdToBR(ymd),
-        Cliente: m.client_name ?? m.clientName ?? "",
-        Responsável: m.responsible ?? "",
-        Quantidade: m.quantity ?? "",
-        Observações: m.notes ?? "",
-        Amostra: (m.material_sample_url || m.sampleUrl) ? "Sim" : "—",
-        Protocolo: (m.protocol_url || m.protocolUrl) ? "Sim" : "—",
+        data: ymdToBR(ymd),
+        cliente: m.client_name ?? m.clientName ?? "",
+        responsavel: m.responsible ?? "",
+        quantidade: m.quantity ?? "",
+        observacoes: m.notes ?? "",
+        amostra: (m.material_sample_url || m.sampleUrl) ? "Sim" : "—",
+        protocolo: (m.protocol_url || m.protocolUrl) ? "Sim" : "—",
       };
     });
   }, [filtered]);
 
-  // CSV (UTF-8 + BOM, delimitador ;)
-  const exportCSV = () => {
-    const headers = ["Data", "Cliente", "Responsável", "Quantidade", "Observações", "Amostra", "Protocolo"];
-    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const lines = [
-      headers.join(";"),
-      ...tableRows.map((r) => headers.map((h) => esc(r[h])).join(";")),
-    ];
-    const csv = "\uFEFF" + lines.join("\n");
-    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `materiais_${nowStamp()}.csv`);
-  };
+  const exportColumns = [
+    { key: 'data', header: 'Data' },
+    { key: 'cliente', header: 'Cliente' },
+    { key: 'responsavel', header: 'Responsável' },
+    { key: 'quantidade', header: 'Quantidade' },
+    { key: 'observacoes', header: 'Observações' },
+    { key: 'amostra', header: 'Amostra' },
+    { key: 'protocolo', header: 'Protocolo' },
+  ];
 
-  // Excel (HTML + MIME Excel) -> .xls
-  const exportExcel = () => {
-    const headers = ["Data", "Cliente", "Responsável", "Quantidade", "Observações", "Amostra", "Protocolo"];
-    const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const rowsHtml = tableRows
-      .map((r) => `<tr>${headers.map((h) => `<td>${esc(r[h])}</td>`).join("")}</tr>`)
-      .join("");
-    const tableHtml = `
-      <table border="1" cellspacing="0" cellpadding="4">
-        <thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    `;
-    const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Materiais</title></head><body>${tableHtml}</body></html>`;
-    downloadBlob(new Blob([doc], { type: "application/vnd.ms-excel;charset=utf-8;" }), `materiais_${nowStamp()}.xls`);
-  };
-
-  // PDF (abre aba para imprimir -> Salvar como PDF)
-  const exportPDF = () => {
-    const headers = ["Data", "Cliente", "Responsável", "Quantidade", "Observações", "Amostra", "Protocolo"];
-    const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const bodyRows = tableRows
-      .map((r) => `<tr>${headers.map((h) => `<td>${esc(r[h])}</td>`).join("")}</tr>`)
-      .join("");
-    const html = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-      <head>
-        <meta charset="utf-8"/>
-        <title>Materiais</title>
-        <style>
-          * { box-sizing: border-box; }
-          body { font: 12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; color: #111; margin: 24px; }
-          h1 { font-size: 18px; margin: 0 0 12px; }
-          table { width: 100%; border-collapse: collapse; }
-          thead th { text-align: left; background: #f4f4f5; }
-          th, td { border: 1px solid #e5e7eb; padding: 8px 10px; vertical-align: top; }
-          @media print { @page { margin: 16mm; size: A4 portrait; } a { display: none; } }
-        </style>
-      </head>
-      <body>
-        <h1>Materiais</h1>
-        <table>
-          <thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
-          <tbody>${bodyRows}</tbody>
-        </table>
-        <script>window.onload = () => { setTimeout(() => { window.print(); }, 200); };</script>
-      </body>
-      </html>
-    `;
-    const w = window.open("", "_blank");
-    if (!w) { alert("Permita pop-ups para exportar em PDF."); return; }
-    w.document.open(); w.document.write(html); w.document.close();
+  const pdfOptions = {
+    title: 'Relatório de Materiais',
+    orientation: 'l', // landscape for more columns
+    filtersSummary: `Filtros aplicados: ${filtersCount > 0 ? 
+      [
+        month ? `Mês: ${month}` : '',
+        fClients.length > 0 ? `Clientes: ${fClients.join(', ')}` : '',
+        fResponsibles.length > 0 ? `Responsáveis: ${fResponsibles.join(', ')}` : '',
+        fHasSample ? `Amostra: ${fHasSample === 'sim' ? 'Com amostra' : 'Sem amostra'}` : '',
+        fHasProtocol ? `Protocolo: ${fHasProtocol === 'sim' ? 'Com protocolo' : 'Sem protocolo'}` : '',
+        (fQtyMin || fQtyMax) ? `Quantidade: ${fQtyMin || '0'} - ${fQtyMax || '∞'}` : '',
+        (fStartBr || fEndBr) ? `Período: ${fStartBr || '...'} - ${fEndBr || '...'}` : '',
+      ].filter(Boolean).join(' | ') : 'Nenhum filtro aplicado'
+    }`,
+    columnStyles: {
+      0: { cellWidth: 25 }, // Data
+      1: { cellWidth: 50 }, // Cliente
+      2: { cellWidth: 40 }, // Responsável
+      3: { cellWidth: 25 }, // Quantidade
+      4: { cellWidth: 60 }, // Observações
+      5: { cellWidth: 20 }, // Amostra
+      6: { cellWidth: 20 }, // Protocolo
+    }
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+    <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-semibold">Materiais</h1>
       </div>
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Registros</CardTitle>
-          <CardDescription>Lista de materiais cadastrados</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg md:text-xl font-semibold">Registros</CardTitle>
+              <CardDescription>Lista de materiais cadastrados</CardDescription>
+            </div>
+            <div className="ml-auto">
+              <ExportMenu
+                data={exportData}
+                columns={exportColumns}
+                filename="materiais"
+                pdfOptions={pdfOptions}
+              />
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {/* Filtros + Exportações + Novo */}
-          <div className="flex flex-col xl:flex-row xl:items-center gap-2 mb-4">
-            <div className="relative flex-1">
+          <div className="flex flex-col xl:flex-row xl:items-center gap-2 lg:gap-3">
+            <div className="relative flex-1 w-full md:w-[320px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="Buscar por cliente, responsável, quantidade ou observações..."
+                placeholder="Buscar materiais..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -512,7 +457,7 @@ const Materials = () => {
             {/* ====== FILTROS AVANÇADOS (POPOVER) ====== */}
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="gap-2 w-full sm:w-auto">
+                <Button variant="outline" size="sm" className="gap-2">
                   <FilterIcon className="size-4" />
                   Filtros
                   {filtersCount > 0 && <Badge variant="secondary">{filtersCount}</Badge>}
@@ -621,56 +566,71 @@ const Materials = () => {
                       </select>
                     </div>
 
-                    {/* Data (ponto) */}
+                    {/* Quantidade */}
                     <div className="space-y-2">
-                      <Label>Início (de)</Label>
-                      <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={fStartBr} onChange={onFilterDateChange(setFStartBr)} />
+                      <Label>Quantidade mínima</Label>
+                      <Input
+                        type="number"
+                        placeholder="Ex.: 1000"
+                        value={fQtyMin}
+                        onChange={(e) => setFQtyMin(e.target.value)}
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label>Término (até)</Label>
-                      <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={fEndBr} onChange={onFilterDateChange(setFEndBr)} />
+                      <Label>Quantidade máxima</Label>
+                      <Input
+                        type="number"
+                        placeholder="Ex.: 50000"
+                        value={fQtyMax}
+                        onChange={(e) => setFQtyMax(e.target.value)}
+                      />
                     </div>
 
-                    {/* Faixa de quantidade */}
+                    {/* Período */}
                     <div className="space-y-2">
-                      <Label>Qtd. mínima</Label>
-                      <Input type="number" inputMode="numeric" value={fQtyMin} onChange={(e) => setFQtyMin(e.target.value)} placeholder="Ex.: 1000" />
+                      <Label>Data inicial</Label>
+                      <Input
+                        placeholder="DD/MM/AAAA"
+                        value={fStartBr}
+                        onChange={(e) => {
+                          let v = e.target.value.replace(/\D/g, "");
+                          if (v.length >= 3) v = v.slice(0, 2) + "/" + v.slice(2);
+                          if (v.length >= 6) v = v.slice(0, 5) + "/" + v.slice(5, 9);
+                          setFStartBr(v);
+                        }}
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label>Qtd. máxima</Label>
-                      <Input type="number" inputMode="numeric" value={fQtyMax} onChange={(e) => setFQtyMax(e.target.value)} placeholder="Ex.: 50000" />
+                      <Label>Data final</Label>
+                      <Input
+                        placeholder="DD/MM/AAAA"
+                        value={fEndBr}
+                        onChange={(e) => {
+                          let v = e.target.value.replace(/\D/g, "");
+                          if (v.length >= 3) v = v.slice(0, 2) + "/" + v.slice(2);
+                          if (v.length >= 6) v = v.slice(0, 5) + "/" + v.slice(5, 9);
+                          setFEndBr(v);
+                        }}
+                      />
                     </div>
                   </div>
 
                   <div className="px-4 py-3 border-t flex justify-between">
-                    <Button variant="ghost" onClick={clearFilters}>Limpar filtros</Button>
+                    <Button variant="ghost" size="sm" onClick={clearFilters}>Limpar filtros</Button>
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => setFiltersOpen(false)}>Fechar</Button>
-                      <Button onClick={() => setFiltersOpen(false)}>Aplicar</Button>
+                      <Button variant="outline" size="sm" onClick={() => setFiltersOpen(false)}>Fechar</Button>
+                      <Button size="sm" onClick={() => setFiltersOpen(false)}>Aplicar</Button>
                     </div>
                   </div>
                 </div>
               </PopoverContent>
             </Popover>
 
-            {/* Botões de Exportação */}
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={exportCSV} className="gap-2">
-                <FileDown className="size-4" /> CSV
-              </Button>
-              <Button variant="outline" onClick={exportExcel} className="gap-2">
-                <FileSpreadsheet className="size-4" /> Excel
-              </Button>
-              <Button variant="outline" onClick={exportPDF} className="gap-2">
-                <FileText className="size-4" /> PDF
-              </Button>
-            </div>
-
             {/* Novo */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
-                  <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+                <Button size="sm" className="gap-2" onClick={openCreate}>
+                  <Plus className="size-4" />
                   <span className="whitespace-nowrap">Novo</span>
                 </Button>
               </DialogTrigger>
@@ -749,11 +709,10 @@ const Materials = () => {
                           <ImagePreview src={form.sampleUrl} alt="Amostra" size={96} />
                           <button
                             type="button"
-                            onClick={() => setForm((f) => ({ ...f, sampleUrl: null }))}
-                            className="bg-white border rounded-full p-1 shadow"
-                            title="Remover"
+                            onClick={() => setForm(prev => ({ ...prev, sampleUrl: "" }))}
+                            className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
                           >
-                            <X className="size-4 text-red-600" />
+                            <X className="size-3" />
                           </button>
                         </div>
                       )}
@@ -763,7 +722,7 @@ const Materials = () => {
                     <div className="space-y-2">
                       <Label>Protocolo</Label>
                       <div className="flex items-center gap-3">
-                        <Input type="file" accept="image/*" onChange={onProtocolChange} />
+                        <Input type="file" accept="image/*,application/pdf" onChange={onProtocolChange} />
                         <Button type="button" variant="outline" disabled className="gap-2">
                           <UploadCloud className="size-4" />
                           {uploadingProtocol ? "Enviando..." : "Upload"}
@@ -774,21 +733,20 @@ const Materials = () => {
                           <ImagePreview src={form.protocolUrl} alt="Protocolo" size={96} />
                           <button
                             type="button"
-                            onClick={() => setForm((f) => ({ ...f, protocolUrl: null }))}
-                            className="bg-white border rounded-full p-1 shadow"
-                            title="Remover"
+                            onClick={() => setForm(prev => ({ ...prev, protocolUrl: "" }))}
+                            className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
                           >
-                            <X className="size-4 text-red-600" />
+                            <X className="size-3" />
                           </button>
                         </div>
                       )}
                     </div>
 
                     <div className="flex justify-end gap-2 pt-2">
-                      <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
                         Cancelar
                       </Button>
-                      <Button type="submit" disabled={saving || uploadingSample || uploadingProtocol}>
+                      <Button type="submit" size="sm" disabled={saving}>
                         {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
                       </Button>
                     </div>
@@ -798,72 +756,51 @@ const Materials = () => {
             </Dialog>
           </div>
 
-          {/* Tabela — TÍTULOS e DADOS centralizados */}
-          <div className="overflow-x-auto">
+          {/* Tabela */}
+          <div className="overflow-x-auto rounded-xl border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-center">Data</TableHead>
                   <TableHead className="text-center">Cliente</TableHead>
                   <TableHead className="text-center">Responsável</TableHead>
-                  <TableHead className="text-center">Qtd</TableHead>
+                  <TableHead className="text-center">Quantidade</TableHead>
                   <TableHead className="text-center">Observações</TableHead>
                   <TableHead className="text-center">Amostra</TableHead>
                   <TableHead className="text-center">Protocolo</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
-
               <TableBody>
                 {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-6">Carregando…</TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center py-6">Carregando…</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-6">Nenhum registro</TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center py-6">Nenhum registro</TableCell></TableRow>
                 ) : (
                   filtered.map((m) => {
                     const id = m.id ?? m._id ?? m.uuid;
                     const ymd = m._ymd ?? toYMDInCuiaba(m.date);
                     return (
-                      <TableRow key={id || `${m.client_name}-${ymd}`}>
-                        <TableCell className="text-center">{ymdToBR(ymd)}</TableCell>
-                        <TableCell className="text-center">{(m.client_name ?? m.clientName) || "—"}</TableCell>
-                        <TableCell className="text-center">{m.responsible || "—"}</TableCell>
+                      <TableRow key={id || `${m.client_name}-${m.date}-${m.quantity}`}>
+                        <TableCell className="text-center font-medium">{ymdToBR(ymd)}</TableCell>
+                        <TableCell className="text-center">{m.client_name ?? m.clientName ?? "—"}</TableCell>
+                        <TableCell className="text-center">{m.responsible ?? "—"}</TableCell>
                         <TableCell className="text-center">{m.quantity ?? "—"}</TableCell>
-
-                        <TableCell className="text-center" title={m.notes || ""}>
-                          {m.notes ? (
-                            <span className="line-clamp-2 max-w-[320px] mx-auto block">{m.notes}</span>
-                          ) : "—"}
-                        </TableCell>
-
+                        <TableCell className="text-center max-w-[200px] truncate">{m.notes ?? "—"}</TableCell>
                         <TableCell className="text-center">
-                          {m.material_sample_url ? (
-                            <div className="flex justify-center">
-                              <ImagePreview
-                                src={m.material_sample_url}
-                                alt={`Amostra - ${m.client_name || ""}`}
-                                size={48}
-                              />
-                            </div>
-                          ) : "—"}
+                          {(m.material_sample_url || m.sampleUrl) ? (
+                            <ImagePreview src={m.material_sample_url || m.sampleUrl} alt="Amostra" size={32} />
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
-
                         <TableCell className="text-center">
-                          {m.protocol_url ? (
-                            <div className="flex justify-center">
-                              <ImagePreview
-                                src={m.protocol_url}
-                                alt={`Protocolo - ${m.client_name || ""}`}
-                                size={48}
-                              />
-                            </div>
-                          ) : "—"}
+                          {(m.protocol_url || m.protocolUrl) ? (
+                            <ImagePreview src={m.protocol_url || m.protocolUrl} alt="Protocolo" size={32} />
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
-
                         <TableCell className="text-center">
                           <div className="flex justify-center gap-2">
                             <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(m)}>
@@ -884,6 +821,7 @@ const Materials = () => {
         </CardContent>
       </Card>
 
+      {/* Dialog de exclusão */}
       <Dialog open={openDelete} onOpenChange={setOpenDelete}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -891,8 +829,8 @@ const Materials = () => {
             <DialogDescription>Esta ação não pode ser desfeita.</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpenDelete(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={onDelete} disabled={deleting}>
+            <Button variant="outline" size="sm" onClick={() => setOpenDelete(false)}>Cancelar</Button>
+            <Button variant="destructive" size="sm" onClick={onDelete} disabled={deleting}>
               {deleting ? "Excluindo..." : "Excluir"}
             </Button>
           </div>
@@ -903,3 +841,4 @@ const Materials = () => {
 };
 
 export default Materials;
+

@@ -25,8 +25,15 @@ def login():
         if not user:
             return jsonify({'message': 'Credenciais inválidas'}), 401
         
-        # Criar token JWT
-        access_token = create_access_token(identity=user['id'])
+        # Criar token JWT com role no payload
+        additional_claims = {
+            'role': user['role'],
+            'username': user['username']
+        }
+        access_token = create_access_token(
+            identity=user['id'], 
+            additional_claims=additional_claims
+        )
         
         return jsonify({
             'access_token': access_token,

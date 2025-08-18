@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from flask import Blueprint, request, jsonify, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from src.middleware.auth_middleware import roles_allowed
 
 log = logging.getLogger(__name__)
 finance_bp = Blueprint("finance", __name__)
@@ -310,7 +311,7 @@ def _preflight_transactions():
 # LISTAR (?type, ?action_id, ?month=YYYY-MM)
 @finance_bp.route("/finance/transactions", methods=["GET"])
 @finance_bp.route("/transactions", methods=["GET"])
-@jwt_required(optional=True)
+@roles_allowed('admin')
 def list_transactions():
     try:
         ttype = (request.args.get("type") or "").strip().lower()
@@ -327,7 +328,7 @@ def list_transactions():
 # CRIAR
 @finance_bp.route("/finance/transactions", methods=["POST"])
 @finance_bp.route("/transactions", methods=["POST"])
-@jwt_required()
+@roles_allowed('admin')
 def create_transaction():
     try:
         data = request.get_json(silent=True) or {}
@@ -362,7 +363,7 @@ def create_transaction():
 # ATUALIZAR
 @finance_bp.route("/finance/transactions/<txid>", methods=["PUT", "PATCH"])
 @finance_bp.route("/transactions/<txid>", methods=["PUT", "PATCH"])
-@jwt_required()
+@roles_allowed('admin')
 def update_transaction(txid):
     try:
         data = request.get_json(silent=True) or {}
@@ -396,7 +397,7 @@ def update_transaction(txid):
 # DELETAR
 @finance_bp.route("/finance/transactions/<txid>", methods=["DELETE"])
 @finance_bp.route("/transactions/<txid>", methods=["DELETE"])
-@jwt_required()
+@roles_allowed('admin')
 def delete_transaction(txid):
     try:
         ok = _fs_delete(txid)

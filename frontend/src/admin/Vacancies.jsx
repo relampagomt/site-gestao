@@ -1,4 +1,3 @@
-// frontend/src/admin/Vacancies.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
@@ -28,14 +27,12 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  // Ícones de exportação
-  FileDown,
-  FileSpreadsheet,
-  FileJson,
-  ClipboardCopy,
-  FileText,
+  Search,
 } from "lucide-react";
 import api from "@/services/api";
+
+// Import the new ExportMenu component
+import ExportMenu from "@/components/export/ExportMenu";
 
 /* ===================== Helpers ===================== */
 const emptyForm = {
@@ -48,152 +45,101 @@ const emptyForm = {
   job_type: "CLT",
   status: "Aberta",
   salary: "",
-  photos: [], // array de URLs de imagens
+  photos: [],
 };
 
-const BRL = (n) =>
-  n === null || n === undefined || n === ""
-    ? "—"
-    : Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const BRL = (value) => {
+  const num = Number(value || 0);
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(num);
+};
 
-// checagem simples por extensão
-const isImageUrl = (url) => /\.(png|jpe?g)(\?|#|$)/i.test(String(url || ""));
-
-// normaliza para um array de fotos a partir do item vindo da API
-function getPhotosFromItem(v) {
-  const a =
-    v?.photos ||
-    v?.images ||
-    v?.photos_urls ||
-    v?.images_urls ||
-    v?.pictures ||
-    null;
-
-  if (Array.isArray(a) && a.length) {
-    return a.filter(Boolean).filter(isImageUrl);
-  }
-
-  if (isImageUrl(v?.documents_url || v?.document_url || v?.documentsUrl)) {
-    return [v.documents_url || v.document_url || v.documentsUrl].filter(Boolean);
-  }
-
-  return [];
-}
-
-export default function Vacancies() {
-  const [items, setItems] = useState([]);
+const Vacancies = () => {
+  const [vacancies, setVacancies] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // modal create/edit
+  // Modal states
   const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
-  const [search, setSearch] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
-  // filtros
+  // Preview modal
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewList, setPreviewList] = useState([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
+
+  // Filters
+  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [departmentFilter, setDepartmentFilter] = useState("todos");
   const [jobTypeFilter, setJobTypeFilter] = useState("todos");
 
-  // upload
-  const [uploading, setUploading] = useState(false);
-
-  // preview
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewList, setPreviewList] = useState([]); // array de URLs
-  const [previewIndex, setPreviewIndex] = useState(0);
-
-  useEffect(() => {
-    load();
-  }, []);
-
+  // Load data
   async function load() {
+    setLoading(true);
     try {
-      setLoading(true);
       const { data } = await api.get("/job-vacancies");
-      const arr = Array.isArray(data) ? data : [];
-      setItems(
-        arr.map((v) => ({
-          ...v,
-          _photos: getPhotosFromItem(v),
-        }))
-      );
+      const list = Array.isArray(data) ? data : [];
+      // Normalize photos field
+      const normalized = list.map((v) => ({
+        ...v,
+        _photos: Array.isArray(v.photos) ? v.photos : [],
+      }));
+      setVacancies(normalized);
     } catch (e) {
       console.error("Erro ao carregar vagas:", e);
-      setItems([]);
+      setVacancies([]);
     } finally {
       setLoading(false);
     }
   }
 
-  const filtered = useMemo(() => {
-    let result = items;
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter((v) =>
-        [
-          v?.name,
-          v?.phone,
-          v?.address,
-          v?.department,
-          v?.job_type,
-          v?.status,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(q)
-      );
-    }
-    if (statusFilter !== "todos") result = result.filter((v) => v.status === statusFilter);
-    if (departmentFilter !== "todos") result = result.filter((v) => v.department === departmentFilter);
-    if (jobTypeFilter !== "todos") result = result.filter((v) => v.job_type === jobTypeFilter);
-    return result;
-  }, [items, search, statusFilter, departmentFilter, jobTypeFilter]);
+  useEffect(() => {
+    load();
+  }, []);
 
-  const total = items.length;
-  const openCount = items.filter((v) => (v?.status || "").toLowerCase() === "aberta").length;
-  const processCount = items.filter((v) => (v?.status || "").toLowerCase() === "em processo").length;
-  const closedCount = items.filter((v) => (v?.status || "").toLowerCase() === "fechada").length;
-
+  // Form handlers
   function openCreate() {
-    setEditingId(null);
     setForm(emptyForm);
+    setEditingId(null);
     setOpen(true);
   }
 
-  function openEdit(v) {
-    setEditingId(v.id);
+  function openEdit(item) {
     setForm({
-      name: v.name || "",
-      phone: v.phone || "",
-      address: v.address || "",
-      age: v.age?.toString?.() || "",
-      sex: v.sex || "Outro",
-      department: v.department || "Operacional",
-      job_type: v.job_type || "CLT",
-      status: v.status || "Aberta",
-      salary: v.salary?.toString?.() || "",
-      photos: getPhotosFromItem(v),
+      name: item.name || "",
+      phone: item.phone || "",
+      address: item.address || "",
+      age: item.age ?? "",
+      sex: item.sex || "Outro",
+      department: item.department || "Operacional",
+      job_type: item.job_type || "CLT",
+      status: item.status || "Aberta",
+      salary: item.salary ?? "",
+      photos: Array.isArray(item.photos) ? [...item.photos] : [],
     });
+    setEditingId(item.id);
     setOpen(true);
   }
 
-  async function handleSubmit(e) {
-    e?.preventDefault?.();
-    if (!form.name?.trim()) return alert("Informe o nome.");
-    if (!form.phone?.trim()) return alert("Informe o telefone.");
-    if (uploading) return alert("Aguarde concluir o upload das imagens.");
+  function onChange(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
 
-    const payload = {
-      ...form,
-      age: form.age ? Number(form.age) : null,
-      salary: form.salary ? Number(form.salary) : null,
-      photos: Array.isArray(form.photos) ? form.photos : [],
-      documents_url: Array.isArray(form.photos) && form.photos[0] ? form.photos[0] : "",
-    };
+  async function handleSave(e) {
+    e.preventDefault();
+    if (!form.name.trim()) return alert("Nome é obrigatório.");
 
     try {
+      const payload = {
+        ...form,
+        age: form.age ? Number(form.age) : null,
+        salary: form.salary ? Number(form.salary) : 0,
+      };
+
       if (editingId) {
         await api.put(`/job-vacancies/${editingId}`, payload);
       } else {
@@ -210,7 +156,7 @@ export default function Vacancies() {
   }
 
   async function handleDelete(id) {
-    if (!confirm("Remover esta indicação?")) return;
+    if (!window.confirm("Remover esta indicação?")) return;
     try {
       await api.delete(`/job-vacancies/${id}`);
       await load();
@@ -220,7 +166,7 @@ export default function Vacancies() {
     }
   }
 
-  // upload múltiplo de imagens
+  // Upload multiple images
   async function onImagesChange(e) {
     const files = Array.from(e.target.files || []).filter(Boolean);
     if (!files.length) return;
@@ -264,340 +210,219 @@ export default function Vacancies() {
     setPreviewIndex(idx);
     setPreviewOpen(true);
   }
+
   function prevImage() {
     setPreviewIndex((i) => (i - 1 + previewList.length) % previewList.length);
   }
+
   function nextImage() {
     setPreviewIndex((i) => (i + 1) % previewList.length);
   }
 
-  /* ===================== EXPORTS ===================== */
-  const headers = [
-    "Nome",
-    "Telefone",
-    "Endereço",
-    "Idade",
-    "Sexo",
-    "Departamento",
-    "Tipo (Cargo)",
-    "Salário",
-    "Status",
-    "Fotos (URLs)"
+  // Filtered data
+  const filtered = useMemo(() => {
+    let list = [...vacancies];
+
+    // Search filter
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((v) =>
+        [v.name, v.phone, v.address, v.department, v.job_type]
+          .filter(Boolean)
+          .some((field) => String(field).toLowerCase().includes(q))
+      );
+    }
+
+    // Status filter
+    if (statusFilter !== "todos") {
+      list = list.filter((v) => v.status === statusFilter);
+    }
+
+    // Department filter
+    if (departmentFilter !== "todos") {
+      list = list.filter((v) => v.department === departmentFilter);
+    }
+
+    // Job type filter
+    if (jobTypeFilter !== "todos") {
+      list = list.filter((v) => v.job_type === jobTypeFilter);
+    }
+
+    return list;
+  }, [vacancies, search, statusFilter, departmentFilter, jobTypeFilter]);
+
+  // Prepare data for export
+  const exportData = useMemo(() => {
+    return filtered.map((v) => {
+      const photos = Array.isArray(v._photos) ? v._photos.join(" | ") : "";
+      return {
+        nome: v.name || "",
+        telefone: v.phone || "",
+        endereco: v.address || "",
+        idade: v.age ?? "",
+        sexo: v.sex || "",
+        departamento: v.department || "",
+        tipo_cargo: v.job_type || "",
+        salario: Number(v.salary || 0),
+        status: v.status || "",
+        fotos_urls: photos,
+      };
+    });
+  }, [filtered]);
+
+  const exportColumns = [
+    { key: 'nome', header: 'Nome' },
+    { key: 'telefone', header: 'Telefone' },
+    { key: 'endereco', header: 'Endereço' },
+    { key: 'idade', header: 'Idade' },
+    { key: 'sexo', header: 'Sexo' },
+    { key: 'departamento', header: 'Departamento' },
+    { key: 'tipo_cargo', header: 'Tipo (Cargo)' },
+    { key: 'salario', header: 'Salário' },
+    { key: 'status', header: 'Status' },
+    { key: 'fotos_urls', header: 'Fotos (URLs)' },
   ];
 
-  const toRow = (v) => {
-    const photos = Array.isArray(v._photos) ? v._photos.join(" | ") : "";
-    return [
-      v.name || "",
-      v.phone || "",
-      v.address || "",
-      v.age ?? "",
-      v.sex || "",
-      v.department || "",
-      v.job_type || "",
-      Number(v.salary || 0), // número cru p/ planilha
-      v.status || "",
-      photos,
-    ];
-  };
-
-  const csvEscape = (val) => {
-    const s = String(val ?? "");
-    return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-
-  const buildCSV = (rows) => {
-    // ; como separador (compat BR) + BOM p/ Excel reconhecer UTF-8
-    const data = [headers, ...rows].map((r) => r.map(csvEscape).join(";")).join("\n");
-    return "\uFEFF" + data;
-  };
-
-  const downloadFile = (name, content, mime) => {
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportCSV = () => {
-    if (!filtered.length) return alert("Não há dados para exportar.");
-    const rows = filtered.map(toRow);
-    const csv = buildCSV(rows);
-    downloadFile("vagas.csv", csv, "text/csv;charset=utf-8;");
-  };
-
-  const handleCopyCSV = async () => {
-    if (!filtered.length) return alert("Não há dados para copiar.");
-    try {
-      const rows = filtered.map(toRow);
-      const csv = buildCSV(rows);
-      await navigator.clipboard.writeText(csv);
-      alert("CSV copiado para a área de transferência.");
-    } catch {
-      alert("Não foi possível copiar. Tente exportar como arquivo CSV.");
+  const pdfOptions = {
+    title: 'Relatório de Vagas',
+    orientation: 'l', // landscape for more columns
+    filtersSummary: `Filtros aplicados: ${
+      [
+        search ? `Busca: "${search}"` : '',
+        statusFilter !== 'todos' ? `Status: ${statusFilter}` : '',
+        departmentFilter !== 'todos' ? `Departamento: ${departmentFilter}` : '',
+        jobTypeFilter !== 'todos' ? `Tipo: ${jobTypeFilter}` : '',
+      ].filter(Boolean).join(' | ') || 'Nenhum filtro aplicado'
+    }`,
+    columnStyles: {
+      0: { cellWidth: 40 }, // Nome
+      1: { cellWidth: 35 }, // Telefone
+      2: { cellWidth: 50 }, // Endereço
+      3: { cellWidth: 20 }, // Idade
+      4: { cellWidth: 25 }, // Sexo
+      5: { cellWidth: 35 }, // Departamento
+      6: { cellWidth: 35 }, // Tipo
+      7: { cellWidth: 30 }, // Salário
+      8: { cellWidth: 30 }, // Status
+      9: { cellWidth: 60 }, // Fotos URLs
     }
   };
 
-  const handleExportJSON = () => {
-    if (!filtered.length) return alert("Não há dados para exportar.");
-    const json = JSON.stringify(filtered, null, 2);
-    downloadFile("vagas.json", json, "application/json;charset=utf-8;");
-  };
-
-  const handleExportPDF = async () => {
-    if (!filtered.length) {
-      alert("Não há dados para exportar.");
-      return;
-    }
-    try {
-      const { jsPDF } = await import("jspdf");
-      const autoTable = (await import("jspdf-autotable")).default;
-
-      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-
-      // Cabeçalho
-      const title = "Relatório de Vagas";
-      const subtitle = new Date().toLocaleString("pt-BR");
-      doc.setFontSize(14);
-      doc.text(title, 40, 32);
-      doc.setFontSize(10);
-      doc.text(`Gerado em: ${subtitle}`, 40, 48);
-
-      const rows = filtered.map((v) => {
-        const r = toRow(v);
-        // Formata salário no PDF como moeda BRL para leitura
-        r[7] = BRL(r[7]);
-        return r;
-      });
-
-      autoTable(doc, {
-        head: [headers],
-        body: rows,
-        startY: 64,
-        styles: { fontSize: 9, cellPadding: 4, overflow: "linebreak", valign: "middle" },
-        headStyles: { fillColor: [239, 68, 68], textColor: [255, 255, 255], halign: "center" },
-        columnStyles: {
-          0: { cellWidth: 120 }, // Nome
-          1: { cellWidth: 100 }, // Telefone
-          2: { cellWidth: 150 }, // Endereço
-          3: { cellWidth: 50 },  // Idade
-          4: { cellWidth: 70 },  // Sexo
-          5: { cellWidth: 110 }, // Departamento
-          6: { cellWidth: 110 }, // Tipo (Cargo)
-          7: { cellWidth: 90 },  // Salário
-          8: { cellWidth: 90 },  // Status
-          9: { cellWidth: 180 }, // Fotos (URLs)
-        },
-        margin: { top: 32, right: 24, bottom: 90, left: 24 },
-        didDrawPage: (data) => {
-          const pageCount = doc.getNumberOfPages();
-          const str = `Página ${data.pageNumber} de ${pageCount}`;
-          doc.setFontSize(9);
-          doc.text(
-            str,
-            doc.internal.pageSize.getWidth() - 24 - doc.getTextWidth(str),
-            doc.internal.pageSize.getHeight() - 14
-          );
-        },
-      });
-
-      // Resumo no rodapé (totais)
-      const pageW = doc.internal.pageSize.getWidth();
-      const pageH = doc.internal.pageSize.getHeight();
-      const blockW = 360;
-      const x = pageW - blockW - 24;
-      const y = pageH - 70;
-
-      doc.setFontSize(10);
-      doc.text("Resumo do conjunto filtrado", x, y);
-      doc.setFontSize(12);
-      doc.text(`Total de vagas: ${total}`, x, y + 18);
-      doc.text(`Abertas: ${openCount}`, x, y + 36);
-      doc.text(`Em Processo: ${processCount}`, x, y + 54);
-      doc.text(`Fechadas: ${closedCount}`, x, y + 72);
-
-      doc.save("vagas.pdf");
-    } catch (err) {
-      console.error("Falha ao exportar PDF:", err);
-      alert("Não foi possível gerar o PDF (verifique jspdf e jspdf-autotable).");
-    }
-  };
-
-  /* ===================== RENDER ===================== */
   return (
-    <div className="admin-page-container admin-space-y-6">
-      <div className="admin-page-header">
-        <h2 className="admin-page-title">Vagas</h2>
+    <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl md:text-2xl font-semibold">Vagas</h1>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <Card className="md:p-0">
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-xs font-medium">Total de Vagas</CardTitle>
-            <CardDescription className="text-[11px]">Registros cadastrados</CardDescription>
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            <div className="text-xl font-semibold leading-tight">{loading ? "—" : total}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="md:p-0">
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-xs font-medium">Vagas Abertas</CardTitle>
-            <CardDescription className="text-[11px]">Disponíveis</CardDescription>
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            <div className="text-xl font-semibold leading-tight">{loading ? "—" : openCount}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="md:p-0">
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-xs font-medium">Em Processo</CardTitle>
-            <CardDescription className="text-[11px]">Triagem/Contato</CardDescription>
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            <div className="text-xl font-semibold leading-tight">
-              {loading ? "—" : processCount}
+      {/* Filters Card */}
+      <Card className="mb-4">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg md:text-xl font-semibold">Filtros e Ações</CardTitle>
+              <CardDescription>Filtre e exporte os dados das vagas</CardDescription>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="md:p-0">
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-xs font-medium">Fechadas</CardTitle>
-            <CardDescription className="text-[11px]">Encerradas</CardDescription>
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            <div className="text-xl font-semibold leading-tight">
-              {loading ? "—" : closedCount}
+            <div className="ml-auto">
+              <ExportMenu
+                data={exportData}
+                columns={exportColumns}
+                filename="vagas"
+                pdfOptions={pdfOptions}
+              />
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Busca / Filtros / Ações */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            <div className="w-full">
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
+            {/* Search */}
+            <div className="relative flex-1 w-full md:w-[320px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome, telefone, endereço, etc…"
+                className="pl-9"
+                placeholder="Buscar vagas..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
-              {/* Status */}
-              <div className="min-w-0">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Filtrar por status" className="truncate" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os status</SelectItem>
-                    <SelectItem value="Aberta">Aberta</SelectItem>
-                    <SelectItem value="Em Processo">Em Processo</SelectItem>
-                    <SelectItem value="Fechada">Fechada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Departamentos */}
-              <div className="min-w-0">
-                <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Filtrar por departamento" className="truncate" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os departamentos</SelectItem>
-                    <SelectItem value="Comercial">Comercial</SelectItem>
-                    <SelectItem value="Operacional">Operacional</SelectItem>
-                    <SelectItem value="Administrativo">Administrativo</SelectItem>
-                    <SelectItem value="Técnico">Técnico</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Tipos */}
-              <div className="min-w-0">
-                <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Filtrar por tipo" className="truncate" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os tipos</SelectItem>
-                    <SelectItem value="CLT">CLT</SelectItem>
-                    <SelectItem value="PJ">PJ</SelectItem>
-                    <SelectItem value="Freelancer">Freelancer</SelectItem>
-                    <SelectItem value="Estágio">Estágio</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Limpar filtros */}
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSearch("");
-                  setStatusFilter("todos");
-                  setDepartmentFilter("todos");
-                  setJobTypeFilter("todos");
-                }}
-              >
-                Limpar Filtros
-              </Button>
-
-              {/* Exportar */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <FileDown className="size-4" />
-                    Exportar
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" side="bottom" sideOffset={8} className="w-56 p-2">
-                  <div className="flex flex-col gap-1">
-                    <Button variant="ghost" className="justify-start gap-2" onClick={handleExportCSV}>
-                      <FileSpreadsheet className="size-4" /> Exportar CSV (planilha)
-                    </Button>
-                    <Button variant="ghost" className="justify-start gap-2" onClick={handleCopyCSV}>
-                      <ClipboardCopy className="size-4" /> Copiar CSV
-                    </Button>
-                    <Button variant="ghost" className="justify-start gap-2" onClick={handleExportJSON}>
-                      <FileJson className="size-4" /> Exportar JSON
-                    </Button>
-                    <Button variant="ghost" className="justify-start gap-2" onClick={handleExportPDF}>
-                      <FileText className="size-4" /> Exportar PDF
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              {/* Nova indicação */}
-              <Button onClick={openCreate} className="admin-btn-primary">
-                <Plus className="mr-2 h-4 w-4" /> Nova Indicação
-              </Button>
+            {/* Status Filter */}
+            <div className="w-full sm:w-auto">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-56 md:w-64 max-w-full">
+                  <SelectValue placeholder="Filtrar por status" className="truncate" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="Aberta">Aberta</SelectItem>
+                  <SelectItem value="Em Processo">Em Processo</SelectItem>
+                  <SelectItem value="Fechada">Fechada</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Department Filter */}
+            <div className="w-full sm:w-auto">
+              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                <SelectTrigger className="w-56 md:w-64 max-w-full">
+                  <SelectValue placeholder="Filtrar por departamento" className="truncate" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os departamentos</SelectItem>
+                  <SelectItem value="Comercial">Comercial</SelectItem>
+                  <SelectItem value="Operacional">Operacional</SelectItem>
+                  <SelectItem value="Administrativo">Administrativo</SelectItem>
+                  <SelectItem value="Técnico">Técnico</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Job Type Filter */}
+            <div className="w-full sm:w-auto">
+              <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
+                <SelectTrigger className="w-56 md:w-64 max-w-full">
+                  <SelectValue placeholder="Filtrar por tipo" className="truncate" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os tipos</SelectItem>
+                  <SelectItem value="CLT">CLT</SelectItem>
+                  <SelectItem value="PJ">PJ</SelectItem>
+                  <SelectItem value="Freelancer">Freelancer</SelectItem>
+                  <SelectItem value="Estágio">Estágio</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Clear Filters */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearch("");
+                setStatusFilter("todos");
+                setDepartmentFilter("todos");
+                setJobTypeFilter("todos");
+              }}
+            >
+              Limpar Filtros
+            </Button>
+
+            {/* Create Button */}
+            <Button size="sm" className="gap-2" onClick={openCreate}>
+              <Plus className="size-4" />
+              Nova Indicação
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Tabela */}
+      {/* Table Card */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Lista de Vagas</CardTitle>
+          <CardTitle className="text-lg md:text-xl font-semibold">Lista de Vagas</CardTitle>
           <CardDescription>Gerencie as indicações de candidatos</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl border bg-card">
             <table className="min-w-full table-auto text-sm">
               <thead className="text-muted-foreground">
                 <tr className="border-b">
@@ -615,343 +440,329 @@ export default function Vacancies() {
                 </tr>
               </thead>
               <tbody>
-                {!loading && filtered.length === 0 && (
+                {loading ? (
+                  <tr>
+                    <td colSpan={11} className="py-6 text-center text-muted-foreground">
+                      Carregando...
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={11} className="py-6 text-center text-muted-foreground">
                       Nenhum registro encontrado.
                     </td>
                   </tr>
-                )}
-                {filtered.map((v) => {
-                  const photos = Array.isArray(v._photos) ? v._photos : [];
-                  return (
-                    <tr key={v.id} className="border-b last:border-0">
-                      <td className="py-3 px-3 text-center">{v.name}</td>
-                      <td className="py-3 px-3 text-center">{v.phone}</td>
-                      <td className="py-3 px-3 text-center">{v.address}</td>
-                      <td className="py-3 px-3 text-center">{v.age ?? "—"}</td>
-                      <td className="py-3 px-3 text-center">{v.sex}</td>
-                      <td className="py-3 px-3 text-center">
-                        <Badge variant="secondary">{v.department}</Badge>
-                      </td>
-                      <td className="py-3 px-3 text-center">{v.job_type}</td>
-                      <td className="py-3 px-3 text-center">{BRL(v.salary)}</td>
+                ) : (
+                  filtered.map((v) => {
+                    const photos = Array.isArray(v._photos) ? v._photos : [];
+                    return (
+                      <tr key={v.id} className="border-b last:border-0">
+                        <td className="py-3 px-3 text-center font-medium">{v.name}</td>
+                        <td className="py-3 px-3 text-center">{v.phone}</td>
+                        <td className="py-3 px-3 text-center">{v.address}</td>
+                        <td className="py-3 px-3 text-center">{v.age ?? "—"}</td>
+                        <td className="py-3 px-3 text-center">{v.sex}</td>
+                        <td className="py-3 px-3 text-center">
+                          <Badge variant="secondary">{v.department}</Badge>
+                        </td>
+                        <td className="py-3 px-3 text-center">{v.job_type}</td>
+                        <td className="py-3 px-3 text-center">{BRL(v.salary)}</td>
 
-                      {/* Fotos */}
-                      <td className="py-3 px-3 text-center">
-                        {photos.length > 0 ? (
-                          <div className="inline-flex items-center gap-1">
-                            {photos.slice(0, 3).map((src, idx) => (
-                              <button
-                                key={src}
-                                type="button"
-                                onClick={() => openPreview(photos, idx)}
-                                title="Ver imagem"
-                                className="w-10 h-10 rounded-md overflow-hidden border"
-                              >
-                                <img
-                                  src={src}
-                                  alt="foto"
-                                  className="w-full h-full object-cover"
-                                  loading="lazy"
-                                />
-                              </button>
-                            ))}
-                            {photos.length > 3 && (
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer"
-                                onClick={() => openPreview(photos, 3)}
-                              >
-                                +{photos.length - 3}
-                              </Badge>
-                            )}
+                        {/* Photos */}
+                        <td className="py-3 px-3 text-center">
+                          {photos.length > 0 ? (
+                            <div className="inline-flex items-center gap-1">
+                              {photos.slice(0, 3).map((src, idx) => (
+                                <button
+                                  key={src}
+                                  type="button"
+                                  onClick={() => openPreview(photos, idx)}
+                                  title="Ver imagem"
+                                  className="w-10 h-10 rounded-md overflow-hidden border"
+                                >
+                                  <img
+                                    src={src}
+                                    alt="foto"
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                  />
+                                </button>
+                              ))}
+                              {photos.length > 3 && (
+                                <Badge
+                                  variant="outline"
+                                  className="cursor-pointer"
+                                  onClick={() => openPreview(photos, 3)}
+                                >
+                                  +{photos.length - 3}
+                                </Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-3 text-center">
+                          <Badge
+                            className={
+                              (v.status || "").toLowerCase() === "aberta"
+                                ? "bg-emerald-600"
+                                : (v.status || "").toLowerCase() === "fechada"
+                                ? "bg-zinc-600"
+                                : "bg-amber-600"
+                            }
+                          >
+                            {v.status || "—"}
+                          </Badge>
+                        </td>
+
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <div className="flex justify-center gap-2">
+                            <Button variant="outline" size="sm" className="gap-2" onClick={() => openEdit(v)}>
+                              <Pencil className="size-4" />
+                              Editar
+                            </Button>
+                            <Button variant="destructive" size="sm" className="gap-2" onClick={() => handleDelete(v.id)}>
+                              <Trash2 className="size-4" />
+                              Excluir
+                            </Button>
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </td>
-
-                      <td className="py-3 px-3 text-center">
-                        <Badge
-                          className={
-                            (v.status || "").toLowerCase() === "aberta"
-                              ? "bg-emerald-600"
-                              : (v.status || "").toLowerCase() === "fechada"
-                              ? "bg-zinc-600"
-                              : "bg-amber-600"
-                          }
-                        >
-                          {v.status || "—"}
-                        </Badge>
-                      </td>
-
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <Button variant="outline" size="icon" className="mr-2" onClick={() => openEdit(v)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="destructive" size="icon" onClick={() => handleDelete(v.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            Total: <strong>{filtered.length}</strong> vaga(s)
+          </p>
         </CardContent>
       </Card>
 
-      {/* Modal Create/Edit */}
+      {/* Create/Edit Modal */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[720px] p-0">
-          <div className="max-h-[80vh] overflow-y-auto p-6">
-            <DialogHeader className="pb-2">
-              <DialogTitle>{editingId ? "Editar Indicação" : "Nova Indicação"}</DialogTitle>
-              <DialogDescription>Preencha os dados do candidato à vaga.</DialogDescription>
-            </DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Editar Vaga" : "Nova Indicação"}</DialogTitle>
+            <DialogDescription>
+              {editingId ? "Atualize as informações da vaga." : "Preencha os dados para criar uma nova indicação."}
+            </DialogDescription>
+          </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nome</Label>
+          <form onSubmit={handleSave} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="name">Nome *</Label>
                 <Input
-                  placeholder="Nome completo"
+                  id="name"
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(e) => onChange("name", e.target.value)}
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Telefone</Label>
-                  <Input
-                    placeholder="(99) 9 9999-9999"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Idade</Label>
-                  <Input
-                    type="number"
-                    min={14}
-                    placeholder="Ex.: 22"
-                    value={form.age}
-                    onChange={(e) => setForm({ ...form, age: e.target.value })}
-                  />
-                </div>
+              <div>
+                <Label htmlFor="phone">Telefone</Label>
+                <Input
+                  id="phone"
+                  value={form.phone}
+                  onChange={(e) => onChange("phone", e.target.value)}
+                />
               </div>
 
-              <div className="space-y-2">
-                <Label>Endereço Residencial</Label>
+              <div className="md:col-span-2">
+                <Label htmlFor="address">Endereço</Label>
                 <Input
-                  placeholder="Rua / Bairro / Cidade"
+                  id="address"
                   value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  onChange={(e) => onChange("address", e.target.value)}
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Sexo</Label>
-                  <Select
-                    value={form.sex}
-                    onValueChange={(v) => setForm({ ...form, sex: v })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Masculino">Masculino</SelectItem>
-                      <SelectItem value="Feminino">Feminino</SelectItem>
-                      <SelectItem value="Outro">Outro</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Departamento</Label>
-                  <Select
-                    value={form.department}
-                    onValueChange={(v) => setForm({ ...form, department: v })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Operacional">Operacional</SelectItem>
-                      <SelectItem value="Comercial">Comercial</SelectItem>
-                      <SelectItem value="Administrativo">Administrativo</SelectItem>
-                      <SelectItem value="Prestação de Serviços">Prestação de Serviços</SelectItem>
-                      <SelectItem value="Outros">Outros</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Tipo (Cargo)</Label>
-                  <Select
-                    value={form.job_type}
-                    onValueChange={(v) => setForm({ ...form, job_type: v })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CLT">CLT</SelectItem>
-                      <SelectItem value="PJ">PJ</SelectItem>
-                      <SelectItem value="Freelancer">Freelancer</SelectItem>
-                      <SelectItem value="Diarista">Diarista</SelectItem>
-                      <SelectItem value="Estágio">Estágio</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select
-                    value={form.status}
-                    onValueChange={(v) => setForm({ ...form, status: v })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Aberta">Aberta</SelectItem>
-                      <SelectItem value="Em Processo">Em Processo</SelectItem>
-                      <SelectItem value="Fechada">Fechada</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label>
-                  Salário{" "}
-                  <span className="text-muted-foreground text-xs">
-                    (Obs.: Freelancer/Diarista = valor por diária)
-                  </span>
-                </Label>
+              <div>
+                <Label htmlFor="age">Idade</Label>
                 <Input
+                  id="age"
                   type="number"
-                  min={0}
-                  placeholder="Ex.: 2200"
-                  value={form.salary}
-                  onChange={(e) => setForm({ ...form, salary: e.target.value })}
+                  min="0"
+                  max="120"
+                  value={form.age}
+                  onChange={(e) => onChange("age", e.target.value)}
                 />
               </div>
 
-              {/* Upload de imagens (múltiplas) */}
-              <div className="space-y-2">
-                <Label>Fotos do candidato (PNG/JPG)</Label>
-                <div className="flex items-center gap-3">
+              <div>
+                <Label htmlFor="sex">Sexo</Label>
+                <Select value={form.sex} onValueChange={(value) => onChange("sex", value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Masculino">Masculino</SelectItem>
+                    <SelectItem value="Feminino">Feminino</SelectItem>
+                    <SelectItem value="Outro">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="department">Departamento</Label>
+                <Select value={form.department} onValueChange={(value) => onChange("department", value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Comercial">Comercial</SelectItem>
+                    <SelectItem value="Operacional">Operacional</SelectItem>
+                    <SelectItem value="Administrativo">Administrativo</SelectItem>
+                    <SelectItem value="Técnico">Técnico</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="job_type">Tipo (Cargo)</Label>
+                <Select value={form.job_type} onValueChange={(value) => onChange("job_type", value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CLT">CLT</SelectItem>
+                    <SelectItem value="PJ">PJ</SelectItem>
+                    <SelectItem value="Freelancer">Freelancer</SelectItem>
+                    <SelectItem value="Estágio">Estágio</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="salary">Salário (R$)</Label>
+                <Input
+                  id="salary"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.salary}
+                  onChange={(e) => onChange("salary", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="status">Status</Label>
+                <Select value={form.status} onValueChange={(value) => onChange("status", value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Aberta">Aberta</SelectItem>
+                    <SelectItem value="Em Processo">Em Processo</SelectItem>
+                    <SelectItem value="Fechada">Fechada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Photos Upload */}
+              <div className="md:col-span-2">
+                <Label>Fotos</Label>
+                <div className="flex items-center gap-3 mt-2">
                   <Input
                     type="file"
-                    accept="image/png,image/jpeg"
+                    accept="image/*"
                     multiple
                     onChange={onImagesChange}
+                    disabled={uploading}
                   />
                   <Button type="button" variant="outline" disabled className="gap-2">
-                    <UploadCloud className="h-4 w-4" />
+                    <UploadCloud className="size-4" />
                     {uploading ? "Enviando..." : "Upload"}
                   </Button>
                 </div>
 
-                {Array.isArray(form.photos) && form.photos.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {form.photos.map((src, idx) => (
-                      <div key={src} className="relative inline-block">
+                {/* Photo Preview */}
+                {form.photos && form.photos.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {form.photos.map((url, idx) => (
+                      <div key={idx} className="relative">
+                        <img
+                          src={url}
+                          alt={`Foto ${idx + 1}`}
+                          className="w-20 h-20 object-cover rounded border"
+                        />
                         <button
                           type="button"
-                          className="w-16 h-16 rounded-md overflow-hidden border"
-                          title="Ver imagem"
-                          onClick={() => openPreview(form.photos, idx)}
-                        >
-                          <img src={src} alt={`foto-${idx + 1}`} className="w-full h-full object-cover" />
-                        </button>
-                        <button
-                          type="button"
-                          title="Remover"
                           onClick={() => removePhotoAt(idx)}
-                          className="absolute -top-2 -right-2 bg-white border rounded-full p-1 shadow"
+                          className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
                         >
-                          <X className="h-3.5 w-3.5 text-red-600" />
+                          <X className="size-3" />
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+            </div>
 
-              <div className="flex justify-end gap-3 pt-2">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={uploading}>
-                  {editingId ? "Salvar" : "Criar"}
-                </Button>
-              </div>
-            </form>
-          </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" size="sm">
+                {editingId ? "Atualizar" : "Salvar"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 
-      {/* Modal de visualização de imagens */}
+      {/* Image Preview Modal */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>Fotos do candidato</DialogTitle>
-            <DialogDescription>Visualização das imagens anexadas.</DialogDescription>
+            <DialogTitle>Visualizar Fotos</DialogTitle>
           </DialogHeader>
-
-          {previewList.length > 0 ? (
-            <div className="space-y-3">
-              <div className="relative border rounded-md overflow-hidden">
-                <img
-                  src={previewList[previewIndex]}
-                  alt="visualização"
-                  className="w-full h-auto object-contain max-h-[60vh]"
-                />
-                {previewList.length > 1 && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={prevImage}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 rounded-full p-2 border shadow"
-                      title="Anterior"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={nextImage}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 rounded-full p-2 border shadow"
-                      title="Próxima"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                  </>
-                )}
-              </div>
-
+          
+          {previewList.length > 0 && (
+            <div className="relative">
+              <img
+                src={previewList[previewIndex]}
+                alt={`Foto ${previewIndex + 1}`}
+                className="w-full max-h-[70vh] object-contain rounded"
+              />
+              
               {previewList.length > 1 && (
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {previewList.map((src, i) => (
-                    <button
-                      key={src}
-                      type="button"
-                      onClick={() => setPreviewIndex(i)}
-                      className={`w-14 h-14 rounded-md overflow-hidden border ${i === previewIndex ? "ring-2 ring-blue-500" : ""}`}
-                      title={`Imagem ${i + 1}`}
-                    >
-                      <img src={src} alt={`thumb-${i + 1}`} className="w-full h-full object-cover" />
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="absolute left-2 top-1/2 -translate-y-1/2"
+                    onClick={prevImage}
+                  >
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="absolute right-2 top-1/2 -translate-y-1/2"
+                    onClick={nextImage}
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
+                  
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/50 text-white px-2 py-1 rounded text-sm">
+                    {previewIndex + 1} / {previewList.length}
+                  </div>
+                </>
               )}
             </div>
-          ) : (
-            <div className="text-sm text-muted-foreground">Sem imagem para exibir.</div>
           )}
         </DialogContent>
       </Dialog>
     </div>
   );
-}
+};
+
+export default Vacancies;
+

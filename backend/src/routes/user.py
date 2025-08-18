@@ -1,11 +1,11 @@
 from flask import Blueprint, request, jsonify
 from src.services.user_service import create_user, get_user_by_id, find_user_by_username, update_user, delete_user, get_all_users
-from src.middleware.auth_middleware import require_admin
+from src.middleware.auth_middleware import require_admin, roles_allowed
 
 user_bp = Blueprint('user_bp', __name__)
 
 @user_bp.route('/users', methods=['POST'])
-@require_admin()
+@roles_allowed('admin')
 def add_user():
     data = request.get_json()
     if not data or not data.get('username') or not data.get('password'):
@@ -19,13 +19,13 @@ def add_user():
         return jsonify({'message': f'Erro ao criar usuário: {str(e)}'}), 500
 
 @user_bp.route('/users', methods=['GET'])
-@require_admin()
+@roles_allowed('admin')
 def list_users():
     users = get_all_users()
     return jsonify(users), 200
 
 @user_bp.route('/users/<user_id>', methods=['GET'])
-@require_admin()
+@roles_allowed('admin')
 def get_single_user(user_id):
     user = get_user_by_id(user_id)
     if user:
@@ -33,7 +33,7 @@ def get_single_user(user_id):
     return jsonify({'message': 'Usuário não encontrado'}), 404
 
 @user_bp.route('/users/<user_id>', methods=['PUT'])
-@require_admin()
+@roles_allowed('admin')
 def update_single_user(user_id):
     data = request.get_json()
     if not data:
@@ -46,7 +46,7 @@ def update_single_user(user_id):
         return jsonify({'message': f'Erro ao atualizar usuário: {str(e)}'}), 500
 
 @user_bp.route('/users/<user_id>', methods=['DELETE'])
-@require_admin()
+@roles_allowed('admin')
 def delete_single_user(user_id):
     try:
         if delete_user(user_id):

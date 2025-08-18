@@ -1,4 +1,3 @@
-// frontend/src/admin/Users.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '@/services/api';
@@ -23,8 +22,11 @@ import {
   Lock,
   CheckCircle,
   XCircle,
-  UserCog, // 👈 novo ícone para diferenciar "Usuários"
+  UserCog,
 } from 'lucide-react';
+
+// Import the new ExportMenu component
+import ExportMenu from '@/components/export/ExportMenu';
 
 // --- Mock (somente em DEV) ---------------------------------------------------
 const mockUsers = [
@@ -48,53 +50,35 @@ const initialForm = {
   active: true,
 };
 
-function formatDate(iso) {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString();
-  } catch {
-    return '-';
-  }
-}
-
-// --- Componente ---------------------------------------------------------------
 const Users = () => {
-  const { user } = useAuth(); // { role, ... }
-  const [loading, setLoading] = useState(false);
-  const [users, setUsers] = useState([]);
+  const { user } = useAuth();
+  const canAdmin = user?.role === 'admin';
 
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
 
-  // Create
+  // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [form, setForm] = useState({ ...initialForm });
-
-  // Edit
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [form, setForm] = useState(initialForm);
 
-  const canAdmin = useMemo(() => {
-    const role = user?.role || user?.claims?.role;
-    return String(role).toLowerCase() === 'admin';
-  }, [user]);
-
-  // -------------------------- LOAD -------------------------------------------
+  // Load users
   const loadUsers = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-
       if (import.meta.env.DEV) {
-        await new Promise((r) => setTimeout(r, 400));
         setUsers(mockUsers);
+        setLoading(false);
         return;
       }
 
       const { data } = await api.get('/users');
-      const list = Array.isArray(data) ? data : (data?.users || []);
-      setUsers(list);
+      setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Erro ao carregar usuários:', err);
-      if (import.meta.env.DEV) setUsers(mockUsers);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -102,10 +86,9 @@ const Users = () => {
 
   useEffect(() => {
     loadUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // -------------------------- FILTER -----------------------------------------
+  // Filtered data
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return users;
@@ -115,11 +98,11 @@ const Users = () => {
     });
   }, [users, query]);
 
-  // -------------------------- FORM HANDLERS -----------------------------------
+  // Form handlers
   const resetForm = () => setForm({ ...initialForm });
   const onChange = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  // -------------------------- CREATE ------------------------------------------
+  // Create user
   const handleCreateUser = async (e) => {
     e.preventDefault();
 
@@ -173,7 +156,7 @@ const Users = () => {
     }
   };
 
-  // -------------------------- EDIT -------------------------------------------
+  // Edit user
   const openEdit = (u) => {
     setEditingUser(u);
     setForm({
@@ -236,7 +219,7 @@ const Users = () => {
     }
   };
 
-  // -------------------------- DELETE -----------------------------------------
+  // Delete user
   const handleDeleteUser = async (userId) => {
     if (!canAdmin) return;
     if (!window.confirm('Tem certeza que deseja excluir este usuário?')) return;
@@ -257,7 +240,7 @@ const Users = () => {
     }
   };
 
-  // -------------------------- TOGGLE ACTIVE -----------------------------------
+  // Toggle active status
   const handleToggleActive = async (userId, currentActive) => {
     try {
       if (import.meta.env.DEV) {
@@ -276,36 +259,88 @@ const Users = () => {
     }
   };
 
-  // -------------------------- RENDER ------------------------------------------
-  return (
-    <div className="admin-page-container admin-space-y-6">
-      <Card className="admin-card">
-        <CardHeader className="admin-card-header admin-page-header">
-          <div>
-            <CardTitle className="admin-page-title flex items-center gap-2">
-              <UserCog className="size-5" /> {/* 👈 alterado para diferenciar de "Clientes" */}
-              Usuários
-            </CardTitle>
-            <CardDescription className="admin-card-description">Gerencie contas, perfis e permissões.</CardDescription>
-          </div>
+  // Prepare data for export
+  const exportData = useMemo(() => {
+    return filtered.map((u) => ({
+      nome: u.name || '',
+      username: u.username || '',
+      email: u.email || '',
+      perfil: u.role === 'admin' ? 'Admin' : 'Supervisor',
+      status: u.active ? 'Ativo' : 'Inativo',
+      criado_em: u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '',
+    }));
+  }, [filtered]);
 
-          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 opacity-60" />
+  const exportColumns = [
+    { key: 'nome', header: 'Nome' },
+    { key: 'username', header: 'Username' },
+    { key: 'email', header: 'E-mail' },
+    { key: 'perfil', header: 'Perfil' },
+    { key: 'status', header: 'Status' },
+    { key: 'criado_em', header: 'Criado em' },
+  ];
+
+  const pdfOptions = {
+    title: 'Relatório de Usuários',
+    orientation: 'l', // landscape for more columns
+    filtersSummary: `Filtros aplicados: ${
+      query ? `Busca: "${query}"` : 'Nenhum filtro aplicado'
+    }`,
+    columnStyles: {
+      0: { cellWidth: 60 }, // Nome
+      1: { cellWidth: 40 }, // Username
+      2: { cellWidth: 70 }, // Email
+      3: { cellWidth: 30 }, // Perfil
+      4: { cellWidth: 30 }, // Status
+      5: { cellWidth: 40 }, // Criado em
+    }
+  };
+
+  return (
+    <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl md:text-2xl font-semibold">Usuários</h1>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg md:text-xl font-semibold flex items-center gap-2">
+                <UserCog className="size-5" />
+                Usuários
+              </CardTitle>
+              <CardDescription>Gerencie contas, perfis e permissões.</CardDescription>
+            </div>
+            <div className="ml-auto">
+              <ExportMenu
+                data={exportData}
+                columns={exportColumns}
+                filename="usuarios"
+                pdfOptions={pdfOptions}
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Toolbar */}
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
+            <div className="relative flex-1 w-full md:w-[320px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
+                className="pl-9"
+                placeholder="Buscar por nome, usuário, e-mail ou perfil"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por nome, usuário, e-mail ou perfil"
-                className="pl-9 w-full sm:w-[260px]"
               />
             </div>
 
-            {/* Botão Novo Usuário só para Admin */}
+            {/* Create User Button - Only for Admin */}
             {canAdmin && (
               <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                 <DialogTrigger asChild>
-                  <Button className="admin-btn-primary" onClick={resetForm}>
-                    <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+                  <Button size="sm" className="gap-2" onClick={resetForm}>
+                    <Plus className="size-4" />
                     <span className="whitespace-nowrap">Novo Usuário</span>
                   </Button>
                 </DialogTrigger>
@@ -400,10 +435,10 @@ const Users = () => {
                       </div>
 
                       <div className="pt-2 mt-4 border-t flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setIsCreateOpen(false)}>
                           Cancelar
                         </Button>
-                        <Button type="submit">Criar</Button>
+                        <Button type="submit" size="sm">Criar</Button>
                       </div>
                     </form>
                   </div>
@@ -411,126 +446,113 @@ const Users = () => {
               </Dialog>
             )}
           </div>
-        </CardHeader>
 
-        <CardContent>
-          <div className="rounded-md border">
-            <div className="overflow-x-auto">
-              <Table className="min-w-[860px]">
-                <TableHeader>
+          {/* Table */}
+          <div className="overflow-x-auto rounded-xl border bg-card">
+            <Table className="min-w-[860px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-center">Nome</TableHead>
+                  <TableHead className="text-center">Username</TableHead>
+                  <TableHead className="text-center">E-mail</TableHead>
+                  <TableHead className="text-center">Perfil</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {loading ? (
                   <TableRow>
-                    <TableHead className="text-center">Nome</TableHead>
-                    <TableHead className="text-center">Username</TableHead>
-                    <TableHead className="text-center">E-mail</TableHead>
-                    <TableHead className="text-center">Perfil</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-center">Ações</TableHead>
+                    <TableCell colSpan={6} className="text-center py-8">
+                      Carregando...
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                      Nenhum usuário encontrado.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell className="text-center font-medium">{u.name || '-'}</TableCell>
+                      <TableCell className="text-center">{u.username}</TableCell>
+                      <TableCell className="text-center">{u.email || '-'}</TableCell>
+                      <TableCell className="text-center">
+                        {u.role === 'admin' ? (
+                          <Badge className="bg-primary/90">Admin</Badge>
+                        ) : (
+                          <Badge variant="secondary">Supervisor</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {u.active ? (
+                          <span className="inline-flex items-center gap-1 text-green-600">
+                            <CheckCircle className="size-4" /> Ativo
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-red-600">
+                            <XCircle className="size-4" /> Inativo
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center gap-2 flex-wrap">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1"
+                            onClick={() => handleToggleActive(u.id, !!u.active)}
+                            title={u.active ? 'Desativar' : 'Ativar'}
+                          >
+                            {u.active ? 'Desativar' : 'Ativar'}
+                          </Button>
 
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8">
-                        Carregando...
-                      </TableCell>
-                    </TableRow>
-                  ) : filtered.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                        Nenhum usuário encontrado.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filtered.map((u) => (
-                      <TableRow key={u.id}>
-                        <TableCell className="text-center font-medium">{u.name || '-'}</TableCell>
-                        <TableCell className="text-center">{u.username}</TableCell>
-                        <TableCell className="text-center">{u.email || '-'}</TableCell>
-                        <TableCell className="text-center">
-                          {u.role === 'admin' ? (
-                            <Badge className="bg-primary/90">Admin</Badge>
-                          ) : (
-                            <Badge variant="secondary">Supervisor</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {u.active ? (
-                            <span className="inline-flex items-center gap-1 text-green-600">
-                              <CheckCircle className="size-4" /> Ativo
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-red-600">
-                              <XCircle className="size-4" /> Inativo
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex justify-center gap-2 flex-wrap">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => openEdit(u)}
+                            className="gap-1"
+                          >
+                            <Edit className="size-4" />
+                            Editar
+                          </Button>
+
+                          {canAdmin && (
                             <Button
                               size="sm"
-                              variant="outline"
-                              className="gap-1 min-h-[36px] touch-manipulation"
-                              onClick={() => handleToggleActive(u.id, !!u.active)}
-                              title={u.active ? 'Desativar' : 'Ativar'}
+                              variant="destructive"
+                              onClick={() => handleDeleteUser(u.id)}
+                              className="gap-1"
                             >
-                              {u.active ? 'Desativar' : 'Ativar'}
+                              <Trash2 className="size-4" />
+                              Excluir
                             </Button>
-
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => openEdit(u)}
-                              className="gap-1 min-h-[36px] touch-manipulation"
-                            >
-                              <Edit className="size-4" />
-                              Editar
-                            </Button>
-
-                            {canAdmin && (
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleDeleteUser(u.id)}
-                                className="gap-1 min-h-[36px] touch-manipulation"
-                              >
-                                <Trash2 className="size-4" />
-                                Excluir
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
-
           <p className="text-xs text-muted-foreground mt-3">
             Total: <strong>{filtered.length}</strong> usuário(s)
           </p>
         </CardContent>
       </Card>
 
-      {/* EDIT MODAL */}
-      <Dialog
-        open={isEditOpen}
-        onOpenChange={(v) => {
-          setIsEditOpen(v);
-          if (!v) {
-            setEditingUser(null);
-            resetForm();
-          }
-        }}
-      >
+      {/* Edit Modal */}
+      <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) { setEditingUser(null); resetForm(); } }}>
         <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
           <div className="px-5 pt-5 pb-3 border-b">
             <DialogHeader>
               <DialogTitle className="text-base">Editar usuário</DialogTitle>
               <DialogDescription className="text-xs">
-                Atualize as informações necessárias e salve.
+                Atualize as informações do usuário.
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -539,11 +561,11 @@ const Users = () => {
             <form className="space-y-4" onSubmit={handleEditUser}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="e-name" className="flex items-center gap-2">
+                  <Label htmlFor="e_name" className="flex items-center gap-2">
                     <UserIcon className="size-4" /> Nome
                   </Label>
                   <Input
-                    id="e-name"
+                    id="e_name"
                     value={form.name}
                     onChange={(e) => onChange('name', e.target.value)}
                     placeholder="Nome completo"
@@ -551,21 +573,22 @@ const Users = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="e-username">Username</Label>
+                  <Label htmlFor="e_username">Username</Label>
                   <Input
-                    id="e-username"
+                    id="e_username"
                     value={form.username}
                     onChange={(e) => onChange('username', e.target.value)}
                     placeholder="login"
+                    required
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="e-email" className="flex items-center gap-2">
-                    <Mail className="size-4" /> E-mail
+                  <Label htmlFor="e_email" className="flex items-center gap-2">
+                    <Mail className="size-4" /> E-mail (opcional)
                   </Label>
                   <Input
-                    id="e-email"
+                    id="e_email"
                     type="email"
                     value={form.email}
                     onChange={(e) => onChange('email', e.target.value)}
@@ -574,15 +597,15 @@ const Users = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="e-password" className="flex items-center gap-2">
+                  <Label htmlFor="e_password" className="flex items-center gap-2">
                     <Lock className="size-4" /> Nova senha (opcional)
                   </Label>
                   <Input
-                    id="e-password"
+                    id="e_password"
                     type="password"
                     value={form.password}
                     onChange={(e) => onChange('password', e.target.value)}
-                    placeholder="Deixe em branco para não alterar"
+                    placeholder="••••••••"
                   />
                 </div>
 
@@ -604,27 +627,19 @@ const Users = () => {
 
                 <div className="flex items-center gap-2 pt-7">
                   <Checkbox
-                    id="e-active"
+                    id="e_active"
                     checked={!!form.active}
                     onCheckedChange={(v) => onChange('active', !!v)}
                   />
-                  <Label htmlFor="e-active">Ativo</Label>
+                  <Label htmlFor="e_active">Ativo</Label>
                 </div>
               </div>
 
               <div className="pt-2 mt-4 border-t flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setIsEditOpen(false);
-                    setEditingUser(null);
-                    resetForm();
-                  }}
-                >
+                <Button type="button" variant="outline" size="sm" onClick={() => setIsEditOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit">Salvar alterações</Button>
+                <Button type="submit" size="sm">Atualizar</Button>
               </div>
             </form>
           </div>
@@ -635,3 +650,4 @@ const Users = () => {
 };
 
 export default Users;
+

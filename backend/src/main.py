@@ -44,9 +44,17 @@ def create_app():
     # Extensões
     # -----------------------
     # CORS completo para /api/* (inclui Authorization e preflight)
+    # Permite Vercel origin e localhost para desenvolvimento
+    allowed_origins = [
+        "*",  # Permite todas as origens por simplicidade
+        "https://site-gestao-mu.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000"
+    ]
+    
     CORS(
         app,
-        resources={r"/api/*": {"origins": "*"}},
+        resources={r"/api/*": {"origins": allowed_origins}},
         supports_credentials=False,
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization"],

@@ -28,6 +28,22 @@ export default [
         'warn',
         { allowConstantExport: true },
       ],
+      // Import/Export rules
+      'no-duplicate-imports': 'error',
+      'sort-imports': ['error', { 
+        ignoreCase: true, 
+        ignoreDeclarationSort: true,
+        ignoreMemberSort: false,
+        memberSyntaxSortOrder: ['none', 'all', 'multiple', 'single']
+      }],
+      // Console rules - warn in development, error in production
+      'no-console': process.env.NODE_ENV === 'production' ? 'error' : 'warn',
+      'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'warn',
+      // Code quality rules
+      'prefer-const': 'error',
+      'no-var': 'error',
+      'object-shorthand': 'error',
+      'prefer-template': 'error',
     },
   },
 ]
