@@ -1,3 +1,4 @@
+// frontend/src/admin/Vacancies.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
@@ -28,6 +29,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  Upload as UploadIcon,
 } from "lucide-react";
 import api from "@/services/api";
 
@@ -56,6 +58,156 @@ const BRL = (value) => {
   }).format(num);
 };
 
+/** ===================== CSV / Google Sheets Helpers ===================== **/
+function normalizeStr(s = "") {
+  return String(s)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Tenta transformar uma URL de Google Sheets em URL CSV exportável
+function toCsvExportUrl(url) {
+  if (!url) return "";
+  const u = url.trim();
+
+  // Já é CSV publicado?
+  if (u.includes("output=csv") || u.endsWith(".csv")) return u;
+
+  // Formato /spreadsheets/d/{ID}/edit#gid=GID
+  const m = u.match(/\/spreadsheets\/d\/([^/]+)/);
+  const gidMatch = u.match(/[#?&]gid=(\d+)/);
+  if (m) {
+    const sheetId = m[1];
+    const gid = gidMatch ? gidMatch[1] : "0";
+    return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+  }
+
+  // Formato /spreadsheets/d/e/{ID}/pub...
+  if (u.includes("/spreadsheets/d/e/")) {
+    // Se não tiver output=csv, força
+    if (!u.includes("output=")) {
+      const sep = u.includes("?") ? "&" : "?";
+      return `${u}${sep}output=csv`;
+    }
+    return u;
+  }
+
+  return u; // tenta como está
+}
+
+// CSV Parser simples que suporta aspas
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cur = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    const next = text[i + 1];
+
+    if (inQuotes) {
+      if (c === '"' && next === '"') {
+        cur += '"';
+        i++;
+      } else if (c === '"') {
+        inQuotes = false;
+      } else {
+        cur += c;
+      }
+    } else {
+      if (c === '"') {
+        inQuotes = true;
+      } else if (c === ",") {
+        row.push(cur);
+        cur = "";
+      } else if (c === "\n") {
+        row.push(cur);
+        rows.push(row);
+        row = [];
+        cur = "";
+      } else if (c === "\r") {
+        // ignora CR
+      } else {
+        cur += c;
+      }
+    }
+  }
+  // última célula
+  row.push(cur);
+  rows.push(row);
+
+  // remove linhas vazias finais
+  while (rows.length && rows[rows.length - 1].every((x) => x === "")) {
+    rows.pop();
+  }
+  return rows;
+}
+
+// Auto-map de colunas pelo cabeçalho
+function autoMapColumns(headers = []) {
+  const normHeaders = headers.map((h) => normalizeStr(h));
+  function findOne(cands) {
+    for (const c of cands) {
+      const idx = normHeaders.findIndex((h) => h.includes(normalizeStr(c)));
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  }
+
+  return {
+    name: findOne(["nome", "name", "candidato", "candidata"]),
+    phone: findOne(["telefone", "celular", "whatsapp", "phone"]),
+    address: findOne(["endereco", "endereço", "address"]),
+    age: findOne(["idade", "age"]),
+    sex: findOne(["sexo", "genero", "gênero", "gender"]),
+    department: findOne(["departamento", "area", "setor", "área", "setor"]),
+    job_type: findOne(["tipo (cargo)", "tipo", "cargo", "funcao", "função", "job type", "tipo de contrato"]),
+    salary: findOne(["salario", "salário", "pretensao", "pretensão", "remuneracao", "remuneração"]),
+    photos: findOne(["fotos", "fotos (urls)", "imagens", "imagens (urls)", "anexos", "upload", "photos", "arquivos"]),
+  };
+}
+
+function parseSalaryBR(str) {
+  if (str == null) return 0;
+  let s = String(str).trim();
+  if (!s) return 0;
+
+  // mantém apenas dígitos, vírgula, ponto e sinal
+  const cleaned = s.replace(/[^\d,.\-]/g, "");
+
+  // Heurística: se termina com ,dd (2 casas), trata como pt-BR
+  if (/,(\d{2})$/.test(cleaned)) {
+    return Number(cleaned.replace(/\./g, "").replace(",", "."));
+  }
+  // Caso geral
+  return parseFloat(cleaned.replace(/,/g, "")) || 0;
+}
+
+function parsePhotos(val) {
+  if (!val) return [];
+  const text = String(val);
+  // captura todos os links http/https
+  const links = text.match(/https?:\/\/\S+/g);
+  if (links && links.length) return links.map((s) => s.replace(/[),;]+$/, ""));
+  // fallback: separa por vírgula/; ou |
+  return text
+    .split(/[,;|]+/)
+    .map((s) => s.trim())
+    .filter((s) => /^https?:\/\//i.test(s));
+}
+
+function normalizeSex(val) {
+  const v = normalizeStr(val);
+  if (v.startsWith("masc")) return "Masculino";
+  if (v.startsWith("fem")) return "Feminino";
+  return "Outro";
+}
+
+/* ===================== Component ===================== */
 const Vacancies = () => {
   const [vacancies, setVacancies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -76,6 +228,19 @@ const Vacancies = () => {
   const [statusFilter, setStatusFilter] = useState("todos");
   const [departmentFilter, setDepartmentFilter] = useState("todos");
   const [jobTypeFilter, setJobTypeFilter] = useState("todos");
+
+  // ===== IMPORT states =====
+  const [importOpen, setImportOpen] = useState(false);
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [importError, setImportError] = useState("");
+  const [importHeaders, setImportHeaders] = useState([]);
+  const [importRows, setImportRows] = useState([]); // array de arrays (sem header)
+  const [columnMap, setColumnMap] = useState({
+    name: -1, phone: -1, address: -1, age: -1, sex: -1,
+    department: -1, job_type: -1, salary: -1, photos: -1,
+  });
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
 
   // Load data
   async function load() {
@@ -285,7 +450,7 @@ const Vacancies = () => {
 
   const pdfOptions = {
     title: 'Relatório de Vagas',
-    orientation: 'l', // landscape for more columns
+    orientation: 'l', // landscape para mais colunas
     filtersSummary: `Filtros aplicados: ${
       [
         search ? `Busca: "${search}"` : '',
@@ -308,6 +473,115 @@ const Vacancies = () => {
     }
   };
 
+  /** ===================== Import Google Forms (CSV) ===================== **/
+  function resetImport() {
+    setSheetUrl("");
+    setImportError("");
+    setImportHeaders([]);
+    setImportRows([]);
+    setColumnMap({
+      name: -1, phone: -1, address: -1, age: -1, sex: -1,
+      department: -1, job_type: -1, salary: -1, photos: -1,
+    });
+    setImportProgress(0);
+    setImporting(false);
+  }
+
+  async function fetchCsvAndPreview() {
+    setImportError("");
+    setImportHeaders([]);
+    setImportRows([]);
+    try {
+      const csvUrl = toCsvExportUrl(sheetUrl);
+      const res = await fetch(csvUrl, { method: "GET" });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} – verifique se a planilha está “Publicada na Web” como CSV.`);
+      }
+      const txt = await res.text();
+      const rows = parseCsv(txt);
+      if (!rows.length) throw new Error("CSV vazio.");
+
+      const headers = rows[0];
+      const dataRows = rows.slice(1).filter((r) => r.some((c) => String(c || "").trim() !== ""));
+      setImportHeaders(headers);
+      setImportRows(dataRows);
+
+      const guess = autoMapColumns(headers);
+      setColumnMap(guess);
+
+      if (guess.name === -1) {
+        setImportError("Mapeie pelo menos a coluna 'Nome' para prosseguir.");
+      }
+    } catch (err) {
+      console.error("Erro ao ler CSV:", err);
+      setImportError(
+        err?.message ||
+          "Falha ao carregar CSV. Garanta que a planilha esteja pública (Arquivo > Publicar na Web > CSV) e copie o link do CSV."
+      );
+    }
+  }
+
+  function setMap(field, idx) {
+    setColumnMap((m) => ({ ...m, [field]: Number(idx) }));
+  }
+
+  function canImport() {
+    return importHeaders.length > 0 && columnMap.name !== -1;
+  }
+
+  async function doImport() {
+    if (!canImport()) return;
+    setImporting(true);
+    setImportProgress(0);
+    let ok = 0;
+    let fail = 0;
+
+    for (let i = 0; i < importRows.length; i++) {
+      const r = importRows[i];
+      const v = (idx) => (idx >= 0 && idx < r.length ? r[idx] : "");
+
+      const payload = {
+        name: (v(columnMap.name) || "").toString().trim(),
+        phone: (v(columnMap.phone) || "").toString().trim(),
+        address: (v(columnMap.address) || "").toString().trim(),
+        age: (() => {
+          const a = v(columnMap.age);
+          const n = parseInt(String(a).replace(/[^\d-]/g, ""), 10);
+          return Number.isFinite(n) ? n : null;
+        })(),
+        sex: columnMap.sex !== -1 ? normalizeSex(v(columnMap.sex)) : "Outro",
+        department: (v(columnMap.department) || "Operacional").toString().trim() || "Operacional",
+        job_type: (v(columnMap.job_type) || "CLT").toString().trim() || "CLT",
+        status: "Aberta",
+        salary: (() => {
+          const s = v(columnMap.salary);
+          return columnMap.salary !== -1 ? parseSalaryBR(s) : 0;
+        })(),
+        photos: (() => {
+          const p = v(columnMap.photos);
+          return columnMap.photos !== -1 ? parsePhotos(p) : [];
+        })(),
+      };
+
+      try {
+        if (!payload.name) throw new Error("Nome vazio");
+        await api.post("/job-vacancies", payload);
+        ok++;
+      } catch (e) {
+        console.error("Falha import linha", i, e);
+        fail++;
+      } finally {
+        setImportProgress(i + 1);
+      }
+    }
+
+    setImporting(false);
+    alert(`Importação finalizada. Sucesso: ${ok} | Falhas: ${fail}`);
+    setImportOpen(false);
+    resetImport();
+    await load();
+  }
+
   return (
     <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
       <div className="flex items-center justify-between mb-4">
@@ -317,12 +591,26 @@ const Vacancies = () => {
       {/* Filters Card */}
       <Card className="mb-4">
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <CardTitle className="text-lg md:text-xl font-semibold">Filtros e Ações</CardTitle>
-              <CardDescription>Filtre e exporte os dados das vagas</CardDescription>
+              <CardDescription>Filtre, exporte e importe dados das vagas</CardDescription>
             </div>
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  resetImport();
+                  setImportOpen(true);
+                }}
+                title="Importar respostas do Google Forms (CSV do Google Sheets)"
+              >
+                <UploadIcon className="size-4" />
+                Importar do Google Forms
+              </Button>
+
               <ExportMenu
                 data={exportData}
                 columns={exportColumns}
@@ -348,7 +636,7 @@ const Vacancies = () => {
             {/* Status Filter */}
             <div className="w-full sm:w-auto">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-56 md:w-64 max-w-full">
+                <SelectTrigger className="w-56 md:w-56 max-w-full">
                   <SelectValue placeholder="Filtrar por status" className="truncate" />
                 </SelectTrigger>
                 <SelectContent>
@@ -363,7 +651,7 @@ const Vacancies = () => {
             {/* Department Filter */}
             <div className="w-full sm:w-auto">
               <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                <SelectTrigger className="w-56 md:w-64 max-w-full">
+                <SelectTrigger className="w-48 md:w-56 max-w-full">
                   <SelectValue placeholder="Filtrar por departamento" className="truncate" />
                 </SelectTrigger>
                 <SelectContent>
@@ -379,7 +667,7 @@ const Vacancies = () => {
             {/* Job Type Filter */}
             <div className="w-full sm:w-auto">
               <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
-                <SelectTrigger className="w-56 md:w-64 max-w-full">
+                <SelectTrigger className="w-48 md:w-56 max-w-full">
                   <SelectValue placeholder="Filtrar por tipo" className="truncate" />
                 </SelectTrigger>
                 <SelectContent>
@@ -474,7 +762,7 @@ const Vacancies = () => {
                             <div className="inline-flex items-center gap-1">
                               {photos.slice(0, 3).map((src, idx) => (
                                 <button
-                                  key={src}
+                                  key={src + idx}
                                   type="button"
                                   onClick={() => openPreview(photos, idx)}
                                   title="Ver imagem"
@@ -723,7 +1011,7 @@ const Vacancies = () => {
           <DialogHeader>
             <DialogTitle>Visualizar Fotos</DialogTitle>
           </DialogHeader>
-          
+
           {previewList.length > 0 && (
             <div className="relative">
               <img
@@ -731,7 +1019,7 @@ const Vacancies = () => {
                 alt={`Foto ${previewIndex + 1}`}
                 className="w-full max-h-[70vh] object-contain rounded"
               />
-              
+
               {previewList.length > 1 && (
                 <>
                   <Button
@@ -750,7 +1038,7 @@ const Vacancies = () => {
                   >
                     <ChevronRight className="size-4" />
                   </Button>
-                  
+
                   <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/50 text-white px-2 py-1 rounded text-sm">
                     {previewIndex + 1} / {previewList.length}
                   </div>
@@ -760,9 +1048,134 @@ const Vacancies = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Import Google Forms Modal */}
+      <Dialog open={importOpen} onOpenChange={(o) => { setImportOpen(o); if (!o) resetImport(); }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Importar do Google Forms</DialogTitle>
+            <DialogDescription>
+              Cole o link <strong>CSV</strong> da planilha de respostas (Google Sheets).
+              <br />
+              Dica: no Google Sheets, vá em <em>Arquivo → Publicar na Web</em>, escolha a aba “Form responses 1” e o formato <em>CSV</em>. Copie o link gerado e cole abaixo.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* URL */}
+          <div className="space-y-2">
+            <Label htmlFor="csvUrl">URL da planilha (CSV ou Google Sheets)</Label>
+            <Input
+              id="csvUrl"
+              placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0 ou ...output=csv"
+              value={sheetUrl}
+              onChange={(e) => setSheetUrl(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={fetchCsvAndPreview} className="gap-2">
+                <UploadIcon className="size-4" />
+                Carregar & Visualizar
+              </Button>
+              {importHeaders.length > 0 && (
+                <span className="text-xs text-muted-foreground self-center">
+                  Linhas detectadas: {importRows.length}
+                </span>
+              )}
+            </div>
+            {!!importError && (
+              <p className="text-sm text-red-600">{importError}</p>
+            )}
+          </div>
+
+          {/* Mapping */}
+          {importHeaders.length > 0 && (
+            <div className="mt-4 space-y-4">
+              <h3 className="text-base font-semibold">Mapeamento de Colunas</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[
+                  ["Nome *", "name"],
+                  ["Telefone", "phone"],
+                  ["Endereço", "address"],
+                  ["Idade", "age"],
+                  ["Sexo", "sex"],
+                  ["Departamento", "department"],
+                  ["Tipo (Cargo)", "job_type"],
+                  ["Salário", "salary"],
+                  ["Fotos (URLs)", "photos"],
+                ].map(([label, key]) => (
+                  <div key={key}>
+                    <Label>{label}</Label>
+                    <Select value={String(columnMap[key])} onValueChange={(v) => setMap(key, v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a coluna" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="-1">— Ignorar —</SelectItem>
+                        {importHeaders.map((h, idx) => (
+                          <SelectItem key={idx} value={String(idx)}>
+                            {String(h || `Coluna ${idx + 1}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+
+              {/* Preview table */}
+              <div>
+                <h4 className="text-sm font-medium mb-2">Pré-visualização (primeiras 5 linhas)</h4>
+                <div className="overflow-x-auto rounded border">
+                  <table className="min-w-full table-auto text-xs">
+                    <thead>
+                      <tr>
+                        {importHeaders.map((h, i) => (
+                          <th key={i} className="px-2 py-1 border-b text-left">{h || `Coluna ${i + 1}`}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importRows.slice(0, 5).map((r, ri) => (
+                        <tr key={ri} className="border-b last:border-0">
+                          {importHeaders.map((_, ci) => (
+                            <td key={ci} className="px-2 py-1">{r[ci]}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Import actions */}
+              <div className="flex items-center justify-between pt-2">
+                <div className="text-xs text-muted-foreground">
+                  {importing
+                    ? `Importando ${importProgress}/${importRows.length}...`
+                    : "Confirme o mapeamento e clique em Importar"}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => { setImportOpen(false); resetImport(); }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={doImport}
+                    disabled={!canImport() || importing}
+                  >
+                    {importing ? `Importando ${importProgress}/${importRows.length}...` : `Importar ${importRows.length} linha(s)`}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 export default Vacancies;
-
