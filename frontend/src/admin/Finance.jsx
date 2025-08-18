@@ -39,15 +39,11 @@ import {
   Legend,
 } from 'recharts';
 
-// Export (CSV/XLSX/PDF) menu
 import ExportMenu from '@/components/export/ExportMenu';
 
 /* =============== Helpers =============== */
 const BRL = (n) =>
-  `R$ ${Number(n || 0)
-    .toFixed(2)
-    .replace('.', ',')
-    .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+  `R$ ${Number(n || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
 
 const maskBR = (v) => {
   let clean = v.replace(/\D/g, '');
@@ -118,18 +114,13 @@ const Finance = () => {
       setMaterials(Array.isArray(matRes.data) ? matRes.data : (matRes.data?.items || []));
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
-      setTransactions([]);
-      setActions([]);
-      setClients([]);
-      setMaterials([]);
+      setTransactions([]); setActions([]); setClients([]); setMaterials([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadAll();
-  }, []);
+  useEffect(() => { loadAll(); }, []);
 
   // Label resolvers
   const actionLabelById = (id) => {
@@ -157,106 +148,78 @@ const Finance = () => {
       const q = search.toLowerCase();
       list = list.filter((t) =>
         [t.category, t.notes, String(t.amount), actionLabelById(t.action_id), clientLabelById(t.client_id), materialLabelById(t.material_id)]
-          .filter(Boolean)
-          .some((field) => String(field).toLowerCase().includes(q))
+          .filter(Boolean).some((field) => String(field).toLowerCase().includes(q))
       );
     }
 
-    if (typeFilter !== 'todos') {
-      list = list.filter((t) => t.type === typeFilter);
-    }
+    if (typeFilter !== 'todos') list = list.filter((t) => t.type === typeFilter);
 
     if (monthFilter !== 'todos') {
-      const [year, month] = monthFilter.split('-');
-      list = list.filter((t) => String(t.date || '').slice(0, 7) === `${year}-${month}`);
+      const [y, m] = monthFilter.split('-');
+      list = list.filter((t) => String(t.date || '').slice(0, 7) === `${y}-${m}`);
     }
 
     if (selectedActions.length > 0) {
-      const actionSet = new Set(selectedActions);
-      list = list.filter((t) => actionSet.has(t.action_id));
+      const set = new Set(selectedActions);
+      list = list.filter((t) => set.has(t.action_id));
     }
 
     list.sort((a, b) => String(b.date || '0000-01-01').localeCompare(String(a.date || '0000-01-01')));
     return list;
   }, [transactions, search, typeFilter, monthFilter, selectedActions, actions, clients, materials]);
 
-  // Month options for filter
+  // Month options
   const monthOptions = useMemo(() => {
     const months = new Set();
     transactions.forEach((t) => {
-      const dateStr = String(t.date || '').slice(0, 7);
-      if (/^\d{4}-\d{2}$/.test(dateStr)) months.add(dateStr);
+      const ym = String(t.date || '').slice(0, 7);
+      if (/^\d{4}-\d{2}$/.test(ym)) months.add(ym);
     });
-    return Array.from(months)
-      .sort()
-      .reverse()
-      .map((ym) => {
-        const [y, m] = ym.split('-');
-        const monthName = new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-        return { value: ym, label: monthName };
-      });
+    return Array.from(months).sort().reverse().map((ym) => {
+      const [y, m] = ym.split('-');
+      return { value: ym, label: new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) };
+    });
   }, [transactions]);
 
   // Charts
   const categoryChart = useMemo(() => {
     const counts = {};
-    filtered.forEach((t) => {
-      const cat = t.category || 'Sem categoria';
-      counts[cat] = (counts[cat] || 0) + Number(t.amount || 0);
-    });
-    return Object.entries(counts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 8);
+    filtered.forEach((t) => { const c = t.category || 'Sem categoria'; counts[c] = (counts[c] || 0) + Number(t.amount || 0); });
+    return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8);
   }, [filtered]);
 
   const monthlyChart = useMemo(() => {
     const months = {};
     filtered.forEach((t) => {
-      const month = String(t.date || '').slice(0, 7);
-      if (!months[month]) months[month] = { entrada: 0, saida: 0, despesa: 0 };
-      months[month][t.type || 'entrada'] += Number(t.amount || 0);
+      const m = String(t.date || '').slice(0, 7);
+      if (!months[m]) months[m] = { entrada: 0, saida: 0, despesa: 0 };
+      months[m][t.type || 'entrada'] += Number(t.amount || 0);
     });
-    return Object.entries(months)
-      .map(([month, data]) => ({ month, ...data }))
-      .sort((a, b) => a.month.localeCompare(b.month))
-      .slice(-6);
+    return Object.entries(months).map(([month, data]) => ({ month, ...data })).sort((a, b) => a.month.localeCompare(b.month)).slice(-6);
   }, [filtered]);
 
   const actionsChart = useMemo(() => {
-    const actionCounts = {};
+    const counts = {};
     actions.forEach((a) => {
-      const status = String(a.status || (a.active ? 'andamento' : 'aguardando')).toLowerCase();
-      if (status.includes('cancel')) actionCounts.cancelada = (actionCounts.cancelada || 0) + 1;
-      else if (status.includes('conclu')) actionCounts.concluída = (actionCounts.concluída || 0) + 1;
-      else if (status.includes('andam') || a.active) actionCounts.andamento = (actionCounts.andamento || 0) + 1;
-      else actionCounts.aguardando = (actionCounts.aguardando || 0) + 1;
+      const s = String(a.status || (a.active ? 'andamento' : 'aguardando')).toLowerCase();
+      if (s.includes('cancel')) counts.cancelada = (counts.cancelada || 0) + 1;
+      else if (s.includes('conclu')) counts.concluída = (counts.concluída || 0) + 1;
+      else if (s.includes('andam') || a.active) counts.andamento = (counts.andamento || 0) + 1;
+      else counts.aguardando = (counts.aguardando || 0) + 1;
     });
     return [
-      { name: 'Aguardando', value: actionCounts.aguardando || 0, color: '#f59e0b' },
-      { name: 'Andamento', value: actionCounts.andamento || 0, color: '#2563eb' },
-      { name: 'Concluída', value: actionCounts.concluída || 0, color: '#16a34a' },
-      { name: 'Cancelada', value: actionCounts.cancelada || 0, color: '#dc2626' },
+      { name: 'Aguardando', value: counts.aguardando || 0, color: '#f59e0b' },
+      { name: 'Andamento', value: counts.andamento || 0, color: '#2563eb' },
+      { name: 'Concluída', value: counts.concluída || 0, color: '#16a34a' },
+      { name: 'Cancelada', value: counts.cancelada || 0, color: '#dc2626' },
     ].filter((d) => d.value > 0);
   }, [actions]);
 
   // Form handlers
-  const onChange = (e) => {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
-  };
+  const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+  const onDateBRChange = (e) => setForm((f) => ({ ...f, dateBr: maskBR(e.target.value) }));
 
-  const onDateBRChange = (e) => {
-    const v = maskBR(e.target.value);
-    setForm((f) => ({ ...f, dateBr: v }));
-  };
-
-  const openCreate = () => {
-    setEditing(null);
-    setForm(emptyForm);
-    setOpen(true);
-  };
-
+  const openCreate = () => { setEditing(null); setForm(emptyForm); setOpen(true); };
   const openEdit = (tx) => {
     setEditing(tx);
     setForm({
@@ -277,11 +240,7 @@ const Finance = () => {
     setSaving(true);
     try {
       const dateISO = brToISO(form.dateBr);
-      if (!isYMD(dateISO)) {
-        alert('Data inválida. Use o formato DD/MM/AAAA.');
-        setSaving(false);
-        return;
-      }
+      if (!isYMD(dateISO)) { alert('Data inválida. Use o formato DD/MM/AAAA.'); setSaving(false); return; }
       const payload = {
         type: form.type,
         date: dateISO,
@@ -295,17 +254,10 @@ const Finance = () => {
         clientId: form.client_id || null,
         materialId: form.material_id || null,
       };
+      if (editing?.id) await api.put(`${TX_PATH}/${editing.id}`, payload);
+      else await api.post(TX_PATH, payload);
 
-      if (editing?.id) {
-        await api.put(`${TX_PATH}/${editing.id}`, payload);
-      } else {
-        await api.post(TX_PATH, payload);
-      }
-
-      setOpen(false);
-      setEditing(null);
-      setForm(emptyForm);
-      loadAll();
+      setOpen(false); setEditing(null); setForm(emptyForm); loadAll();
     } catch (err) {
       console.error('Erro ao salvar transação:', err);
       alert('Não foi possível salvar. Verifique o backend de transações.');
@@ -316,24 +268,19 @@ const Finance = () => {
 
   const handleDelete = async (id) => {
     if (!window.confirm('Tem certeza que deseja excluir este lançamento?')) return;
-    try {
-      await api.delete(`${TX_PATH}/${id}`);
-      loadAll();
-    } catch (err) {
-      console.error('Erro ao excluir transação:', err);
-      alert('Não foi possível excluir. Verifique o backend.');
-    }
+    try { await api.delete(`${TX_PATH}/${id}`); loadAll(); }
+    catch (err) { console.error('Erro ao excluir transação:', err); alert('Não foi possível excluir. Verifique o backend.'); }
   };
 
   // Actions selector (filtro)
   const [actionsOpen, setActionsOpen] = useState(false);
-  const toggleAction = (id) =>
-    setSelectedActions((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggleAction = (id) => setSelectedActions((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const ActionsSelector = () => (
     <Popover open={actionsOpen} onOpenChange={setActionsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="w-full justify-between">
+        {/* força borda neutra (evita vermelho) */}
+        <Button variant="outline" className="w-full justify-between border-border">
           {selectedActions.length === 0 ? 'Filtrar por ações' : <span className="truncate">{selectedActions.length} selecionada(s)</span>}
           <Layers className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
@@ -346,12 +293,8 @@ const Finance = () => {
         collisionPadding={16}
         className="z-[100] p-0 w-[min(92vw,560px)]"
       >
-        <div
-          className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
-          onWheel={(e) => e.stopPropagation()}
-          onWheelCapture={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-        >
+        {/* rolagem fluida; sem bloquear eventos do touchpad */}
+        <div className="max-h-[60vh] overflow-y-auto overscroll-contain [touch-action:pan-y] [-webkit-overflow-scrolling:touch]">
           <Command>
             <CommandInput placeholder="Buscar ação..." />
             <CommandEmpty>Nenhuma ação encontrada.</CommandEmpty>
@@ -382,18 +325,16 @@ const Finance = () => {
   const saldo = totalEntrada - totalSaida;
 
   // Export
-  const exportData = useMemo(() => {
-    return filtered.map((t) => ({
-      data: isoToBR(String(t.date || '').slice(0, 10)) || '',
-      tipo: t.type || '',
-      categoria: t.category || '',
-      acao: actionLabelById(t.action_id),
-      cliente: clientLabelById(t.client_id),
-      material: materialLabelById(t.material_id),
-      valor: Number(t.amount || 0),
-      observacoes: t.notes || '',
-    }));
-  }, [filtered, actions, clients, materials]);
+  const exportData = useMemo(() => filtered.map((t) => ({
+    data: isoToBR(String(t.date || '').slice(0, 10)) || '',
+    tipo: t.type || '',
+    categoria: t.category || '',
+    acao: actionLabelById(t.action_id),
+    cliente: clientLabelById(t.client_id),
+    material: materialLabelById(t.material_id),
+    valor: Number(t.amount || 0),
+    observacoes: t.notes || '',
+  })), [filtered, actions, clients, materials]);
 
   const exportColumns = [
     { key: 'data', header: 'Data' },
@@ -417,15 +358,11 @@ const Finance = () => {
         selectedActions.length > 0 ? `Ações: ${selectedActions.length} selecionada(s)` : '',
       ].filter(Boolean).join(' | ') || 'Nenhum filtro aplicado'
     }`,
-    columnStyles: {
-      0: { cellWidth: 22 }, 1: { cellWidth: 22 }, 2: { cellWidth: 38 },
-      3: { cellWidth: 46 }, 4: { cellWidth: 46 }, 5: { cellWidth: 60 },
-      6: { cellWidth: 26 }, 7: { cellWidth: 70 },
-    },
+    columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 22 }, 2: { cellWidth: 38 }, 3: { cellWidth: 46 }, 4: { cellWidth: 46 }, 5: { cellWidth: 60 }, 6: { cellWidth: 26 }, 7: { cellWidth: 70 } },
     footerContent: `Totais do período: Entradas: ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`
   };
 
-  // Itens para selects do formulário
+  // Items p/ selects do formulário
   const actionItems = useMemo(() => actions.map(a => ({ id: a.id, label: actionLabelById(a.id) })), [actions]);
   const clientItems = useMemo(() => clients.map(c => ({ id: c.id, label: clientLabelById(c.id) })), [clients]);
   const materialItems = useMemo(() => materials.map(m => ({ id: m.id, label: materialLabelById(m.id) })), [materials]);
@@ -448,6 +385,7 @@ const Finance = () => {
             <p className="text-xs text-muted-foreground">Receitas registradas</p>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Saídas/Despesas</CardTitle>
@@ -458,6 +396,7 @@ const Finance = () => {
             <p className="text-xs text-muted-foreground">Gastos registrados</p>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Saldo</CardTitle>
@@ -476,18 +415,18 @@ const Finance = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <Card>
           <CardHeader><CardTitle className="text-lg">Gastos por Categoria</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={categoryChart} cx="50%" cy="50%" labelLine={false}
-                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                     outerRadius={80} fill="#8884d8" dataKey="value">
-                  {categoryChart.map((_, i) => <Cell key={i} fill={`hsl(${i * 45}, 70%, 60%)`} />)}
-                </Pie>
-                <Tooltip formatter={(v) => BRL(v)} />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie data={categoryChart} cx="50%" cy="50%" labelLine={false}
+                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                   outerRadius={80} fill="#8884d8" dataKey="value">
+                {categoryChart.map((_, i) => <Cell key={i} fill={`hsl(${i * 45}, 70%, 60%)`} />)}
+              </Pie>
+              <Tooltip formatter={(v) => BRL(v)} />
+            </PieChart>
+          </ResponsiveContainer>
+        </CardContent>
         </Card>
 
         <Card>
@@ -545,9 +484,7 @@ const Finance = () => {
               </select>
             </div>
 
-            <div className="w-full sm:w-auto">
-              <ActionsSelector />
-            </div>
+            <div className="w-full sm:w-auto"><ActionsSelector /></div>
 
             <Button variant="outline" size="sm" onClick={() => { setSearch(''); setTypeFilter('todos'); setMonthFilter('todos'); setSelectedActions([]); }}>
               Limpar Filtros
@@ -623,15 +560,15 @@ const Finance = () => {
       {/* Create/Edit Modal */}
       <Dialog
         open={open}
-        onOpenChange={(v) => {
-          if (!v) { setEditing(null); setForm(emptyForm); }
-          setOpen(v);
-        }}
+        onOpenChange={(v) => { if (!v) { setEditing(null); setForm(emptyForm); } setOpen(v); }}
       >
-        {/* centralizado; largura responsiva; sem overflow escondido */}
-        <DialogContent className="w-[95vw] sm:max-w-2xl p-0">
-          {/* rolagem só no corpo do modal */}
-          <div className="max-h-[80vh] overflow-y-auto p-6">
+        {/* Centralização garantida em qualquer tema/override */}
+        <DialogContent
+          style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
+          className="w-[95vw] sm:max-w-2xl p-0"
+        >
+          {/* rolagem suave dentro do modal */}
+          <div className="max-h-[80vh] overflow-y-auto overscroll-contain [touch-action:pan-y] [-webkit-overflow-scrolling:touch] p-6">
             <DialogHeader className="pb-2">
               <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
               <DialogDescription>
@@ -727,7 +664,8 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" className="w-full justify-between">
+        {/* força borda neutra para evitar “vermelho” */}
+        <Button type="button" variant="outline" className="w-full justify-between border-border">
           <span className="truncate">{selected ? selected.label : '—'}</span>
           <Search className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
@@ -740,12 +678,7 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
         collisionPadding={16}
         className="z-[100] p-0 w-[min(92vw,520px)]"
       >
-        <div
-          className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
-          onWheel={(e) => e.stopPropagation()}
-          onWheelCapture={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-        >
+        <div className="max-h-[60vh] overflow-y-auto overscroll-contain [touch-action:pan-y] [-webkit-overflow-scrolling:touch]">
           <Command>
             <CommandInput placeholder={placeholder} />
             <CommandEmpty>Nenhuma opção encontrada.</CommandEmpty>
