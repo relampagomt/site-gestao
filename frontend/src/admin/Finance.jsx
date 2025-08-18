@@ -628,18 +628,21 @@ const Finance = () => {
           setOpen(v);
         }}
       >
-        {/* centralizado; largura responsiva; sem overflow escondido */}
         <DialogContent className="w-[95vw] sm:max-w-2xl p-0">
-          {/* rolagem só no corpo do modal */}
-          <div className="max-h-[80vh] overflow-y-auto p-6">
-            <DialogHeader className="pb-2">
-              <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
-              <DialogDescription>
-                Registre ou atualize uma entrada, saída ou despesa. Você pode vincular (opcionalmente) a uma Ação, a um Cliente e a um Material.
-              </DialogDescription>
-            </DialogHeader>
+          {/* Container do modal com altura fixa e layout colunar */}
+          <form onSubmit={submit} className="max-h-[80vh] flex flex-col">
+            {/* Cabeçalho (fora da área rolável) */}
+            <div className="p-6 pb-2">
+              <DialogHeader className="pb-2">
+                <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+                <DialogDescription>
+                  Registre ou atualize uma entrada, saída ou despesa. Você pode vincular (opcionalmente) a uma Ação, a um Cliente e a um Material.
+                </DialogDescription>
+              </DialogHeader>
+            </div>
 
-            <form onSubmit={submit} className="space-y-4">
+            {/* Corpo rolável */}
+            <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <Label>Tipo</Label>
@@ -701,17 +704,23 @@ const Finance = () => {
                   <Textarea name="notes" rows={3} value={form.notes} onChange={onChange} />
                 </div>
               </div>
+            </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm); }}>
-                  Cancelar
-                </Button>
-                <Button type="submit" size="sm" disabled={saving}>
-                  {saving ? 'Salvando...' : 'Salvar'}
-                </Button>
-              </div>
-            </form>
-          </div>
+            {/* Rodapé fixo (fora da área rolável) */}
+            <div className="border-t bg-background px-6 py-3 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm); }}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" size="sm" disabled={saving}>
+                {saving ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
@@ -733,16 +742,16 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
         </Button>
       </PopoverTrigger>
 
-      {/* Força abrir embaixo + limite de altura pra não cortar */}
+      {/* Abrir embaixo, com limite de altura e scroll interno */}
       <PopoverContent
         side="bottom"
         align="center"
-        sideOffset={20}
-        avoidCollisions={false}
-        className="z-[100] p-0 w-[min(92vw,520px)] max-h-[48vh] overflow-hidden"
+        sideOffset={10}
+        collisionPadding={12}
+        className="z-[100] p-0 w-[min(92vw,520px)] max-h-[50vh] overflow-hidden"
       >
         <div
-          className="max-h-[48vh] overflow-y-auto overscroll-contain touch-pan-y [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
+          className="max-h-[50vh] overflow-y-auto overscroll-contain touch-pan-y [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
           onWheel={(e) => e.stopPropagation()}
           onWheelCapture={(e) => e.stopPropagation()}
           onTouchMove={(e) => e.stopPropagation()}
