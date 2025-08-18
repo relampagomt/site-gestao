@@ -733,16 +733,16 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
         </Button>
       </PopoverTrigger>
 
-      {/* Força abrir embaixo e um pouco mais baixo, sem flip */}
+      {/* Força abrir embaixo + limite de altura pra não cortar */}
       <PopoverContent
         side="bottom"
         align="center"
         sideOffset={20}
         avoidCollisions={false}
-        className="z-[100] p-0 w-[min(92vw,520px)]"
+        className="z-[100] p-0 w-[min(92vw,520px)] max-h-[48vh] overflow-hidden"
       >
         <div
-          className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
+          className="max-h-[48vh] overflow-y-auto overscroll-contain touch-pan-y [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
           onWheel={(e) => e.stopPropagation()}
           onWheelCapture={(e) => e.stopPropagation()}
           onTouchMove={(e) => e.stopPropagation()}
