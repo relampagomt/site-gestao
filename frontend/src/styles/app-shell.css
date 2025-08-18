@@ -1,0 +1,20 @@
+/* ===== App Shell: largura do sidebar e contenção de overflow ===== */
+@layer base {
+  :root { --sidebar-w: 256px; }             /* menu expandido */
+  [data-sidebar="collapsed"] { --sidebar-w: 72px; }  /* menu recolhido */
+
+  /* guard rails pra não “estourar” horizontalmente */
+  html, body, #root { height: 100%; overflow-x: hidden; }
+  * { box-sizing: border-box; min-width: 0; }
+}
+
+/* O conteúdo principal reserva o espaço do menu via padding-left */
+@layer components {
+  .app-main {
+    padding-left: var(--sidebar-w);
+  }
+  @media (max-width: 1024px) {
+    /* em telas menores o menu vira sobreposto, então não reserva espaço */
+    .app-main { padding-left: 0; }
+  }
+}
