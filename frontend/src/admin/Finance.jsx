@@ -733,12 +733,12 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
         </Button>
       </PopoverTrigger>
 
-      {/* Centralizado e empurrado para baixo usando sideOffset */}
+      {/* Força abrir embaixo e um pouco mais baixo, sem flip */}
       <PopoverContent
         side="bottom"
         align="center"
-        sideOffset={120}
-        collisionPadding={16}
+        sideOffset={28}
+        avoidCollisions={false}
         className="z-[100] p-0 w-[min(92vw,520px)]"
       >
         <div
