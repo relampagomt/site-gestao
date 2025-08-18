@@ -15,7 +15,7 @@ for p in (backend_dir, src_dir):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, redirect
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -31,27 +31,23 @@ def create_app():
     app.config["JWT_ACCESS_TOKEN_EXPIRES"] = False  # token sem expirar
     app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 25 * 1024 * 1024))
     app.config["JSON_SORT_KEYS"] = False
-    # útil para ver tracebacks reais no log da plataforma
     app.config["PROPAGATE_EXCEPTIONS"] = True
 
-    # Logging básico
+    # Logging
     logging.basicConfig(
         level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
     # -----------------------
-    # Extensões
+    # CORS
     # -----------------------
-    # CORS completo para /api/* (inclui Authorization e preflight)
-    # Permite Vercel origin e localhost para desenvolvimento
     allowed_origins = [
-        "*",  # Permite todas as origens por simplicidade
+        "*",
         "https://site-gestao-mu.vercel.app",
         "http://localhost:5173",
-        "http://localhost:3000"
+        "http://localhost:3000",
     ]
-    
     CORS(
         app,
         resources={r"/api/*": {"origins": allowed_origins}},
@@ -64,7 +60,7 @@ def create_app():
     JWTManager(app)
 
     # -----------------------
-    # Imports tardios (evita ciclos)
+    # Imports tardios
     # -----------------------
     from src.routes.auth import auth_bp
     from src.routes.client import client_bp
@@ -74,7 +70,7 @@ def create_app():
     from src.routes.metrics import metrics_bp
     from src.routes.upload import upload_bp
     from src.routes.user import user_bp
-    from src.routes.finance import finance_bp  # <— finanças
+    from src.routes.finance import finance_bp
     from src.services.user_service import ensure_admin_seed
 
     # -----------------------
@@ -94,19 +90,33 @@ def create_app():
     # Healthcheck
     # -----------------------
     @app.get("/healthcheck")
-    def healthcheck():
+    def healthcheck_root():
         return jsonify({"status": "ok"}), 200
+
+    # >>> adição: healthcheck dentro de /api <<<
+    @app.route("/api/healthcheck", methods=["GET", "HEAD", "OPTIONS"])
+    def healthcheck_api():
+        return jsonify({"status": "ok"}), 200
+
+    # >>> aliases para compatibilizar chamadas do front <<<
+    # mantém método com 307 (POST continua POST, GET continua GET)
+    @app.route("/api/monthly-campaigns", methods=["GET", "POST", "OPTIONS", "HEAD"])
+    def alias_monthly_campaigns():
+        return redirect("/api/metrics/monthly-campaigns", code=307)
+
+    @app.route("/api/service-distribution", methods=["GET", "OPTIONS", "HEAD"])
+    def alias_service_distribution():
+        return redirect("/api/metrics/service-distribution", code=307)
 
     # -----------------------
     # Preflight genérico para /api/*
     # -----------------------
     @app.route("/api/<path:any_path>", methods=["OPTIONS"])
     def api_preflight(any_path):
-        # CORS já injeta os cabeçalhos. 204 é suficiente para o browser prosseguir.
         return ("", 204)
 
     # -----------------------
-    # Error Handlers úteis (JSON)
+    # Error Handlers (JSON)
     # -----------------------
     @app.errorhandler(404)
     def handle_404(e):
@@ -131,8 +141,6 @@ def create_app():
 
     return app
 
-
-# expõe um objeto app global (funciona com "src.main:create_app()")
 app = create_app()
 
 if __name__ == "__main__":
