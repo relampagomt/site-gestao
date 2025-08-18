@@ -15,7 +15,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
 import { Checkbox } from "@/components/ui/checkbox.jsx";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 import { Separator } from "@/components/ui/separator.jsx";
 import {
   Plus,
@@ -73,9 +72,13 @@ function brToYMD(br) {
   const [d, m, y] = s.split("/");
   return `${y}-${m}-${d}`;
 }
-function cls(...xs) {
-  return xs.filter(Boolean).join(" ");
-}
+
+/* ===== Helpers de URL ===== */
+const getSampleUrl = (row) => row?.material_sample_url || row?.sampleUrl || "";
+const getProtocolUrl = (row) => row?.protocol_url || row?.protocolUrl || "";
+
+const isProbablyImage = (u = "") =>
+  /\.(png|jpe?g|gif|webp|bmp|tif?f|svg)(\?|#|$)/i.test(String(u));
 
 /* ============================ Component ============================ */
 
@@ -127,10 +130,7 @@ const Materials = () => {
   const [deleting, setDeleting] = useState(false);
   const [delId, setDelId] = useState(null);
 
-  // upload de imagem/arquivo
-  const [uploading, setUploading] = useState(false);
-
-  // (restaurado) flags de upload dos modais
+  // upload flags
   const [uploadingSample, setUploadingSample] = useState(false);
   const [uploadingProtocol, setUploadingProtocol] = useState(false);
 
@@ -142,9 +142,7 @@ const Materials = () => {
       try {
         const res = await api.get("/materials");
         const list = Array.isArray(res.data) ? res.data : res.data?.items || [];
-        if (mounted) {
-          setMaterials(list);
-        }
+        if (mounted) setMaterials(list);
       } catch (err) {
         console.error("Erro ao carregar materiais:", err);
       } finally {
@@ -186,7 +184,7 @@ const Materials = () => {
       return { ...m, _ymd };
     });
 
-    // mês único (atajo)
+    // mês único (atalho)
     if (month) list = list.filter((m) => m._ymd.slice(0, 7) === month);
 
     // busca por digitação
@@ -199,7 +197,7 @@ const Materials = () => {
       );
     }
 
-    // filtros novos
+    // filtros
     if (fClients.length > 0) {
       const set = new Set(fClients);
       list = list.filter((m) => set.has((m.client_name ?? m.clientName ?? "").trim()));
@@ -210,18 +208,18 @@ const Materials = () => {
     }
     if (fHasSample) {
       const want = fHasSample === "sim";
-      list = list.filter((m) => Boolean(m.material_sample_url || m.sampleUrl) === want);
+      list = list.filter((m) => Boolean(getSampleUrl(m)) === want);
     }
     if (fHasProtocol) {
       const want = fHasProtocol === "sim";
-      list = list.filter((m) => Boolean(m.protocol_url || m.protocolUrl) === want);
+      list = list.filter((m) => Boolean(getProtocolUrl(m)) === want);
     }
     if (fQtyMin || fQtyMax) {
       const min = Number(fQtyMin || 0);
       const max = fQtyMax ? Number(fQtyMax) : Number.MAX_SAFE_INTEGER;
       list = list.filter((m) => {
-        const q = Number(m.quantity || 0);
-        return q >= min && q <= max;
+        const qn = Number(m.quantity || 0);
+        return qn >= min && qn <= max;
       });
     }
     if (fStartBr || fEndBr) {
@@ -237,16 +235,14 @@ const Materials = () => {
 
   /* ================== RESUMOS DINÂMICOS (baseado em FILTERED) ================== */
 
-  // Totais gerais (pós-filtro)
   const totalRegistrosFiltrados = filtered.length;
   const totalQtdFiltrada = useMemo(
     () => filtered.reduce((sum, m) => sum + Number(m.quantity || 0), 0),
     [filtered]
   );
 
-  // Agrupar por mês (YYYY-MM) com contagem e soma de Qtd
   const byMonth = useMemo(() => {
-    const map = new Map(); // key: 'YYYY-MM' -> {count, qty}
+    const map = new Map();
     filtered.forEach((m) => {
       if (!m._ymd) return;
       const ym = m._ymd.slice(0, 7);
@@ -257,12 +253,11 @@ const Materials = () => {
     });
     return Array.from(map.entries())
       .map(([ym, v]) => ({ ym, ...v }))
-      .sort((a, b) => a.ym.localeCompare(b.ym)); // crescente
+      .sort((a, b) => a.ym.localeCompare(b.ym));
   }, [filtered]);
 
-  // Agrupar por ano (YYYY) com contagem e soma de Qtd
   const byYear = useMemo(() => {
-    const map = new Map(); // key: 'YYYY' -> {count, qty}
+    const map = new Map();
     filtered.forEach((m) => {
       if (!m._ymd) return;
       const y = m._ymd.slice(0, 4);
@@ -273,10 +268,9 @@ const Materials = () => {
     });
     return Array.from(map.entries())
       .map(([year, v]) => ({ year, ...v }))
-      .sort((a, b) => a.year.localeCompare(b.year)); // crescente
+      .sort((a, b) => a.year.localeCompare(b.year));
   }, [filtered]);
 
-  // Opções de ano para foco quando "Agrupar por mês"
   const yearOptions = useMemo(() => {
     const ys = new Set(byMonth.map((m) => m.ym.slice(0, 4)));
     return ["todos", ...Array.from(ys).sort()];
@@ -293,18 +287,9 @@ const Materials = () => {
     }).format(date);
   }, []);
 
-  // Mês focado (cards clicáveis setam esse state)
-  const setMonthFilterFromCard = (ym) => {
-    setMonth(ym);
-  };
+  const setMonthFilterFromCard = (ym) => setMonth(ym);
 
-  // ByMonth filtrado por anoFocus (quando groupBy === 'mes')
-  const byMonthForUI = useMemo(() => {
-    if (yearFocus === "todos") return byMonth;
-    return byMonth.filter((m) => m.ym.startsWith(String(yearFocus)));
-  }, [byMonth, yearFocus]);
-
-  // Prepare data for export
+  // Export (com fallback dos campos)
   const exportData = useMemo(() => {
     return filtered.map((item) => ({
       "Cliente": item.client_name || "",
@@ -312,8 +297,8 @@ const Materials = () => {
       "Data": ymdToBR(item._ymd || toYMDInCuiaba(item.date) || ""),
       "Quantidade": item.quantity ?? "",
       "Observações": item.notes || "",
-      "Amostra (URL)": item.material_sample_url || "",
-      "Protocolo (URL)": item.protocol_url || "",
+      "Amostra (URL)": getSampleUrl(item),
+      "Protocolo (URL)": getProtocolUrl(item),
     }));
   }, [filtered]);
 
@@ -346,8 +331,8 @@ const Materials = () => {
       date: row._ymd || toYMDInCuiaba(row.date) || "",
       quantity: row.quantity ?? "",
       notes: row.notes || "",
-      material_sample_url: row.material_sample_url || "",
-      protocol_url: row.protocol_url || "",
+      material_sample_url: getSampleUrl(row),
+      protocol_url: getProtocolUrl(row),
     });
     setOpen(true);
   };
@@ -403,7 +388,7 @@ const Materials = () => {
     }
   };
 
-  /* ================== Upload Genérico (URL) ================== */
+  /* ================== Upload ================== */
   const uploadAnyFile = async (file) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -413,7 +398,6 @@ const Materials = () => {
     return res.data?.url || "";
   };
 
-  // (restaurado) handlers dos inputs de arquivo dos modais
   const onSampleChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -565,7 +549,7 @@ const Materials = () => {
             )}
           </div>
 
-          {/* Resumo (dinâmico, pós-filtros) */}
+          {/* Resumo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="rounded-xl border bg-card p-4">
               <p className="text-xs text-muted-foreground">Registros (após filtros)</p>
@@ -578,31 +562,33 @@ const Materials = () => {
             </div>
           </div>
 
-          {/* Quebras por MÊS / ANO (sempre baseadas em FILTERED) */}
+          {/* Quebras por MÊS / ANO */}
           {groupBy === "mes" && (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">Totais por mês (clique para filtrar pelo mês)</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                {byMonthForUI.length === 0 ? (
+                {byMonth.length === 0 ? (
                   <div className="text-sm text-muted-foreground">Sem dados para o agrupamento.</div>
                 ) : (
-                  byMonthForUI.map(({ ym, count, qty }) => (
-                    <button
-                      key={ym}
-                      type="button"
-                      onClick={() => setMonthFilterFromCard(ym)}
-                      className="rounded-xl border bg-card p-4 text-left hover:shadow-sm transition"
-                      title="Aplicar filtro por mês"
-                    >
-                      <div className="text-xs text-muted-foreground">{formatMonthLabel(ym)}</div>
-                      <div className="mt-1 text-sm">
-                        Registros: <b>{fmtInt.format(count)}</b>
-                      </div>
-                      <div className="text-sm">
-                        Qtd: <b>{fmtInt.format(qty)}</b>
-                      </div>
-                    </button>
-                  ))
+                  byMonth
+                    .filter(({ ym }) => (yearFocus === "todos" ? true : ym.startsWith(String(yearFocus))))
+                    .map(({ ym, count, qty }) => (
+                      <button
+                        key={ym}
+                        type="button"
+                        onClick={() => setMonthFilterFromCard(ym)}
+                        className="rounded-xl border bg-card p-4 text-left hover:shadow-sm transition"
+                        title="Aplicar filtro por mês"
+                      >
+                        <div className="text-xs text-muted-foreground">{formatMonthLabel(ym)}</div>
+                        <div className="mt-1 text-sm">
+                          Registros: <b>{fmtInt.format(count)}</b>
+                        </div>
+                        <div className="text-sm">
+                          Qtd: <b>{fmtInt.format(qty)}</b>
+                        </div>
+                      </button>
+                    ))
                 )}
               </div>
             </div>
@@ -620,7 +606,7 @@ const Materials = () => {
                       key={year}
                       type="button"
                       onClick={() => {
-                        setMonth(""); // limpa o atalho de mês
+                        setMonth("");
                         setFStartBr(`01/01/${year}`);
                         setFEndBr(`31/12/${year}`);
                       }}
@@ -653,7 +639,7 @@ const Materials = () => {
                   <TableHead className="text-xs md:text-sm">Amostra</TableHead>
                   <TableHead className="text-xs md:text-sm">Protocolo</TableHead>
                   <TableHead className="text-xs md:text-sm">Observações</TableHead>
-                  <TableHead className="text-xs md:text-sm w-[100px] text-right">Ações</TableHead>
+                  <TableHead className="text-xs md:text-sm w-[160px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -670,48 +656,72 @@ const Materials = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  pageItems.map((row) => (
-                    <TableRow key={row.id || `${row.client_name}-${row.date}`}>
-                      <TableCell className="align-top">{ymdToBR(row._ymd || toYMDInCuiaba(row.date))}</TableCell>
-                      <TableCell className="align-top">{row.client_name}</TableCell>
-                      <TableCell className="align-top">{row.responsible}</TableCell>
-                      <TableCell className="align-top text-right">{fmtInt.format(Number(row.quantity || 0))}</TableCell>
-                      <TableCell className="align-top">
-                        {row.material_sample_url ? (
-                          <ImagePreview url={row.material_sample_url} />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="align-top">
-                        {row.protocol_url ? (
-                          <ImagePreview url={row.protocol_url} />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="align-top max-w-[260px]">
-                        <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words">
-                          {row.notes || "—"}
-                        </div>
-                      </TableCell>
-                      <TableCell className="align-top text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="icon" className="size-8" onClick={() => openEdit(row)}>
-                            <Edit className="size-4" />
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="icon"
-                            className="size-8"
-                            onClick={() => confirmDelete(row.id)}
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  pageItems.map((row) => {
+                    const sampleUrl = getSampleUrl(row);
+                    const protocolUrl = getProtocolUrl(row);
+                    return (
+                      <TableRow key={row.id || `${row.client_name}-${row.date}`}>
+                        <TableCell className="align-top">{ymdToBR(row._ymd || toYMDInCuiaba(row.date))}</TableCell>
+                        <TableCell className="align-top">{row.client_name}</TableCell>
+                        <TableCell className="align-top">{row.responsible}</TableCell>
+                        <TableCell className="align-top text-right">{fmtInt.format(Number(row.quantity || 0))}</TableCell>
+
+                        {/* Amostra: miniatura */}
+                        <TableCell className="align-top">
+                          {sampleUrl ? (
+                            <ImagePreview src={sampleUrl} />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+
+                        {/* Protocolo: miniatura se imagem, link se pdf/outro */}
+                        <TableCell className="align-top">
+                          {protocolUrl ? (
+                            isProbablyImage(protocolUrl) ? (
+                              <ImagePreview src={protocolUrl} />
+                            ) : (
+                              <a
+                                href={protocolUrl}
+                                className="text-xs text-primary underline hover:no-underline"
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Abrir
+                              </a>
+                            )
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+
+                        <TableCell className="align-top max-w-[260px]">
+                          <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words">
+                            {row.notes || "—"}
+                          </div>
+                        </TableCell>
+
+                        {/* Ações: texto + ícone (restaurado) */}
+                        <TableCell className="align-top text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="outline" size="sm" className="gap-2" onClick={() => openEdit(row)}>
+                              <Edit className="size-4" />
+                              Editar
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => confirmDelete(row.id)}
+                            >
+                              <Trash2 className="size-4" />
+                              Excluir
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -947,7 +957,7 @@ const Materials = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Amostra (restaurado) */}
+                {/* Amostra */}
                 <div className="space-y-2">
                   <Label className="text-xs">Amostra do Material</Label>
                   <div className="flex items-center gap-3">
@@ -957,9 +967,9 @@ const Materials = () => {
                       {uploadingSample ? "Enviando..." : "Upload"}
                     </Button>
                   </div>
-                  {current.material_sample_url && (
+                  {current.material_sample_url ? (
                     <div className="relative inline-flex items-center gap-2 mt-2">
-                      <ImagePreview url={current.material_sample_url} />
+                      <ImagePreview src={current.material_sample_url} />
                       <button
                         type="button"
                         className="bg-white border rounded-full p-1 shadow"
@@ -969,22 +979,33 @@ const Materials = () => {
                         <X className="size-4 text-red-600" />
                       </button>
                     </div>
-                  )}
+                  ) : null}
                 </div>
 
-                {/* Protocolo (restaurado) */}
+                {/* Protocolo */}
                 <div className="space-y-2">
                   <Label className="text-xs">Protocolo</Label>
                   <div className="flex items-center gap-3">
-                    <Input type="file" accept="image/*" onChange={onProtocolChange} />
+                    <Input type="file" accept="image/*,.pdf" onChange={onProtocolChange} />
                     <Button type="button" variant="outline" disabled className="gap-2">
                       <UploadCloud className="size-4" />
                       {uploadingProtocol ? "Enviando..." : "Upload"}
                     </Button>
                   </div>
-                  {current.protocol_url && (
+                  {current.protocol_url ? (
                     <div className="relative inline-flex items-center gap-2 mt-2">
-                      <ImagePreview url={current.protocol_url} />
+                      {isProbablyImage(current.protocol_url) ? (
+                        <ImagePreview src={current.protocol_url} />
+                      ) : (
+                        <a
+                          href={current.protocol_url}
+                          className="text-xs text-primary underline hover:no-underline"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Abrir protocolo
+                        </a>
+                      )}
                       <button
                         type="button"
                         className="bg-white border rounded-full p-1 shadow"
@@ -994,7 +1015,7 @@ const Materials = () => {
                         <X className="size-4 text-red-600" />
                       </button>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
 
@@ -1034,62 +1055,6 @@ const Materials = () => {
 };
 
 /* ================== Components Auxiliares ================== */
-
-const UploadWidget = ({ onUploaded, uploading, setUploading }) => {
-  const [file, setFile] = useState(null);
-  const [error, setError] = useState("");
-
-  const handleUpload = async () => {
-    if (!file) return;
-    try {
-      setError("");
-      setUploading(true);
-      const url = await fakeUpload(file); // substitua por uploadAnyFile(file) se tiver o backend pronto
-      onUploaded(url);
-      setFile(null);
-    } catch (err) {
-      console.error(err);
-      setError("Falha no upload. Tente novamente.");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const fakeUpload = async (f) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.readAsDataURL(f);
-    });
-  };
-
-  return (
-    <div className="space-y-2">
-      <Input
-        type="file"
-        onChange={(e) => setFile(e.target.files?.[0] || null)}
-      />
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      <div className="flex gap-2">
-        <Button size="sm" type="button" disabled={!file || uploading} onClick={handleUpload}>
-          {uploading ? "Enviando..." : "Enviar"}
-        </Button>
-        {file ? (
-          <Button
-            size="sm"
-            type="button"
-            variant="ghost"
-            onClick={() => setFile(null)}
-            className="text-muted-foreground hover:text-foreground"
-            title="Limpar seleção"
-          >
-            <X className="size-3" />
-          </Button>
-        ) : null}
-      </div>
-    </div>
-  );
-};
 
 const ComboMulti = ({ options, values, onChange, placeholder }) => {
   const [open, setOpen] = useState(false);
