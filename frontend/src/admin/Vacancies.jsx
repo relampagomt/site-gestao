@@ -58,7 +58,6 @@ const BRL = (value) => {
   }).format(num);
 };
 
-/** ===================== CSV / Google Sheets Helpers ===================== **/
 function normalizeStr(s = "") {
   return String(s)
     .toLowerCase()
@@ -68,37 +67,7 @@ function normalizeStr(s = "") {
     .trim();
 }
 
-// Tenta transformar uma URL de Google Sheets em URL CSV exportável
-function toCsvExportUrl(url) {
-  if (!url) return "";
-  const u = url.trim();
-
-  // Já é CSV publicado?
-  if (u.includes("output=csv") || u.endsWith(".csv")) return u;
-
-  // Formato /spreadsheets/d/{ID}/edit#gid=GID
-  const m = u.match(/\/spreadsheets\/d\/([^/]+)/);
-  const gidMatch = u.match(/[#?&]gid=(\d+)/);
-  if (m) {
-    const sheetId = m[1];
-    const gid = gidMatch ? gidMatch[1] : "0";
-    return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
-  }
-
-  // Formato /spreadsheets/d/e/{ID}/pub...
-  if (u.includes("/spreadsheets/d/e/")) {
-    // Se não tiver output=csv, força
-    if (!u.includes("output=")) {
-      const sep = u.includes("?") ? "&" : "?";
-      return `${u}${sep}output=csv`;
-    }
-    return u;
-  }
-
-  return u; // tenta como está
-}
-
-// CSV Parser simples que suporta aspas
+// CSV Parser simples com suporte a aspas ("," como separador)
 function parseCsv(text) {
   const rows = [];
   let row = [];
@@ -136,27 +105,25 @@ function parseCsv(text) {
       }
     }
   }
-  // última célula
   row.push(cur);
   rows.push(row);
 
-  // remove linhas vazias finais
+  // remove linhas completamente vazias no final
   while (rows.length && rows[rows.length - 1].every((x) => x === "")) {
     rows.pop();
   }
   return rows;
 }
 
-// Auto-map de colunas pelo cabeçalho
 function autoMapColumns(headers = []) {
-  const normHeaders = headers.map((h) => normalizeStr(h));
-  function findOne(cands) {
+  const norm = headers.map((h) => normalizeStr(h));
+  const findOne = (cands) => {
     for (const c of cands) {
-      const idx = normHeaders.findIndex((h) => h.includes(normalizeStr(c)));
+      const idx = norm.findIndex((h) => h.includes(normalizeStr(c)));
       if (idx !== -1) return idx;
     }
     return -1;
-  }
+  };
 
   return {
     name: findOne(["nome", "name", "candidato", "candidata"]),
@@ -175,25 +142,18 @@ function parseSalaryBR(str) {
   if (str == null) return 0;
   let s = String(str).trim();
   if (!s) return 0;
-
-  // mantém apenas dígitos, vírgula, ponto e sinal
   const cleaned = s.replace(/[^\d,.\-]/g, "");
-
-  // Heurística: se termina com ,dd (2 casas), trata como pt-BR
   if (/,(\d{2})$/.test(cleaned)) {
     return Number(cleaned.replace(/\./g, "").replace(",", "."));
   }
-  // Caso geral
   return parseFloat(cleaned.replace(/,/g, "")) || 0;
 }
 
 function parsePhotos(val) {
   if (!val) return [];
   const text = String(val);
-  // captura todos os links http/https
   const links = text.match(/https?:\/\/\S+/g);
   if (links && links.length) return links.map((s) => s.replace(/[),;]+$/, ""));
-  // fallback: separa por vírgula/; ou |
   return text
     .split(/[,;|]+/)
     .map((s) => s.trim())
@@ -229,12 +189,12 @@ const Vacancies = () => {
   const [departmentFilter, setDepartmentFilter] = useState("todos");
   const [jobTypeFilter, setJobTypeFilter] = useState("todos");
 
-  // ===== IMPORT states =====
+  // ===== IMPORT (CSV upload) states =====
   const [importOpen, setImportOpen] = useState(false);
-  const [sheetUrl, setSheetUrl] = useState("");
-  const [importError, setImportError] = useState("");
+  const [csvFile, setCsvFile] = useState(null);
+  const [csvError, setCsvError] = useState("");
   const [importHeaders, setImportHeaders] = useState([]);
-  const [importRows, setImportRows] = useState([]); // array de arrays (sem header)
+  const [importRows, setImportRows] = useState([]); // sem header
   const [columnMap, setColumnMap] = useState({
     name: -1, phone: -1, address: -1, age: -1, sex: -1,
     department: -1, job_type: -1, salary: -1, photos: -1,
@@ -248,7 +208,6 @@ const Vacancies = () => {
     try {
       const { data } = await api.get("/job-vacancies");
       const list = Array.isArray(data) ? data : [];
-      // Normalize photos field
       const normalized = list.map((v) => ({
         ...v,
         _photos: Array.isArray(v.photos) ? v.photos : [],
@@ -388,7 +347,6 @@ const Vacancies = () => {
   const filtered = useMemo(() => {
     let list = [...vacancies];
 
-    // Search filter
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((v) =>
@@ -398,17 +356,14 @@ const Vacancies = () => {
       );
     }
 
-    // Status filter
     if (statusFilter !== "todos") {
       list = list.filter((v) => v.status === statusFilter);
     }
 
-    // Department filter
     if (departmentFilter !== "todos") {
       list = list.filter((v) => v.department === departmentFilter);
     }
 
-    // Job type filter
     if (jobTypeFilter !== "todos") {
       list = list.filter((v) => v.job_type === jobTypeFilter);
     }
@@ -450,7 +405,7 @@ const Vacancies = () => {
 
   const pdfOptions = {
     title: 'Relatório de Vagas',
-    orientation: 'l', // landscape para mais colunas
+    orientation: 'l',
     filtersSummary: `Filtros aplicados: ${
       [
         search ? `Busca: "${search}"` : '',
@@ -473,10 +428,10 @@ const Vacancies = () => {
     }
   };
 
-  /** ===================== Import Google Forms (CSV) ===================== **/
+  /** ===================== Import CSV (upload local) ===================== **/
   function resetImport() {
-    setSheetUrl("");
-    setImportError("");
+    setCsvFile(null);
+    setCsvError("");
     setImportHeaders([]);
     setImportRows([]);
     setColumnMap({
@@ -487,38 +442,54 @@ const Vacancies = () => {
     setImporting(false);
   }
 
-  async function fetchCsvAndPreview() {
-    setImportError("");
+  function onCsvFileChange(e) {
+    const f = e.target.files?.[0] || null;
+    setCsvFile(f);
+    setCsvError("");
     setImportHeaders([]);
     setImportRows([]);
-    try {
-      const csvUrl = toCsvExportUrl(sheetUrl);
-      const res = await fetch(csvUrl, { method: "GET" });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} – verifique se a planilha está “Publicada na Web” como CSV.`);
-      }
-      const txt = await res.text();
-      const rows = parseCsv(txt);
-      if (!rows.length) throw new Error("CSV vazio.");
+  }
 
-      const headers = rows[0];
-      const dataRows = rows.slice(1).filter((r) => r.some((c) => String(c || "").trim() !== ""));
-      setImportHeaders(headers);
-      setImportRows(dataRows);
+  function loadCsvPreview() {
+    setCsvError("");
+    setImportHeaders([]);
+    setImportRows([]);
 
-      const guess = autoMapColumns(headers);
-      setColumnMap(guess);
-
-      if (guess.name === -1) {
-        setImportError("Mapeie pelo menos a coluna 'Nome' para prosseguir.");
-      }
-    } catch (err) {
-      console.error("Erro ao ler CSV:", err);
-      setImportError(
-        err?.message ||
-          "Falha ao carregar CSV. Garanta que a planilha esteja pública (Arquivo > Publicar na Web > CSV) e copie o link do CSV."
-      );
+    if (!csvFile) {
+      setCsvError("Selecione um arquivo .csv primeiro.");
+      return;
     }
+    if (!/\.csv$/i.test(csvFile.name)) {
+      setCsvError("Arquivo inválido. Envie um .csv exportado do Google Forms/Sheets.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => setCsvError("Falha ao ler o arquivo. Tente novamente.");
+    reader.onload = () => {
+      try {
+        const text = typeof reader.result === "string" ? reader.result : new TextDecoder("utf-8").decode(reader.result);
+        const rows = parseCsv(text);
+        if (!rows.length) throw new Error("CSV vazio ou ilegível.");
+
+        const headers = rows[0];
+        const dataRows = rows.slice(1).filter((r) => r.some((c) => String(c || "").trim() !== ""));
+
+        setImportHeaders(headers);
+        setImportRows(dataRows);
+
+        const guess = autoMapColumns(headers);
+        setColumnMap(guess);
+
+        if (guess.name === -1) {
+          setCsvError("Mapeie pelo menos a coluna 'Nome' para prosseguir.");
+        }
+      } catch (err) {
+        console.error(err);
+        setCsvError(err?.message || "Não foi possível interpretar o CSV.");
+      }
+    };
+    reader.readAsText(csvFile, "utf-8");
   }
 
   function setMap(field, idx) {
@@ -601,14 +572,11 @@ const Vacancies = () => {
                 variant="outline"
                 size="sm"
                 className="gap-2"
-                onClick={() => {
-                  resetImport();
-                  setImportOpen(true);
-                }}
-                title="Importar respostas do Google Forms (CSV do Google Sheets)"
+                onClick={() => { resetImport(); setImportOpen(true); }}
+                title="Importar respostas via upload de CSV"
               >
                 <UploadIcon className="size-4" />
-                Importar do Google Forms
+                Importar CSV
               </Button>
 
               <ExportMenu
@@ -969,7 +937,6 @@ const Vacancies = () => {
                   </Button>
                 </div>
 
-                {/* Photo Preview */}
                 {form.photos && form.photos.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-3">
                     {form.photos.map((url, idx) => (
@@ -1049,41 +1016,39 @@ const Vacancies = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Import Google Forms Modal */}
+      {/* Import CSV Modal */}
       <Dialog open={importOpen} onOpenChange={(o) => { setImportOpen(o); if (!o) resetImport(); }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Importar do Google Forms</DialogTitle>
+            <DialogTitle>Importar CSV (Google Forms/Sheets)</DialogTitle>
             <DialogDescription>
-              Cole o link <strong>CSV</strong> da planilha de respostas (Google Sheets).
+              Faça upload do arquivo <strong>.csv</strong> exportado do Google Forms/Sheets.
               <br />
-              Dica: no Google Sheets, vá em <em>Arquivo → Publicar na Web</em>, escolha a aba “Form responses 1” e o formato <em>CSV</em>. Copie o link gerado e cole abaixo.
+              Dica (Sheets): Arquivo → Fazer download → <em>Valores separados por vírgulas (.csv)</em>.
             </DialogDescription>
           </DialogHeader>
 
-          {/* URL */}
+          {/* File input */}
           <div className="space-y-2">
-            <Label htmlFor="csvUrl">URL da planilha (CSV ou Google Sheets)</Label>
+            <Label htmlFor="csvFile">Arquivo CSV</Label>
             <Input
-              id="csvUrl"
-              placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0 ou ...output=csv"
-              value={sheetUrl}
-              onChange={(e) => setSheetUrl(e.target.value)}
+              id="csvFile"
+              type="file"
+              accept=".csv,text/csv"
+              onChange={onCsvFileChange}
             />
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={fetchCsvAndPreview} className="gap-2">
+            <div className="flex gap-2 items-center">
+              <Button type="button" variant="outline" onClick={loadCsvPreview} className="gap-2">
                 <UploadIcon className="size-4" />
                 Carregar & Visualizar
               </Button>
               {importHeaders.length > 0 && (
-                <span className="text-xs text-muted-foreground self-center">
+                <span className="text-xs text-muted-foreground">
                   Linhas detectadas: {importRows.length}
                 </span>
               )}
             </div>
-            {!!importError && (
-              <p className="text-sm text-red-600">{importError}</p>
-            )}
+            {!!csvError && <p className="text-sm text-red-600">{csvError}</p>}
           </div>
 
           {/* Mapping */}
