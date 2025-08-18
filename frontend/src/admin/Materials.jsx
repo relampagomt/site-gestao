@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
 import { Checkbox } from "@/components/ui/checkbox.jsx";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 import { Separator } from "@/components/ui/separator.jsx";
 import {
   Plus,
@@ -49,7 +50,7 @@ function toYMDInCuiaba(value) {
   if (isDMY(s)) {
     const [d, m, y] = s.split("/");
     return `${y}-${m}-${d}`;
-    }
+  }
   const d = new Date(s);
   if (isNaN(d)) return "";
   const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -126,10 +127,12 @@ const Materials = () => {
   const [deleting, setDeleting] = useState(false);
   const [delId, setDelId] = useState(null);
 
-  // upload (estados dos DIÁLOGOS revertidos)
-  const [isSampleDialogOpen, setIsSampleDialogOpen] = useState(false);
-  const [isProtocolDialogOpen, setIsProtocolDialogOpen] = useState(false);
+  // upload de imagem/arquivo
   const [uploading, setUploading] = useState(false);
+
+  // (restaurado) flags de upload dos modais
+  const [uploadingSample, setUploadingSample] = useState(false);
+  const [uploadingProtocol, setUploadingProtocol] = useState(false);
 
   // efeitos
   useEffect(() => {
@@ -183,7 +186,7 @@ const Materials = () => {
       return { ...m, _ymd };
     });
 
-    // mês único (atalho)
+    // mês único (atajo)
     if (month) list = list.filter((m) => m._ymd.slice(0, 7) === month);
 
     // busca por digitação
@@ -295,7 +298,7 @@ const Materials = () => {
     setMonth(ym);
   };
 
-  // ByMonth filtrado por yearFocus (quando groupBy === 'mes')
+  // ByMonth filtrado por anoFocus (quando groupBy === 'mes')
   const byMonthForUI = useMemo(() => {
     if (yearFocus === "todos") return byMonth;
     return byMonth.filter((m) => m.ym.startsWith(String(yearFocus)));
@@ -408,6 +411,31 @@ const Materials = () => {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return res.data?.url || "";
+  };
+
+  // (restaurado) handlers dos inputs de arquivo dos modais
+  const onSampleChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingSample(true);
+      const url = await uploadAnyFile(file);
+      if (url) setCurrent((c) => ({ ...c, material_sample_url: url }));
+    } finally {
+      setUploadingSample(false);
+    }
+  };
+
+  const onProtocolChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingProtocol(true);
+      const url = await uploadAnyFile(file);
+      if (url) setCurrent((c) => ({ ...c, protocol_url: url }));
+    } finally {
+      setUploadingProtocol(false);
+    }
   };
 
   /* ================== UI ================== */
@@ -592,7 +620,7 @@ const Materials = () => {
                       key={year}
                       type="button"
                       onClick={() => {
-                        setMonth("");
+                        setMonth(""); // limpa o atalho de mês
                         setFStartBr(`01/01/${year}`);
                         setFEndBr(`31/12/${year}`);
                       }}
@@ -657,14 +685,7 @@ const Materials = () => {
                       </TableCell>
                       <TableCell className="align-top">
                         {row.protocol_url ? (
-                          <a
-                            href={row.protocol_url}
-                            className="text-xs text-primary underline hover:no-underline"
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Abrir
-                          </a>
+                          <ImagePreview url={row.protocol_url} />
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
@@ -926,107 +947,54 @@ const Materials = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* === AMOSTRA: DIÁLOGO (revertido) === */}
-                <div>
-                  <Label className="text-xs flex items-center gap-2">
-                    Amostra (URL)
-                    <Button type="button" size="xs" variant="outline" className="h-6 px-2" onClick={() => setIsSampleDialogOpen(true)}>
-                      <UploadCloud className="size-3 mr-1" />
-                      Upload
+                {/* Amostra (restaurado) */}
+                <div className="space-y-2">
+                  <Label className="text-xs">Amostra do Material</Label>
+                  <div className="flex items-center gap-3">
+                    <Input type="file" accept="image/*" onChange={onSampleChange} />
+                    <Button type="button" variant="outline" disabled className="gap-2">
+                      <UploadCloud className="size-4" />
+                      {uploadingSample ? "Enviando..." : "Upload"}
                     </Button>
-                  </Label>
-                  {current.material_sample_url ? (
-                    <div className="flex items-center gap-2 mt-1">
+                  </div>
+                  {current.material_sample_url && (
+                    <div className="relative inline-flex items-center gap-2 mt-2">
                       <ImagePreview url={current.material_sample_url} />
                       <button
                         type="button"
-                        className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                        className="bg-white border rounded-full p-1 shadow"
                         onClick={() => setCurrent((c) => ({ ...c, material_sample_url: "" }))}
                         title="Remover"
                       >
-                        <X className="size-3" />
-                        Remover
+                        <X className="size-4 text-red-600" />
                       </button>
                     </div>
-                  ) : (
-                    <Input
-                      placeholder="https://..."
-                      value={current.material_sample_url}
-                      onChange={(e) => setCurrent((c) => ({ ...c, material_sample_url: e.target.value }))}
-                    />
                   )}
-
-                  <Dialog open={isSampleDialogOpen} onOpenChange={setIsSampleDialogOpen}>
-                    <DialogContent className="w-[420px]">
-                      <DialogHeader>
-                        <DialogTitle>Enviar amostra</DialogTitle>
-                        <DialogDescription>Selecione um arquivo para enviar. Ao concluir, o link será preenchido automaticamente.</DialogDescription>
-                      </DialogHeader>
-                      <UploadWidget
-                        onUploaded={(url) => {
-                          setCurrent((c) => ({ ...c, material_sample_url: url }));
-                          setIsSampleDialogOpen(false);
-                        }}
-                        uploading={uploading}
-                        setUploading={setUploading}
-                      />
-                    </DialogContent>
-                  </Dialog>
                 </div>
 
-                {/* === PROTOCOLO: DIÁLOGO (revertido) === */}
-                <div>
-                  <Label className="text-xs flex items-center gap-2">
-                    Protocolo (URL)
-                    <Button type="button" size="xs" variant="outline" className="h-6 px-2" onClick={() => setIsProtocolDialogOpen(true)}>
-                      <UploadCloud className="size-3 mr-1" />
-                      Upload
+                {/* Protocolo (restaurado) */}
+                <div className="space-y-2">
+                  <Label className="text-xs">Protocolo</Label>
+                  <div className="flex items-center gap-3">
+                    <Input type="file" accept="image/*" onChange={onProtocolChange} />
+                    <Button type="button" variant="outline" disabled className="gap-2">
+                      <UploadCloud className="size-4" />
+                      {uploadingProtocol ? "Enviando..." : "Upload"}
                     </Button>
-                  </Label>
-                  {current.protocol_url ? (
-                    <div className="flex items-center gap-2 mt-1">
-                      <a
-                        href={current.protocol_url}
-                        className="text-xs text-primary underline hover:no-underline"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Abrir protocolo
-                      </a>
+                  </div>
+                  {current.protocol_url && (
+                    <div className="relative inline-flex items-center gap-2 mt-2">
+                      <ImagePreview url={current.protocol_url} />
                       <button
                         type="button"
-                        className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                        className="bg-white border rounded-full p-1 shadow"
                         onClick={() => setCurrent((c) => ({ ...c, protocol_url: "" }))}
                         title="Remover"
                       >
-                        <X className="size-3" />
-                        Remover
+                        <X className="size-4 text-red-600" />
                       </button>
                     </div>
-                  ) : (
-                    <Input
-                      placeholder="https://..."
-                      value={current.protocol_url}
-                      onChange={(e) => setCurrent((c) => ({ ...c, protocol_url: e.target.value }))}
-                    />
                   )}
-
-                  <Dialog open={isProtocolDialogOpen} onOpenChange={setIsProtocolDialogOpen}>
-                    <DialogContent className="w-[420px]">
-                      <DialogHeader>
-                        <DialogTitle>Enviar protocolo</DialogTitle>
-                        <DialogDescription>Envie um arquivo e o link será preenchido automaticamente.</DialogDescription>
-                      </DialogHeader>
-                      <UploadWidget
-                        onUploaded={(url) => {
-                          setCurrent((c) => ({ ...c, protocol_url: url }));
-                          setIsProtocolDialogOpen(false);
-                        }}
-                        uploading={uploading}
-                        setUploading={setUploading}
-                      />
-                    </DialogContent>
-                  </Dialog>
                 </div>
               </div>
 
