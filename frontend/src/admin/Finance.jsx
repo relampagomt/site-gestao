@@ -109,8 +109,8 @@ const Finance = () => {
       const [txRes, actRes, cliRes, matRes] = await Promise.all([
         api.get(TX_PATH).catch(() => ({ data: [] })),
         api.get('/actions').catch(() => ({ data: [] })),
-        api.get('/clients').catch(() => ({ data: [] })),
-        api.get('/materials').catch(() => ({ data: [] })),
+        api.get('/clients').catch(() => ({ data: [] })),      // clientes
+        api.get('/materials').catch(() => ({ data: [] })),    // materiais
       ]);
       setTransactions(Array.isArray(txRes.data) ? txRes.data : []);
       setActions(Array.isArray(actRes.data) ? actRes.data : []);
@@ -168,7 +168,10 @@ const Finance = () => {
 
     if (monthFilter !== 'todos') {
       const [year, month] = monthFilter.split('-');
-      list = list.filter((t) => String(t.date || '').slice(0, 7) === `${year}-${month}`);
+      list = list.filter((t) => {
+        const tDate = String(t.date || '').slice(0, 7); // YYYY-MM
+        return tDate === `${year}-${month}`;
+      });
     }
 
     if (selectedActions.length > 0) {
@@ -176,15 +179,20 @@ const Finance = () => {
       list = list.filter((t) => actionSet.has(t.action_id));
     }
 
-    list.sort((a, b) => String(b.date || '0000-01-01').localeCompare(String(a.date || '0000-01-01')));
+    list.sort((a, b) => {
+      const aDate = String(a.date || '0000-01-01');
+      const bDate = String(b.date || '0000-01-01');
+      return bDate.localeCompare(aDate);
+    });
+
     return list;
   }, [transactions, search, typeFilter, monthFilter, selectedActions, actions, clients, materials]);
 
-  // Month options for filter
+  // Month options
   const monthOptions = useMemo(() => {
     const months = new Set();
     transactions.forEach((t) => {
-      const dateStr = String(t.date || '').slice(0, 7);
+      const dateStr = String(t.date || '').slice(0, 7); // YYYY-MM
       if (/^\d{4}-\d{2}$/.test(dateStr)) months.add(dateStr);
     });
     return Array.from(months)
@@ -325,7 +333,7 @@ const Finance = () => {
     }
   };
 
-  // Actions selector (filtro)
+  // Actions selector (filtro de lista)
   const [actionsOpen, setActionsOpen] = useState(false);
   const toggleAction = (id) =>
     setSelectedActions((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -338,20 +346,8 @@ const Finance = () => {
           <Layers className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
-
-      <PopoverContent
-        side="bottom"
-        align="start"
-        sideOffset={8}
-        collisionPadding={16}
-        className="z-[100] p-0 w-[min(92vw,560px)]"
-      >
-        <div
-          className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
-          onWheel={(e) => e.stopPropagation()}
-          onWheelCapture={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-        >
+      <PopoverContent align="start" className="p-0 w-[min(92vw,560px)] max-h-[70vh] overflow-hidden">
+        <div className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
           <Command>
             <CommandInput placeholder="Buscar ação..." />
             <CommandEmpty>Nenhuma ação encontrada.</CommandEmpty>
@@ -363,7 +359,7 @@ const Finance = () => {
                   return (
                     <CommandItem key={a.id} value={label} className="flex items-center gap-2" onSelect={() => toggleAction(a.id)}>
                       <Checkbox checked={checked} onCheckedChange={() => toggleAction(a.id)} />
-                      <span className="flex-1 truncate">{label}</span>
+                      <span className="flex-1">{label}</span>
                       {checked && <span className="text-xs text-muted-foreground">selecionada</span>}
                     </CommandItem>
                   );
@@ -376,7 +372,7 @@ const Finance = () => {
     </Popover>
   );
 
-  // Totais
+  // Totals
   const totalEntrada = filtered.filter((t) => t.type === 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
   const totalSaida = filtered.filter((t) => t.type !== 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
   const saldo = totalEntrada - totalSaida;
@@ -418,17 +414,28 @@ const Finance = () => {
       ].filter(Boolean).join(' | ') || 'Nenhum filtro aplicado'
     }`,
     columnStyles: {
-      0: { cellWidth: 22 }, 1: { cellWidth: 22 }, 2: { cellWidth: 38 },
-      3: { cellWidth: 46 }, 4: { cellWidth: 46 }, 5: { cellWidth: 60 },
-      6: { cellWidth: 26 }, 7: { cellWidth: 70 },
+      0: { cellWidth: 22 }, // Data
+      1: { cellWidth: 22 }, // Tipo
+      2: { cellWidth: 38 }, // Categoria
+      3: { cellWidth: 46 }, // Ação
+      4: { cellWidth: 46 }, // Cliente
+      5: { cellWidth: 60 }, // Material
+      6: { cellWidth: 26 }, // Valor
+      7: { cellWidth: 70 }, // Observações
     },
     footerContent: `Totais do período: Entradas: ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`
   };
 
-  // Itens para selects do formulário
+  // Items para selects do formulário
   const actionItems = useMemo(() => actions.map(a => ({ id: a.id, label: actionLabelById(a.id) })), [actions]);
-  const clientItems = useMemo(() => clients.map(c => ({ id: c.id, label: clientLabelById(c.id) })), [clients]);
-  const materialItems = useMemo(() => materials.map(m => ({ id: m.id, label: materialLabelById(m.id) })), [materials]);
+  const clientItems = useMemo(() => clients.map(c => ({
+    id: c.id,
+    label: clientLabelById(c.id),
+  })), [clients]);
+  const materialItems = useMemo(() => materials.map(m => ({
+    id: m.id,
+    label: materialLabelById(m.id),
+  })), [materials]);
 
   return (
     <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
@@ -448,6 +455,7 @@ const Finance = () => {
             <p className="text-xs text-muted-foreground">Receitas registradas</p>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Saídas/Despesas</CardTitle>
@@ -458,6 +466,7 @@ const Finance = () => {
             <p className="text-xs text-muted-foreground">Gastos registrados</p>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Saldo</CardTitle>
@@ -474,31 +483,46 @@ const Finance = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Category Chart */}
         <Card>
-          <CardHeader><CardTitle className="text-lg">Gastos por Categoria</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-lg">Gastos por Categoria</CardTitle>
+          </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
-                <Pie data={categoryChart} cx="50%" cy="50%" labelLine={false}
-                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                     outerRadius={80} fill="#8884d8" dataKey="value">
-                  {categoryChart.map((_, i) => <Cell key={i} fill={`hsl(${i * 45}, 70%, 60%)`} />)}
+                <Pie
+                  data={categoryChart}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {categoryChart.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={`hsl(${index * 45}, 70%, 60%)`} />
+                  ))}
                 </Pie>
-                <Tooltip formatter={(v) => BRL(v)} />
+                <Tooltip formatter={(value) => BRL(value)} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
+        {/* Monthly Chart */}
         <Card>
-          <CardHeader><CardTitle className="text-lg">Fluxo Mensal</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-lg">Fluxo Mensal</CardTitle>
+          </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={monthlyChart}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
-                <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v) => BRL(v)} />
+                <YAxis tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(value) => BRL(value)} />
                 <Legend />
                 <Bar dataKey="entrada" stackId="a" fill="#16a34a" name="Entradas" />
                 <Bar dataKey="saida" stackId="a" fill="#dc2626" name="Saídas" />
@@ -518,19 +542,35 @@ const Finance = () => {
               <CardDescription>Gerencie entradas, saídas e despesas</CardDescription>
             </div>
             <div className="ml-auto">
-              <ExportMenu data={exportData} columns={exportColumns} filename="financas" pdfOptions={pdfOptions} />
+              <ExportMenu
+                data={exportData}
+                columns={exportColumns}
+                filename="financas"
+                pdfOptions={pdfOptions}
+              />
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
+            {/* Search */}
             <div className="relative flex-1 w-full md:w-[320px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Buscar transações..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input
+                className="pl-9"
+                placeholder="Buscar transações..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
 
+            {/* Type Filter */}
             <div className="w-full sm:w-auto">
-              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-56 md:w-64 max-w-full border rounded-md px-3 py-2 text-sm bg-background">
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="w-56 md:w-64 max-w-full border rounded-md px-3 py-2 text-sm bg-background"
+              >
                 <option value="todos">Todos os tipos</option>
                 <option value="entrada">Entrada</option>
                 <option value="saida">Saída</option>
@@ -538,21 +578,42 @@ const Finance = () => {
               </select>
             </div>
 
+            {/* Month Filter */}
             <div className="w-full sm:w-auto">
-              <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="w-56 md:w-64 max-w-full border rounded-md px-3 py-2 text-sm bg-background">
+              <select
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+                className="w-56 md:w-64 max-w-full border rounded-md px-3 py-2 text-sm bg-background"
+              >
                 <option value="todos">Todos os meses</option>
-                {monthOptions.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                {monthOptions.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
               </select>
             </div>
 
+            {/* Actions Filter */}
             <div className="w-full sm:w-auto">
               <ActionsSelector />
             </div>
 
-            <Button variant="outline" size="sm" onClick={() => { setSearch(''); setTypeFilter('todos'); setMonthFilter('todos'); setSelectedActions([]); }}>
+            {/* Clear Filters */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearch('');
+                setTypeFilter('todos');
+                setMonthFilter('todos');
+                setSelectedActions([]);
+              }}
+            >
               Limpar Filtros
             </Button>
 
+            {/* Create Button */}
             <Button size="sm" className="gap-2" onClick={openCreate}>
               <Plus className="size-4" />
               Novo Lançamento
@@ -581,20 +642,35 @@ const Finance = () => {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={9} className="text-center py-8">Carregando…</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-8">
+                      Carregando…
+                    </TableCell>
+                  </TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={9} className="text-center py-8">Nenhuma transação encontrada.</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-8">
+                      Nenhuma transação encontrada.
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   filtered.map((t) => {
                     const actionLabel = actionLabelById(t.action_id);
                     const clientLabel = clientLabelById(t.client_id);
                     const materialLabel = materialLabelById(t.material_id);
-                    const typeColor = t.type === 'entrada' ? 'default' : t.type === 'saida' ? 'destructive' : 'secondary';
+                    const typeColor =
+                      t.type === 'entrada'
+                        ? 'default'
+                        : t.type === 'saida'
+                        ? 'destructive'
+                        : 'secondary';
 
                     return (
                       <TableRow key={t.id}>
                         <TableCell className="text-center">{isoToBR(String(t.date || '').slice(0, 10))}</TableCell>
-                        <TableCell className="text-center"><Badge variant={typeColor} className="capitalize">{t.type}</Badge></TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={typeColor} className="capitalize">{t.type}</Badge>
+                        </TableCell>
                         <TableCell className="text-center">{t.category || '—'}</TableCell>
                         <TableCell className="text-center">{actionLabel || '—'}</TableCell>
                         <TableCell className="text-center">{clientLabel || '—'}</TableCell>
@@ -603,8 +679,14 @@ const Finance = () => {
                         <TableCell className="text-center">{t.notes || '—'}</TableCell>
                         <TableCell className="text-center">
                           <div className="flex justify-center gap-2">
-                            <Button variant="outline" size="sm" className="gap-2" onClick={() => openEdit(t)}><Edit className="size-4" />Editar</Button>
-                            <Button variant="destructive" size="sm" className="gap-2" onClick={() => handleDelete(t.id)}><Trash2 className="size-4" />Excluir</Button>
+                            <Button variant="outline" size="sm" className="gap-2" onClick={() => openEdit(t)}>
+                              <Edit className="size-4" />
+                              Editar
+                            </Button>
+                            <Button variant="destructive" size="sm" className="gap-2" onClick={() => handleDelete(t.id)}>
+                              <Trash2 className="size-4" />
+                              Excluir
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -615,7 +697,10 @@ const Finance = () => {
             </Table>
           </div>
           <p className="text-xs text-muted-foreground mt-3 px-6 pb-6">
-            Total: <strong>{filtered.length}</strong> transação(ões) | Entradas: <strong>{BRL(totalEntrada)}</strong> | Saídas: <strong>{BRL(totalSaida)}</strong> | Saldo: <strong className={saldo >= 0 ? 'text-green-600' : 'text-red-600'}>{BRL(saldo)}</strong>
+            Total: <strong>{filtered.length}</strong> transação(ões) |{' '}
+            Entradas: <strong>{BRL(totalEntrada)}</strong> |{' '}
+            Saídas: <strong>{BRL(totalSaida)}</strong> |{' '}
+            Saldo: <strong className={saldo >= 0 ? 'text-green-600' : 'text-red-600'}>{BRL(saldo)}</strong>
           </p>
         </CardContent>
       </Card>
@@ -628,9 +713,13 @@ const Finance = () => {
           setOpen(v);
         }}
       >
-        {/* centralizado; largura responsiva; sem overflow escondido */}
-        <DialogContent className="w-[95vw] sm:max-w-2xl p-0">
-          {/* rolagem só no corpo do modal */}
+        {/* ↓↓↓ CENTRALIZADO NO VIEWPORT + largura responsiva ↓↓↓ */}
+        <DialogContent
+          className="
+            w-[min(92vw,800px)] sm:max-w-2xl p-0
+            !left-1/2 !top-1/2 -translate-x-1/2 -translate-y-1/2
+          "
+        >
           <div className="max-h-[80vh] overflow-y-auto p-6">
             <DialogHeader className="pb-2">
               <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
@@ -643,7 +732,12 @@ const Finance = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <Label>Tipo</Label>
-                  <select name="type" value={form.type} onChange={onChange} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                  <select
+                    name="type"
+                    value={form.type}
+                    onChange={onChange}
+                    className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                  >
                     <option value="entrada">Entrada</option>
                     <option value="saida">Saída</option>
                     <option value="despesa">Despesa</option>
@@ -652,7 +746,14 @@ const Finance = () => {
 
                 <div>
                   <Label>Data</Label>
-                  <Input name="dateBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.dateBr} onChange={onDateBRChange} required />
+                  <Input
+                    name="dateBr"
+                    placeholder="DD/MM/AAAA"
+                    inputMode="numeric"
+                    value={form.dateBr}
+                    onChange={onDateBRChange}
+                    required
+                  />
                 </div>
 
                 <div>
@@ -703,7 +804,12 @@ const Finance = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm); }}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm); }}
+                >
                   Cancelar
                 </Button>
                 <Button type="submit" size="sm" disabled={saving}>
@@ -720,32 +826,24 @@ const Finance = () => {
 
 /* ------------------------- Componentes Auxiliares ------------------------- */
 
+// Combobox de busca (Popover + Command) para selects grandes
 const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => {
   const [open, setOpen] = useState(false);
   const selected = items.find((i) => String(i.id) === String(value));
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" className="w-full justify-between">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full justify-between"
+        >
           <span className="truncate">{selected ? selected.label : '—'}</span>
           <Search className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
-
-      <PopoverContent
-        side="bottom"
-        align="start"
-        sideOffset={8}
-        collisionPadding={16}
-        className="z-[100] p-0 w-[min(92vw,520px)]"
-      >
-        <div
-          className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
-          onWheel={(e) => e.stopPropagation()}
-          onWheelCapture={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-        >
+      <PopoverContent align="start" className="p-0 w-[min(92vw,520px)] max-h-[70vh] overflow-hidden">
+        <div className="max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
           <Command>
             <CommandInput placeholder={placeholder} />
             <CommandEmpty>Nenhuma opção encontrada.</CommandEmpty>
@@ -755,8 +853,11 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
                   <CommandItem
                     key={String(opt.id)}
                     value={opt.label}
-                    onSelect={() => { onChange(String(opt.id)); setOpen(false); }}
-                    className="flex items-center gap-2 px-3 py-2"
+                    onSelect={() => {
+                      onChange(String(opt.id));
+                      setOpen(false);
+                    }}
+                    className="flex items-center gap-2"
                   >
                     <span className="truncate">{opt.label}</span>
                   </CommandItem>
