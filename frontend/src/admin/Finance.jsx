@@ -737,7 +737,7 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
       <PopoverContent
         side="bottom"
         align="center"
-        sideOffset={28}
+        sideOffset={24}
         avoidCollisions={false}
         className="z-[100] p-0 w-[min(92vw,520px)]"
       >
