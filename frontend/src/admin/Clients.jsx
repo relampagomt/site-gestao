@@ -1,5 +1,5 @@
 // frontend/src/admin/Clients.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef, useLayoutEffect } from "react";
 import api from "@/services/api";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
@@ -40,6 +40,9 @@ import {
 } from "lucide-react";
 
 import ExportMenu from "@/components/export/ExportMenu";
+
+/* Aux de número */
+const fmtInt = new Intl.NumberFormat("pt-BR");
 
 /* ============================================================================
    TELEFONE BR (+55) — normalização/máscara (simplificada)
@@ -366,10 +369,19 @@ const ensureArraySegments = (client) => {
 
 /* ============================================================================
    Combobox multi de segmentos — com busca, grupos e criação de novos (modo livre)
+   FIX: ancora o portal do Popover dentro do Dialog p/ o scroll do touchpad funcionar.
 ============================================================================ */
 function SegmentosSelect({ value = [], onChange, onCreate }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+
+  // === FIX DE SCROLL EM DIALOG ===
+  const triggerWrapRef = useRef(null);
+  const [portalContainer, setPortalContainer] = useState(null);
+  useLayoutEffect(() => {
+    const el = triggerWrapRef.current?.closest?.("[data-radix-dialog-content]");
+    if (el) setPortalContainer(el);
+  }, []);
 
   const baseOptions = useMemo(
     () => SEGMENTOS_GRUPOS.flatMap((g) => g.options.map((o) => o.value)),
@@ -408,14 +420,17 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" className="w-full justify-between">
-          {value.length === 0 ? "Selecionar segmentos" : (
-            <span className="truncate">
-              {value.slice(0, 2).join(", ")}{value.length > 2 ? ` +${value.length - 2}` : ""}
-            </span>
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
+        {/* wrapper só para capturar o ancestral do Dialog */}
+        <div ref={triggerWrapRef}>
+          <Button variant="outline" role="combobox" className="w-full justify-between">
+            {value.length === 0 ? "Selecionar segmentos" : (
+              <span className="truncate">
+                {value.slice(0, 2).join(", ")}{value.length > 2 ? ` +${value.length - 2}` : ""}
+              </span>
+            )}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </div>
       </PopoverTrigger>
 
       <PopoverContent
@@ -424,8 +439,12 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
         sideOffset={6}
         collisionPadding={32}
         className="p-0 z-[70] w-[min(92vw,320px)] sm:w-[360px] bg-background"
+        container={portalContainer || undefined}
+        onWheelCapture={(e) => e.stopPropagation()}
+        onWheel={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
       >
-        <div className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2">
+        <div className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2 touch-pan-y [-webkit-overflow-scrolling:touch]">
           <Command className="text-[13px] leading-tight">
             <div className="sticky top-0 z-10 bg-background">
               <CommandInput
@@ -498,6 +517,8 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
 
 /* ============================================================================
    Página — filtros com altura fixa (header/footer sempre visíveis)
+   + Paginação (15 por página)
+   + KDI total de clientes e Top 10 segmentos (% sobre exibidos)
 ============================================================================ */
 const Clients = () => {
   const [clients, setClients] = useState([]);
@@ -518,6 +539,10 @@ const Clients = () => {
 
   const [extraSegments, setExtraSegments] = useState([]);
   const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
+
+  // Paginação
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
@@ -725,6 +750,40 @@ const Clients = () => {
     return list;
   }, [clients, q, fCompanies, fSegments, fHasEmail, fHasPhone]);
 
+  /* ===================== INDICADORES (KDI) ===================== */
+  const totalClientesGeral = clients.length;
+  const totalExibidos = filtered.length;
+
+  // Top 10 segmentos por % sobre os "exibidos"
+  const topSegments = useMemo(() => {
+    const counts = new Map();
+    filtered.forEach((c) => {
+      // usa Set para não contar o mesmo segmento 2x no mesmo cliente
+      new Set(ensureArraySegments(c)).forEach((seg) => {
+        if (!seg) return;
+        counts.set(seg, (counts.get(seg) || 0) + 1);
+      });
+    });
+    const arr = Array.from(counts.entries()).map(([segment, count]) => ({
+      segment,
+      count,
+      pct: totalExibidos > 0 ? (count / totalExibidos) * 100 : 0,
+    }));
+    arr.sort((a, b) => b.count - a.count || a.segment.localeCompare(b.segment, "pt-BR"));
+    return arr.slice(0, 10);
+  }, [filtered, totalExibidos]);
+
+  /* ===================== PAGINAÇÃO (15) ===================== */
+  const totalPages = Math.max(1, Math.ceil(totalExibidos / pageSize));
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [page, totalPages]);
+  const pageItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page]);
+
+  /* ===================== EXPORT ===================== */
   const exportData = useMemo(() => {
     return filtered.map((c) => ({
       name: c.name || "",
@@ -1091,7 +1150,35 @@ const Clients = () => {
             </Dialog>
           </div>
 
-          {/* Tabela */}
+          {/* ===================== KDI ===================== */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="rounded-xl border bg-card p-4">
+              <p className="text-xs text-muted-foreground">Total de clientes (geral)</p>
+              <p className="text-2xl font-bold leading-tight">{fmtInt.format(totalClientesGeral)}</p>
+              <p className="text-xs text-muted-foreground mt-1">Exibidos após filtros: <b>{fmtInt.format(totalExibidos)}</b></p>
+            </div>
+
+            <div className="rounded-xl border bg-card p-4">
+              <p className="text-xs text-muted-foreground">Top 10 segmentos (% dos clientes exibidos)</p>
+              <div className="mt-2 space-y-2">
+                {topSegments.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">—</div>
+                ) : topSegments.map(({ segment, pct, count }) => (
+                  <div key={segment}>
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="truncate">{segment}</span>
+                      <span className="tabular-nums">{pct.toFixed(1)}% ({fmtInt.format(count)})</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-1">
+                      <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ===================== TABELA ===================== */}
           <div className="overflow-x-auto rounded-xl border bg-card">
             <Table>
               <TableHeader>
@@ -1107,10 +1194,10 @@ const Clients = () => {
               <TableBody>
                 {loading ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-6">Carregando…</TableCell></TableRow>
-                ) : filtered.length === 0 ? (
+                ) : pageItems.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-6">Nenhum registro</TableCell></TableRow>
                 ) : (
-                  filtered.map((c) => {
+                  pageItems.map((c) => {
                     const id = c.id ?? c._id ?? c.uuid;
                     const company = c.company ?? c.company_name ?? c.companyName ?? "—";
                     const segs = ensureArraySegments(c);
@@ -1147,6 +1234,29 @@ const Clients = () => {
                 )}
               </TableBody>
             </Table>
+          </div>
+
+          {/* ===================== PAGINAÇÃO ===================== */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Exibindo <b>{pageItems.length}</b> de <b>{totalExibidos}</b> cliente(s)
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                Anterior
+              </Button>
+              <div className="text-xs text-muted-foreground">
+                Página <b>{page}</b> / <b>{totalPages}</b>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Próxima
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
