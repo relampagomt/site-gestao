@@ -83,6 +83,39 @@ const pickYMD = (obj) => {
   return { sYMD: s, eYMD: e };
 };
 
+/* ========= TimeField24 (campo 24h sem AM/PM) ========= */
+const TimeField24 = ({ value = "", onChange, id }) => {
+  const [local, setLocal] = React.useState(value || "");
+  React.useEffect(() => setLocal(value || ""), [value]);
+
+  const handleChange = (e) => {
+    const raw = e.target.value;
+    setLocal(raw);
+    onChange(normalizeHM(raw));           // normaliza enquanto digita
+  };
+  const handleBlur = () => {
+    const v = normalizeHM(local);         // garante HH:MM no blur
+    setLocal(v);
+    onChange(v);
+  };
+
+  return (
+    <Input
+      id={id}
+      type="text"
+      inputMode="numeric"
+      placeholder="HH:MM"
+      value={local}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      pattern="^(?:[01]\d|2[0-3]):[0-5]\d$"
+      title="Use o formato 24h: HH:MM"
+      list="__hhmm__"
+      className="w-[120px]"
+    />
+  );
+};
+
 /* ========= TypeSelector ========= */
 const TypeSelector = ({ value = [], onChange }) => {
   const [open, setOpen] = React.useState(false);
@@ -432,7 +465,7 @@ const Actions = () => {
     } catch {
       setActions([]);
     } finally {
-      setLoading(false);
+           setLoading(false);
     }
   };
   useEffect(()=>{ loadActions(); }, []);
@@ -444,8 +477,8 @@ const Actions = () => {
     if (v.length >= 6) v = v.slice(0, 5) + "/" + v.slice(5, 9);
     onChange(field, v);
   };
-  const onTimeChange = (field) => (e) => {
-    onChange(field, normalizeHM(e.target.value));
+  const onTimeChange = (field) => (e) => {   // ainda usado pelo TimeField24 via onChange(normalizeHM)
+    onChange(field, normalizeHM(e.target ? e.target.value : e));
   };
 
   const toggleType   = (t) => onChange("types", form.types.includes(t) ? form.types.filter(x=>x!==t) : [...form.types, t]);
@@ -687,8 +720,24 @@ const Actions = () => {
 
   const pdfOptions = { title: "Relatório de Ações", orientation: "l" };
 
+  // opções de horário (datalist) a cada 30 min
+  const hhmmOptions = useMemo(() => {
+    const out = [];
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m += 30) {
+        out.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
+      }
+    }
+    return out;
+  }, []);
+
   return (
     <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
+      {/* datalist global para TimeField24 */}
+      <datalist id="__hhmm__">
+        {hhmmOptions.map((t)=> <option key={t} value={t} />)}
+      </datalist>
+
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-semibold">Ações</h1>
       </div>
@@ -863,14 +912,14 @@ const Actions = () => {
                         <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
                         <div className="flex gap-2 w-full">
                           <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.startBr} onChange={onDateChange("startBr")} className="flex-1" />
-                          <Input type="time" lang="pt-BR" step="60" value={form.startTime} onChange={onTimeChange("startTime")} className="w-[120px]" />
+                          <TimeField24 value={form.startTime} onChange={(v)=>onChange("startTime", v)} />
                         </div>
                       </div>
                       <div className="space-y-1.5">
                         <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
                         <div className="flex gap-2 w-full">
                           <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.endBr} onChange={onDateChange("endBr")} className="flex-1" />
-                          <Input type="time" lang="pt-BR" step="60" value={form.endTime} onChange={onTimeChange("endTime")} className="w-[120px]" />
+                          <TimeField24 value={form.endTime} onChange={(v)=>onChange("endTime", v)} />
                         </div>
                       </div>
 
@@ -879,7 +928,7 @@ const Actions = () => {
                         <div className="flex flex-wrap gap-4">
                           {periodOptions.map((p)=>(
                             <label key={p} className="flex items-center gap-2 cursor-pointer">
-                              <Checkbox checked={form.day_periods.includes(p)} onCheckedChange={()=>togglePeriod(p)} />
+                              <Checkbox checked={form.day_periods.includes(p)} onCheckedChange={()=>onChange("day_periods", form.day_periods.includes(p) ? form.day_periods.filter(x=>x!==p) : [...form.day_periods, p])} />
                               <span className="text-sm">{p}</span>
                             </label>
                           ))}
@@ -1079,14 +1128,14 @@ const Actions = () => {
                   <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
                   <div className="flex gap-2 w-full">
                     <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.startBr} onChange={onDateChange("startBr")} className="flex-1" />
-                    <Input type="time" lang="pt-BR" step="60" value={form.startTime} onChange={onTimeChange("startTime")} className="w-[120px]" />
+                    <TimeField24 value={form.startTime} onChange={(v)=>onChange("startTime", v)} />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
                   <div className="flex gap-2 w-full">
                     <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.endBr} onChange={onDateChange("endBr")} className="flex-1" />
-                    <Input type="time" lang="pt-BR" step="60" value={form.endTime} onChange={onTimeChange("endTime")} className="w-[120px]" />
+                    <TimeField24 value={form.endTime} onChange={(v)=>onChange("endTime", v)} />
                   </div>
                 </div>
 
