@@ -109,18 +109,17 @@ export default function AdminLayout() {
         {/* Cabeçalho da Sidebar */}
         <div className="h-16 flex items-center justify-between px-3">
           {collapsed ? (
-            // Logo recolhido (chip igual ao expandido, com "R")
+            /* ===== Logo recolhido: QUADRADO (cantos retos) ===== */
             <div
-              className="inline-flex items-center justify-center bg-white border-2 border-red-600 text-red-600
-                         rounded-2xl h-8 px-2 leading-none font-bold select-none"
+              className="inline-flex h-8 w-8 items-center justify-center bg-white border-2 border-red-600 text-red-600 rounded-none font-bold leading-none select-none"
               title="Relâmpago"
               aria-label="Relâmpago"
             >
               R
             </div>
           ) : (
-            // Logo expandido (texto completo)
-            <div className="inline-flex items-center bg-white border-2 border-red-600 rounded-2xl px-3 py-1">
+            /* ===== Logo expandido: RETANGULAR (cantos retos) ===== */
+            <div className="inline-flex h-8 items-center justify-center bg-white border-2 border-red-600 rounded-none px-3">
               <span className="font-bold text-red-600 text-xl tracking-wide leading-none">
                 Relâmpago
               </span>
@@ -166,7 +165,8 @@ export default function AdminLayout() {
         aria-label="Menu lateral (mobile)"
       >
         <div className="h-16 px-6 flex items-center">
-          <div className="inline-flex items-center bg-white border-2 border-red-600 rounded-2xl px-3 py-1">
+          {/* ===== Logo mobile: RETANGULAR (cantos retos) ===== */}
+          <div className="inline-flex h-8 items-center justify-center bg-white border-2 border-red-600 rounded-none px-3">
             <span className="font-bold text-red-600 text-lg tracking-wide leading-none">
               Relâmpago
             </span>
