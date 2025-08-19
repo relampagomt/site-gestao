@@ -632,14 +632,14 @@ const Materials = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-xs md:text-sm">Data</TableHead>
-                  <TableHead className="text-xs md:text-sm">Cliente</TableHead>
-                  <TableHead className="text-xs md:text-sm">Responsável</TableHead>
-                  <TableHead className="text-xs md:text-sm text-right">Qtd</TableHead>
-                  <TableHead className="text-xs md:text-sm">Amostra</TableHead>
-                  <TableHead className="text-xs md:text-sm">Protocolo</TableHead>
-                  <TableHead className="text-xs md:text-sm">Observações</TableHead>
-                  <TableHead className="text-xs md:text-sm w-[160px] text-right">Ações</TableHead>
+                  <TableHead className="text-xs md:text-sm text-center">Data</TableHead>
+                  <TableHead className="text-xs md:text-sm text-center">Cliente</TableHead>
+                  <TableHead className="text-xs md:text-sm text-center">Responsável</TableHead>
+                  <TableHead className="text-xs md:text-sm text-center">Qtd</TableHead>
+                  <TableHead className="text-xs md:text-sm text-center">Amostra</TableHead>
+                  <TableHead className="text-xs md:text-sm text-center">Protocolo</TableHead>
+                  <TableHead className="text-xs md:text-sm text-center">Observações</TableHead>
+                  <TableHead className="text-xs md:text-sm w-[160px] text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -661,25 +661,33 @@ const Materials = () => {
                     const protocolUrl = getProtocolUrl(row);
                     return (
                       <TableRow key={row.id || `${row.client_name}-${row.date}`}>
-                        <TableCell className="align-top">{ymdToBR(row._ymd || toYMDInCuiaba(row.date))}</TableCell>
-                        <TableCell className="align-top">{row.client_name}</TableCell>
-                        <TableCell className="align-top">{row.responsible}</TableCell>
-                        <TableCell className="align-top text-right">{fmtInt.format(Number(row.quantity || 0))}</TableCell>
+                        <TableCell className="align-top text-center">
+                          {ymdToBR(row._ymd || toYMDInCuiaba(row.date))}
+                        </TableCell>
+                        <TableCell className="align-top text-center">{row.client_name}</TableCell>
+                        <TableCell className="align-top text-center">{row.responsible}</TableCell>
+                        <TableCell className="align-top text-center">
+                          {fmtInt.format(Number(row.quantity || 0))}
+                        </TableCell>
 
-                        {/* Amostra: miniatura */}
-                        <TableCell className="align-top">
+                        {/* Amostra: miniatura centralizada */}
+                        <TableCell className="align-top text-center">
                           {sampleUrl ? (
-                            <ImagePreview src={sampleUrl} />
+                            <div className="inline-flex justify-center">
+                              <ImagePreview src={sampleUrl} />
+                            </div>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </TableCell>
 
                         {/* Protocolo: miniatura se imagem, link se pdf/outro */}
-                        <TableCell className="align-top">
+                        <TableCell className="align-top text-center">
                           {protocolUrl ? (
                             isProbablyImage(protocolUrl) ? (
-                              <ImagePreview src={protocolUrl} />
+                              <div className="inline-flex justify-center">
+                                <ImagePreview src={protocolUrl} />
+                              </div>
                             ) : (
                               <a
                                 href={protocolUrl}
@@ -695,15 +703,15 @@ const Materials = () => {
                           )}
                         </TableCell>
 
-                        <TableCell className="align-top max-w-[260px]">
-                          <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words">
+                        <TableCell className="align-top max-w-[260px] text-center">
+                          <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words text-center">
                             {row.notes || "—"}
                           </div>
                         </TableCell>
 
-                        {/* Ações: texto + ícone (restaurado) */}
-                        <TableCell className="align-top text-right">
-                          <div className="flex justify-end gap-2">
+                        {/* Ações: centralizado */}
+                        <TableCell className="align-top text-center">
+                          <div className="flex justify-center gap-2">
                             <Button variant="outline" size="sm" className="gap-2" onClick={() => openEdit(row)}>
                               <Edit className="size-4" />
                               Editar
