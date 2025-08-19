@@ -73,11 +73,279 @@ const formatPhoneDisplay = (phone) => {
 };
 
 /* ========================================================================== */
-/* Segmentos (grupos) — mantidos                                              */
+/* Segmentos (grupos) — conteúdo completo                                     */
 /* ========================================================================== */
 const SEGMENTOS_GRUPOS = [
-  // … (mesmo conteúdo longo que você já tem; mantive integral)
-  // Tecnologia e Informática, Saúde e Bem-Estar, Engenharia e Indústria, ...
+  {
+    group: "Tecnologia e Informática",
+    options: [
+      { value: "Desenvolvimento de Software", desc: "Programador, Dev Web, Eng. Software" },
+      { value: "Segurança da Informação", desc: "Analista/Eng. Segurança, Hacker Ético" },
+      { value: "Ciência de Dados", desc: "Cientista/Analista de Dados, Eng. ML" },
+      { value: "Infraestrutura e Redes", desc: "Adm. Sistemas, Eng. Redes, Suporte" },
+      { value: "Design Digital", desc: "UX/UI, Web, Jogos" },
+      { value: "Suporte e Help Desk", desc: "Atendimento técnico, Field" },
+      { value: "Consultoria em TI", desc: "Implantação, Governança, RPA" },
+      { value: "E-commerce & Marketplaces", desc: "Lojas virtuais, Marketplaces" },
+      { value: "SaaS", desc: "Software como serviço, produto digital" },
+      { value: "Startups", desc: "Empreendimentos inovadores, aceleração" },
+      { value: "Fintech", desc: "Pagamentos, crédito, meios de pagamento" },
+      { value: "Healthtech", desc: "Tecnologia para saúde" },
+      { value: "Edtech", desc: "Tecnologia para educação" },
+      { value: "Agtech", desc: "Tecnologia para agronegócio" },
+      { value: "Govtech", desc: "Tecnologia para setor público" },
+      { value: "IoT e Automação", desc: "Internet das Coisas, sensores, automação" },
+      { value: "Robótica", desc: "Robôs, automação avançada" },
+      { value: "Cloud & DevOps", desc: "Nuvem, CI/CD, SRE, observabilidade" },
+    ],
+  },
+  {
+    group: "Saúde e Bem-Estar",
+    options: [
+      { value: "Medicina", desc: "Clínico, Cirurgião, Pediatra, Gineco" },
+      { value: "Enfermagem", desc: "Enfermeiro, Téc. Enfermagem" },
+      { value: "Terapias e Reabilitação", desc: "Fisio, TO, Fono" },
+      { value: "Nutrição", desc: "Clínico, Esportivo" },
+      { value: "Saúde Mental", desc: "Psicólogo, Psiquiatra, Psicanalista" },
+      { value: "Odontologia", desc: "Dentista, Clínica Odontológica" },
+      { value: "Oftalmologia", desc: "Oftalmo, Exames" },
+      { value: "Laboratório de Análises", desc: "Exames, Coleta" },
+      { value: "Clínicas Populares", desc: "Multiespecialidades" },
+      { value: "Clínica Veterinária", desc: "Consultas, Cirurgias, Exames" },
+      { value: "Farmácia e Drogaria", desc: "Medicamentos, Manipulação" },
+      { value: "Estética Avançada", desc: "Procedimentos estéticos, harmonização" },
+      { value: "Fonoaudiologia", desc: "Voz, audição, linguagem" },
+      { value: "Fisioterapia Desportiva", desc: "Reabilitação de atletas" },
+      { value: "Home Care", desc: "Atendimento domiciliar" },
+      { value: "Clínica de Vacinação", desc: "Imunização, campanhas" },
+    ],
+  },
+  {
+    group: "Engenharia e Indústria",
+    options: [
+      { value: "Engenharia Civil", desc: "Eng. Civil, Arquiteto, Téc. Edificações" },
+      { value: "Engenharia Mecânica", desc: "Eng. Mecânico, Manutenção" },
+      { value: "Engenharia Elétrica", desc: "Eng. Eletricista, Eletrotécnico" },
+      { value: "Engenharia de Produção", desc: "Eng. Produção, GP Industrial" },
+      { value: "Indústria", desc: "Operador de Máquinas, Automação" },
+      { value: "Manutenção Industrial", desc: "PCM, Caldeiraria, Solda" },
+      { value: "Energias Renováveis", desc: "Solar, Eólica, Projetos" },
+      { value: "Têxtil e Confecção", desc: "Fiações, malharias, vestuário" },
+      { value: "Plástico e Borracha", desc: "Transformadores, injeção" },
+      { value: "Química e Petroquímica", desc: "Tintas, resinas, petroquímica" },
+      { value: "Papel e Celulose", desc: "Fábricas, conversão" },
+      { value: "Mineração", desc: "Extração, beneficiamento" },
+      { value: "Petróleo e Gás", desc: "Upstream, downstream, distribuição" },
+      { value: "Cerâmica e Pisos", desc: "Revestimentos, louças" },
+      { value: "Metalurgia e Siderurgia", desc: "Fundição, aços, ligas" },
+      { value: "Moveleiro Industrial", desc: "Linha seriada, usinagem" },
+    ],
+  },
+  {
+    group: "Comunicação e Marketing",
+    options: [
+      { value: "Jornalismo", desc: "Repórter, Editor, Assessor" },
+      { value: "Publicidade e Propaganda", desc: "Redator, Direção de Arte, Conteúdo" },
+      { value: "Marketing Digital", desc: "SEO/SEM, Social, Analista" },
+      { value: "Relações Públicas", desc: "RP, Assessoria" },
+      { value: "Gráfica e Comunicação Visual", desc: "Impressão, Plotagem, Sinalização" },
+      { value: "Produtora de Vídeo/Áudio", desc: "Filmagem, Podcast, Estúdio" },
+      { value: "Fotografia", desc: "Estúdio, Ensaios, Still" },
+      { value: "Eventos e Locação", desc: "Som, Luz, Palco, Estruturas" },
+      { value: "Assessoria de Imprensa", desc: "Press kit, media training" },
+      { value: "Influencer Marketing", desc: "Creators, parcerias" },
+      { value: "Branding e Naming", desc: "Posicionamento, identidade" },
+    ],
+  },
+  {
+    group: "Negócios e Finanças",
+    options: [
+      { value: "Administração", desc: "Administrador, GP" },
+      { value: "Contabilidade e Finanças", desc: "Contador, Analista, Auditor, Economista" },
+      { value: "Recursos Humanos", desc: "Analista de RH, Recrutador, GPessoas" },
+      { value: "Vendas e Comércio", desc: "Gerente de Vendas, Consultor, Vendedor" },
+      { value: "Corretora de Seguros", desc: "Auto, Vida, Saúde, Empresarial" },
+      { value: "Correspondente Bancário", desc: "Crédito, Consignado, Empréstimos" },
+      { value: "Franquias", desc: "Expansão, Gestão de Franqueados" },
+      { value: "Atacado e Distribuição", desc: "Cash & carry, distribuidoras" },
+      { value: "Consultoria Empresarial", desc: "Estratégia, processos, finanças" },
+      { value: "BPO e Terceirização", desc: "Backoffice, folha, fiscal" },
+      { value: "Cartórios e Notariais", desc: "Registro civil, títulos" },
+      { value: "Cobrança e Recuperação", desc: "Cobrança extrajudicial, crédito" },
+    ],
+  },
+  {
+    group: "Educação e Cultura",
+    options: [
+      { value: "Ensino", desc: "Professor, Coord. Pedagógico, Tutor" },
+      { value: "Pesquisa", desc: "Pesquisador, Cientista" },
+      { value: "Artes", desc: "Artista, Músico, Ator, Diretor" },
+      { value: "Museologia e História", desc: "Historiador, Curador, Museólogo" },
+      { value: "Biblioteca", desc: "Bibliotecário, Arquivista" },
+      { value: "Escolas e Colégios", desc: "Educação Básica, Técnica" },
+      { value: "Idiomas", desc: "Cursos, Intercâmbio" },
+      { value: "Cursos Profissionalizantes", desc: "TI, Saúde, Indústria" },
+      { value: "Autoescola", desc: "CNH, Reciclagem" },
+      { value: "Esporte e Lazer", desc: "Clubes, Academias, Estúdios" },
+      { value: "Pré-vestibular e Reforço", desc: "Cursinhos, ENEM" },
+      { value: "Escolas de Música e Dança", desc: "Conservatórios, estúdios" },
+      { value: "Produção Cultural", desc: "Editais, projetos, captação" },
+    ],
+  },
+  {
+    group: "Direito e Segurança",
+    options: [
+      { value: "Direito", desc: "Advogado, Juiz, Promotor" },
+      { value: "Segurança Pública", desc: "Policial, Bombeiro, Agente Penitenciário" },
+      { value: "Segurança Privada", desc: "Vigilante, Consultor" },
+      { value: "Perícia", desc: "Perito Criminal/Judicial" },
+      { value: "Compliance e LGPD", desc: "Proteção de Dados, Governança" },
+      { value: "Defesa Civil", desc: "Proteção e resposta a desastres" },
+      { value: "Cartórios e Registros", desc: "Notas, registro de imóveis" },
+      { value: "Detran e Trânsito", desc: "Órgãos, despachantes" },
+    ],
+  },
+  {
+    group: "Serviços e Social",
+    options: [
+      { value: "Hotelaria e Turismo", desc: "Hotel, Guia, Viagens" },
+      { value: "Gastronomia", desc: "Chef, Confeiteiro, Bartender" },
+      { value: "Beleza e Estética", desc: "Cabeleireiro, Esteticista, Maquiador" },
+      { value: "Serviço Social", desc: "Assistente Social, Sociólogo" },
+      { value: "Lavanderia", desc: "Lavagem, Secagem, Passadoria" },
+      { value: "Costura e Ajustes", desc: "Conserto de roupas, Sob medida" },
+      { value: "Chaveiro", desc: "Cópias, Aberturas, Troca de fechaduras" },
+      { value: "Limpeza e Facilities", desc: "Residencial, Comercial, Pós-obra" },
+      { value: "Jardinagem e Paisagismo", desc: "Manutenção, Projetos" },
+      { value: "Dedetização e Sanitização", desc: "Pragas urbanas, Sanitização" },
+      { value: "Mudanças e Carretos", desc: "Local, Interestadual" },
+      { value: "Assistência Técnica", desc: "Eletro, Informática, Celular" },
+      { value: "Coworking e Escritórios", desc: "Salas privativas, Compartilhadas" },
+      { value: "Igrejas e Comunidades", desc: "Templos, Entidades religiosas" },
+      { value: "ONGs e Terceiro Setor", desc: "Associações, Fundações" },
+      { value: "Barbearia", desc: "Cortes, grooming masculino" },
+      { value: "Perfumaria e Cosméticos", desc: "Varejo de beleza" },
+      { value: "Coaching e Mentoria", desc: "Desenvolvimento pessoal e negócios" },
+      { value: "Tradução e Interpretação", desc: "Traduções técnicas, simultânea" },
+      { value: "Agência de Empregos", desc: "RH, recrutamento, temporários" },
+    ],
+  },
+  {
+    group: "Comércio Varejista",
+    options: [
+      { value: "Supermercado e Mercearia", desc: "Supermercado, Mini-mercado, Atacado" },
+      { value: "Padaria e Confeitaria", desc: "Padaria, Doceria, Bolos" },
+      { value: "Açougue", desc: "Carnes, Frios" },
+      { value: "Hortifruti", desc: "Frutas, Verduras, Legumes" },
+      { value: "Ótica", desc: "Óculos, Lentes, Consultoria" },
+      { value: "Loja de Roupas e Acessórios", desc: "Moda, Boutique, Lingerie" },
+      { value: "Calçados", desc: "Sapataria, Sneakers" },
+      { value: "Joalheria e Relojoaria", desc: "Semi-joias, Relógios" },
+      { value: "Móveis e Decoração", desc: "Planejados, Colchões, Utilidades" },
+      { value: "Eletro e Eletrônicos", desc: "TV, Som, Informática" },
+      { value: "Livraria e Papelaria", desc: "Livros, Materiais escolares" },
+      { value: "Floricultura", desc: "Flores, Presentes" },
+      { value: "Loja de Utilidades", desc: "Variedades, 1,99" },
+      { value: "Pet Shop", desc: "Rações, Acessórios, Banho e Tosa" },
+      { value: "Distribuidora de Bebidas", desc: "Atacado, B2B, eventos" },
+      { value: "Shopping e Quiosques", desc: "Lojas de shopping, quiosques" },
+      { value: "Perfumaria", desc: "Fragrâncias e cosméticos" },
+      { value: "Papelaria Especializada", desc: "Materiais artísticos e técnicos" },
+    ],
+  },
+  {
+    group: "Alimentação e Bebidas (Foodservice)",
+    options: [
+      { value: "Restaurante", desc: "À la carte, Self-service" },
+      { value: "Pizzaria", desc: "Forno a lenha, Delivery" },
+      { value: "Lanchonete", desc: "Sanduíches, Pastéis" },
+      { value: "Hamburgueria", desc: "Artesanal, Smash" },
+      { value: "Churrascaria", desc: "Rodízio, Espetos" },
+      { value: "Cafeteria", desc: "Café, Brunch" },
+      { value: "Sorveteria e Açaíteria", desc: "Gelatos, Açaí, Milk-shake" },
+      { value: "Food Truck", desc: "Eventos, Itinerante" },
+      { value: "Cozinha Industrial e Marmitaria", desc: "Corporativo, PF" },
+      { value: "Delivery/Cozinha Fantasma", desc: "Somente entrega" },
+      { value: "Bares e Pubs", desc: "Drinks, Petiscos, Música" },
+      { value: "Padaria Artesanal", desc: "Fermentação natural, pâtisserie" },
+      { value: "Doceria Especializada", desc: "Bolos artísticos, brigadeiria" },
+    ],
+  },
+  {
+    group: "Automotivo",
+    options: [
+      { value: "Oficina Mecânica", desc: "Mecânica leve/pesada" },
+      { value: "Autoelétrica", desc: "Partida, Alternador, Injeção" },
+      { value: "Funilaria e Pintura", desc: "Estética, Reparos" },
+      { value: "Autopeças e Acessórios", desc: "Peças, Som, Película" },
+      { value: "Lava Jato e Estética", desc: "Lavagem, Vitrificação" },
+      { value: "Borracharia", desc: "Pneus, Alinhamento" },
+      { value: "Concessionária/Revenda", desc: "Novos, Seminovos" },
+      { value: "Motocicletas - Oficina e Peças", desc: "Motos, Acessórios" },
+      { value: "Guincho e Socorro", desc: "24h, Reboque" },
+      { value: "Vistoria e Laudos", desc: "Vistorias cautelar e transferência" },
+      { value: "Carros por Assinatura", desc: "Locadoras, mobilidade" },
+      { value: "Estética Automotiva Premium", desc: "Detailing, PPF, vitrificação" },
+    ],
+  },
+  {
+    group: "Construção, Imobiliário e Manutenção",
+    options: [
+      { value: "Materiais de Construção", desc: "Cimento, Ferramentas" },
+      { value: "Loja de Tintas", desc: "Tintas, Acessórios" },
+      { value: "Vidraçaria", desc: "Box, Espelhos, Temperado" },
+      { value: "Serralheria", desc: "Esquadrias, Portões" },
+      { value: "Marcenaria", desc: "Móveis sob medida" },
+      { value: "Marmoraria", desc: "Granito, Quartzo" },
+      { value: "Elétrica e Hidráulica", desc: "Materiais e serviços" },
+      { value: "Ar Condicionado e Refrigeração", desc: "Instalação, PMOC" },
+      { value: "Imobiliária e Condomínios", desc: "Vendas, Locação, Gestão" },
+      { value: "Paisagismo e Irrigação", desc: "Projetos, Manutenção" },
+      { value: "Energia Solar", desc: "Projetos, Instalação" },
+      { value: "Arquitetura e Urbanismo", desc: "Projetos, interiores" },
+      { value: "Condomínios e Síndicos", desc: "Gestão condominial" },
+      { value: "Automação Residencial", desc: "Casa inteligente, CFTV" },
+      { value: "Gesso e Drywall", desc: "Forros, divisórias" },
+      { value: "Topografia e Georreferenciamento", desc: "Levantamentos, GPS" },
+    ],
+  },
+  {
+    group: "Transporte e Logística",
+    options: [
+      { value: "Transporte de Cargas", desc: "Rodoviário, Fracionado" },
+      { value: "Entregas Rápidas/Courier", desc: "Express, Same-day" },
+      { value: "Motoboy", desc: "Delivery urbano" },
+      { value: "Fretamento e Turismo", desc: "Ônibus, Vans" },
+      { value: "Transporte Escolar", desc: "Escolar, Universitário" },
+      { value: "Logística e Armazenagem", desc: "CDs, 3PL" },
+      { value: "Locação de Veículos", desc: "Curto e longo prazo" },
+      { value: "Portos e Navegação", desc: "Cabotagem, terminais" },
+      { value: "Aeroportos e Aviação", desc: "Aviação executiva, hangares" },
+      { value: "Ferrovias", desc: "Transporte ferroviário" },
+      { value: "Frio e Refrigeração Logística", desc: "Cadeia fria" },
+      { value: "Fulfillment e Cross-docking", desc: "Operações e e-commerce" },
+    ],
+  },
+  {
+    group: "Telecomunicações e Mídia",
+    options: [
+      { value: "Telecomunicações", desc: "Operadoras, telefonia, fibra" },
+      { value: "Provedor de Internet (ISP)", desc: "Banda larga, WISP" },
+      { value: "Call Center e Contact Center", desc: "Atendimento, SAC, suporte" },
+      { value: "Streaming e Conteúdo", desc: "Plataformas OTT, produção" },
+      { value: "Radiodifusão", desc: "TV, rádio" },
+    ],
+  },
+  {
+    group: "Energia, Saneamento e Meio Ambiente",
+    options: [
+      { value: "Saneamento Básico", desc: "Água e esgoto" },
+      { value: "Gestão de Resíduos", desc: "Coleta, reciclagem" },
+      { value: "Tratamento de Água", desc: "ETA/ETEs, filtros" },
+      { value: "Eficiência Energética", desc: "Projetos, ESCO" },
+      { value: "ESG e Sustentabilidade", desc: "Ambiental, social e governança" },
+    ],
+  },
 ];
 const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap((g) => g.options.map((o) => o.value));
 
@@ -96,7 +364,7 @@ const ensureArraySegments = (client) => {
 };
 
 /* ========================================================================== */
-/* SegmentosSelect — FIX: scroll em touchpad/mobile e evitar fechar o Dialog  */
+/* SegmentosSelect — scroll touchpad/mobile e sem fechar o Dialog             */
 /* ========================================================================== */
 function SegmentosSelect({ value = [], onChange, onCreate }) {
   const [open, setOpen] = useState(false);
@@ -135,7 +403,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
     return !existsInBase(t) && !existsInValue(t);
   }, [query, baseOptions, value]);
 
-  // Handlers para impedir que o Popover feche o Dialog durante o scroll
+  // Evita o fechamento do Dialog ao rolar/clicar fora enquanto interage
   const stopAll = (e) => { e.stopPropagation(); };
   const prevent = (e) => { e.preventDefault(); };
 
@@ -158,7 +426,6 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
         sideOffset={6}
         collisionPadding={32}
         className="p-0 z-[70] w-[92vw] max-w-[360px] bg-background"
-        // evita fechar ao clicar/rolar fora, enquanto o usuário está interactivo
         onPointerDownOutside={prevent}
         onFocusOutside={prevent}
         onEscapeKeyDown={prevent}
@@ -240,7 +507,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
 }
 
 /* ========================================================================== */
-/* Página Clientes — KPIs responsivos + pizza + paginação                    */
+/* Página Clientes — KPIs responsivos + pizza + paginação                     */
 /* ========================================================================== */
 const Clients = () => {
   const [clients, setClients] = useState([]);
@@ -575,6 +842,7 @@ const Clients = () => {
                 </Button>
               </PopoverTrigger>
 
+              {/* Altura fixa (header/footer sempre visíveis) */}
               <PopoverContent
                 align="end"
                 side="bottom"
@@ -584,7 +852,7 @@ const Clients = () => {
                 style={{ height: 'min(72vh, 600px)' }}
               >
                 <div className="grid h-full grid-rows-[auto,1fr,auto] text-[12px] leading-tight">
-                  {/* HEADER (fixo) */}
+                  {/* HEADER */}
                   <div className="px-3 py-2 border-b flex items-center justify-between">
                     <div>
                       <p className="text-[13px] font-medium">Filtrar clientes</p>
@@ -605,11 +873,150 @@ const Clients = () => {
                   <div
                     className="p-3 grid md:grid-cols-2 gap-3 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
                   >
-                    {/* … (conteúdo dos filtros, igual ao seu) */}
-                    {/* Empresas, Segmentos, etc. */}
+                    {/* Empresas */}
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px]">Empresas</Label>
+                      <div className="max-h-[40vh] overflow-y-auto pr-1">
+                        {uniqueCompanies.length === 0 ? (
+                          <p className="text-[11px] text-muted-foreground">—</p>
+                        ) : uniqueCompanies.map((comp) => (
+                          <label key={comp} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
+                            <Checkbox checked={fCompanies.includes(comp)} onCheckedChange={() => toggle(setFCompanies, comp)} className="h-3 w-3" />
+                            <span className="truncate">{comp}</span>
+                          </label>
+                        ))}
+                      </div>
+
+                      {fCompanies.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {fCompanies.map((c) => (
+                            <Badge key={c} variant="secondary" className="gap-1 py-0.5 text-[11px]">
+                              {c}
+                              <button type="button" onClick={() => toggle(setFCompanies, c)} className="ml-1 opacity-70 hover:opacity-100">
+                                <X className="size-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Segmentos (agrupados + personalizados) */}
+                    <div className="space-y-1.5">
+                      <Label className="flex items-center justify-between text-[12px]">
+                        <span>Segmentos</span>
+                      </Label>
+
+                      {/* Busca + Selecionar exibidos */}
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                          <Input
+                            className="pl-7 h-8 text-[12px]"
+                            placeholder="Buscar segmento nos filtros..."
+                            value={fSegmentsQuery}
+                            onChange={(e) => setFSegmentsQuery(e.target.value)}
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          className="h-8 px-2 text-[12px]"
+                          variant="secondary"
+                          disabled={shownSegmentValues.length === 0 || allShownAlreadySelected}
+                          onClick={selectShownSegments}
+                        >
+                          Selecionar exibidos
+                        </Button>
+                      </div>
+
+                      <div className="max-h-[40vh] overflow-y-auto pr-1">
+                        {SEGMENTOS_GRUPOS.map((grp) => {
+                          const q = fSegmentsQuery.trim().toLowerCase();
+                          const shownOpts = grp.options.filter((opt) =>
+                            !q || opt.value.toLowerCase().includes(q) || (opt.desc && opt.desc.toLowerCase().includes(q))
+                          );
+                          if (shownOpts.length === 0) return null;
+                          return (
+                            <div key={grp.group} className="mb-2">
+                              <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">{grp.group}</p>
+                              <div className="space-y-1">
+                                {shownOpts.map((opt) => (
+                                  <label key={opt.value} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
+                                    <Checkbox checked={fSegments.includes(opt.value)} onCheckedChange={() => toggle(setFSegments, opt.value)} className="h-3 w-3" />
+                                    <span className="truncate">{opt.value}</span>
+                                  </label>
+                                ))}
+                              </div>
+                              <Separator className="my-2" />
+                            </div>
+                          );
+                        })}
+
+                        {/* Grupo: Personalizados (dinâmico) */}
+                        {(() => {
+                          const q = fSegmentsQuery.trim().toLowerCase();
+                          const list = customSegmentsFromData.filter((s) => !q || s.toLowerCase().includes(q));
+                          if (list.length === 0) return null;
+                          return (
+                            <div className="mb-2">
+                              <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">Personalizados</p>
+                              <div className="space-y-1">
+                                {list.map((opt) => (
+                                  <label key={opt} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
+                                    <Checkbox checked={fSegments.includes(opt)} onCheckedChange={() => toggle(setFSegments, opt)} className="h-3 w-3" />
+                                    <span className="truncate">{opt}</span>
+                                  </label>
+                                ))}
+                              </div>
+                              <Separator className="my-2" />
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Chips dos segmentos selecionados */}
+                      {fSegments.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {fSegments.map((s) => (
+                            <Badge key={s} variant="secondary" className="gap-1 py-0.5 text-[11px]">
+                              {s}
+                              <button type="button" onClick={() => toggle(setFSegments, s)} className="ml-1 opacity-70 hover:opacity-100">
+                                <X className="size-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* E-mail / Telefone */}
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px]">E-mail</Label>
+                      <select
+                        className="w-full border rounded-md px-2 py-1.5 h-8 text-[12px] bg-background"
+                        value={fHasEmail}
+                        onChange={(e) => setFHasEmail(e.target.value)}
+                      >
+                        <option value="">Todos</option>
+                        <option value="sim">Com e-mail</option>
+                        <option value="nao">Sem e-mail</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px]">Telefone</Label>
+                      <select
+                        className="w-full border rounded-md px-2 py-1.5 h-8 text-[12px] bg-background"
+                        value={fHasPhone}
+                        onChange={(e) => setFHasPhone(e.target.value)}
+                      >
+                        <option value="">Todos</option>
+                        <option value="sim">Com telefone</option>
+                        <option value="nao">Sem telefone</option>
+                      </select>
+                    </div>
                   </div>
 
-                  {/* FOOTER (fixo) */}
+                  {/* FOOTER */}
                   <div className="px-3 py-2 border-t flex justify-end gap-2 items-center bg-background">
                     <Button variant="outline" size="sm" className="h-8 px-2 text-[12px]" onClick={() => setFiltersOpen(false)}>Fechar</Button>
                     <Button size="sm" className="h-8 px-3 text-[12px]" onClick={() => setFiltersOpen(false)}>Aplicar</Button>
@@ -648,7 +1055,7 @@ const Clients = () => {
                         <Input name="company" value={form.company} onChange={onChange} />
                       </div>
 
-                      {/* Segmentos — FIX aplicado (scroll touchpad/mobile) */}
+                      {/* Segmentos — combobox multi com modo livre (com FIX de scroll) */}
                       <div className="md:col-span-2 space-y-2">
                         <Label>Segmentos</Label>
                         <SegmentosSelect
@@ -716,7 +1123,7 @@ const Clients = () => {
 
           {/* KPI Cards — MOBILE-FRIENDLY */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* Total de clientes — centralizado H/V e mais compacto em mobile */}
+            {/* Total de clientes — centralizado H/V e compacto */}
             <div className="rounded-xl border bg-card p-4 min-h-[180px] sm:min-h-[220px] flex items-center justify-center text-center">
               <div>
                 <p className="text-xs text-muted-foreground">Total de clientes (geral)</p>
