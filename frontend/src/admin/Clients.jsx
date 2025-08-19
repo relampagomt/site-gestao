@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 
 // Gráfico (donut)
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 import ExportMenu from "@/components/export/ExportMenu";
 
@@ -348,27 +348,16 @@ const SEGMENTOS_GRUPOS = [
 const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap((grp) => grp.options.map((opt) => opt.value));
 
 /* ========================================================================== */
-/* Componente SegmentosSelect — combobox multi com modo livre                 */
-/* CORREÇÃO: Aplicação de estilos inline para forçar overflow visible        */
+/* SegmentosSelect — AGORA CENTRALIZADO (estilo modal)                        */
+/*  - Overlay escurecido                                                      */
+/*  - PopoverContent posicionado FIXO ao centro (H/V)                         */
+/*  - Rolagem segura, sem fechar ao scroll                                    */
 /* ========================================================================== */
 function SegmentosSelect({ value = [], onChange, onCreate }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
   const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
-
-  const filteredOptions = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const base = [];
-    SEGMENTOS_GRUPOS.forEach((grp) => {
-      grp.options.forEach((opt) => {
-        if (!q || opt.value.toLowerCase().includes(q) || (opt.desc && opt.desc.toLowerCase().includes(q))) {
-          base.push(opt.value);
-        }
-      });
-    });
-    return base;
-  }, [query]);
 
   const toggle = (segValue) => {
     const next = value.includes(segValue)
@@ -385,7 +374,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
       toggle(label);
     } else {
       onChange([...value, label]);
-      if (onCreate) onCreate(label);
+      onCreate?.(label);
     }
     setQuery("");
   };
@@ -393,109 +382,131 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
   const canCreate = query.trim() && !value.includes(query.trim());
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
-          Selecionar segmentos
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
+    <>
+      {/* Overlay (fecha ao clicar fora, mas sem interferir no scroll interno) */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/30 z-[79]"
+          onClick={() => setOpen(false)}
+        />
+      )}
 
-      {/* CORREÇÃO: Aplicação de estilos inline para forçar overflow e z-index */}
-      <PopoverContent
-        className="w-[min(96vw,600px)] p-0"
-        style={{
-          height: 'min(70vh, 500px)',
-          overflow: 'visible',
-          zIndex: 9999
-        }}
-        align="start"
-        side="bottom"
-        sideOffset={8}
-        collisionPadding={12}
-        avoidCollisions={true}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-      >
-        <div className="grid h-full grid-rows-[auto,1fr,auto]" style={{ overflow: 'visible' }}>
-          {/* Header com busca */}
-          <div className="p-3 border-b bg-background">
-            <Command>
-              <CommandInput
-                placeholder="Buscar ou criar segmento..."
-                value={query}
-                onValueChange={setQuery}
-                className="h-9"
-              />
-            </Command>
-          </div>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
+            {value.length ? (
+              <span className="truncate">{value.slice(0, 2).join(", ")}{value.length > 2 ? ` +${value.length - 2}` : ""}</span>
+            ) : "Selecionar segmentos"}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
 
-          {/* Body rolável - CORREÇÃO: Estilos inline para garantir scroll */}
-          <div
-            className="overflow-y-auto overscroll-contain touch-pan-y"
-            style={{
-              WebkitOverflowScrolling: 'touch',
-              maxHeight: 'calc(70vh - 120px)',
-              overflow: 'auto'
-            }}
-          >
-            <Command style={{ overflow: 'visible' }}>
-              <CommandList className="max-h-none" style={{ overflow: 'visible' }}>
-                {canCreate && (
-                  <CommandGroup>
-                    <CommandItem onSelect={handleCreate} className="cursor-pointer">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Criar "{query.trim()}"
-                    </CommandItem>
-                  </CommandGroup>
-                )}
+        {/* Conteúdo centralizado no viewport */}
+        <PopoverContent
+          className="p-0 w-[min(96vw,620px)]"
+          style={{
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            height: "min(75vh, 560px)",
+            zIndex: 80,                // acima do overlay
+            overflow: "hidden",
+            borderRadius: "0.75rem",
+          }}
+          // evita fechar ao rolar/arrastar
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onFocusOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => setOpen(false)}
+          align="center"
+          side="bottom"
+          sideOffset={0}
+          collisionPadding={0}
+          avoidCollisions={false}
+        >
+          <div className="grid h-full grid-rows-[auto,1fr,auto] bg-background">
+            {/* Header (busca) */}
+            <div className="p-3 border-b">
+              <Command>
+                <CommandInput
+                  placeholder="Buscar ou criar segmento..."
+                  value={query}
+                  onValueChange={setQuery}
+                  className="h-9"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && canCreate) {
+                      e.preventDefault();
+                      handleCreate();
+                    }
+                  }}
+                />
+              </Command>
+            </div>
 
-                {SEGMENTOS_GRUPOS.map((grp) => {
-                  const q = query.trim().toLowerCase();
-                  const shownOpts = grp.options.filter((opt) =>
-                    !q || opt.value.toLowerCase().includes(q) || (opt.desc && opt.desc.toLowerCase().includes(q))
-                  );
-                  if (shownOpts.length === 0) return null;
-
-                  return (
-                    <CommandGroup key={grp.group} heading={grp.group}>
-                      {shownOpts.map((opt) => (
-                        <CommandItem
-                          key={opt.value}
-                          onSelect={() => toggle(opt.value)}
-                          className="cursor-pointer"
-                        >
-                          <Check
-                            className={`mr-2 h-4 w-4 ${
-                              value.includes(opt.value) ? "opacity-100" : "opacity-0"
-                            }`}
-                          />
-                          <div>
-                            <div className="font-medium">{opt.value}</div>
-                            {opt.desc && <div className="text-xs text-muted-foreground">{opt.desc}</div>}
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  );
-                })}
-              </CommandList>
-            </Command>
-          </div>
-
-          {/* Footer */}
-          <div className="p-3 border-t bg-background">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setOpen(false)}
-              className="w-full"
+            {/* Body rolável */}
+            <div
+              className="overflow-y-auto overscroll-contain touch-pan-y"
+              style={{ WebkitOverflowScrolling: "touch" }}
             >
-              Fechar
-            </Button>
+              <Command className="text-[13px] leading-tight">
+                <CommandList className="max-h-none">
+                  {canCreate && (
+                    <CommandGroup>
+                      <CommandItem onSelect={handleCreate} className="cursor-pointer">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Criar “{query.trim()}”
+                      </CommandItem>
+                    </CommandGroup>
+                  )}
+
+                  {SEGMENTOS_GRUPOS.map((grp) => {
+                    const q = query.trim().toLowerCase();
+                    const shown = grp.options.filter(
+                      (opt) =>
+                        !q ||
+                        opt.value.toLowerCase().includes(q) ||
+                        (opt.desc && opt.desc.toLowerCase().includes(q))
+                    );
+                    if (!shown.length) return null;
+
+                    return (
+                      <CommandGroup key={grp.group} heading={grp.group}>
+                        {shown.map((opt) => (
+                          <CommandItem
+                            key={opt.value}
+                            onSelect={() => toggle(opt.value)}
+                            className="cursor-pointer"
+                          >
+                            <Check
+                              className={`mr-2 h-4 w-4 ${
+                                value.includes(opt.value) ? "opacity-100" : "opacity-0"
+                              }`}
+                            />
+                            <div>
+                              <div className="font-medium">{opt.value}</div>
+                              {opt.desc && (
+                                <div className="text-xs text-muted-foreground">{opt.desc}</div>
+                              )}
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    );
+                  })}
+                </CommandList>
+              </Command>
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 border-t">
+              <Button variant="outline" size="sm" className="w-full" onClick={() => setOpen(false)}>
+                Fechar
+              </Button>
+            </div>
           </div>
-        </div>
-      </PopoverContent>
-    </Popover>
+        </PopoverContent>
+      </Popover>
+    </>
   );
 }
 
@@ -825,7 +836,7 @@ const Clients = () => {
               />
             </div>
 
-            {/* ====== FILTROS AVANÇADOS - CORREÇÃO: Estilos inline para overflow ====== */}
+            {/* FILTROS */}
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
@@ -844,7 +855,7 @@ const Clients = () => {
                 style={{
                   height: 'min(72vh, 600px)',
                   overflow: 'visible',
-                  zIndex: 9999
+                  zIndex: 60
                 }}
                 avoidCollisions={true}
                 onOpenAutoFocus={(e) => e.preventDefault()}
@@ -861,28 +872,20 @@ const Clients = () => {
                       size="sm"
                       className="h-8 px-2 text-[12px]"
                       onClick={clearFilters}
-                      title="Limpar todos os filtros"
                     >
                       Limpar
                     </Button>
                   </div>
 
-                  {/* BODY (rolável) - CORREÇÃO: Estilos inline para scroll seguro */}
+                  {/* BODY */}
                   <div
                     className="p-3 grid md:grid-cols-2 gap-3 overflow-y-auto overscroll-contain touch-pan-y pr-2"
-                    style={{
-                      WebkitOverflowScrolling: 'touch',
-                      maxHeight: 'calc(72vh - 120px)',
-                      overflow: 'auto'
-                    }}
+                    style={{ WebkitOverflowScrolling: 'touch', maxHeight: 'calc(72vh - 120px)' }}
                   >
                     {/* Empresas */}
                     <div className="space-y-1.5">
                       <Label className="text-[12px]">Empresas</Label>
-                      <div
-                        className="max-h-[40vh] overflow-y-auto overscroll-contain touch-pan-y pr-1"
-                        style={{ WebkitOverflowScrolling: 'touch' }}
-                      >
+                      <div className="max-h-[40vh] overflow-y-auto overscroll-contain touch-pan-y pr-1" style={{ WebkitOverflowScrolling: 'touch' }}>
                         {uniqueCompanies.length === 0 ? (
                           <p className="text-[11px] text-muted-foreground">—</p>
                         ) : uniqueCompanies.map((comp) => (
@@ -907,7 +910,7 @@ const Clients = () => {
                       )}
                     </div>
 
-                    {/* Segmentos (agrupados + personalizados) - CORREÇÃO: Scroll seguro */}
+                    {/* Segmentos */}
                     <div className="space-y-1.5">
                       <Label className="flex items-center justify-between text-[12px]">
                         <span>Segmentos</span>
@@ -935,10 +938,7 @@ const Clients = () => {
                         </Button>
                       </div>
 
-                      <div
-                        className="max-h-[40vh] overflow-y-auto overscroll-contain touch-pan-y pr-1"
-                        style={{ WebkitOverflowScrolling: 'touch' }}
-                      >
+                      <div className="max-h-[40vh] overflow-y-auto overscroll-contain touch-pan-y pr-1" style={{ WebkitOverflowScrolling: 'touch' }}>
                         {SEGMENTOS_GRUPOS.map((grp) => {
                           const q = fSegmentsQuery.trim().toLowerCase();
                           const shownOpts = grp.options.filter((opt) =>
@@ -961,27 +961,6 @@ const Clients = () => {
                             </div>
                           );
                         })}
-
-                        {customSegmentsFromData.length > 0 && (
-                          <div className="mb-2">
-                            <p className="text-[11px] font-medium text-muted-foreground mb-1">Personalizados</p>
-                            {customSegmentsFromData
-                              .filter((s) => {
-                                const q = fSegmentsQuery.trim().toLowerCase();
-                                return !q || s.toLowerCase().includes(q);
-                              })
-                              .map((seg) => (
-                                <label key={seg} className="flex items-center gap-1.5 text-[12px] cursor-pointer mb-1">
-                                  <Checkbox
-                                    checked={fSegments.includes(seg)}
-                                    onCheckedChange={() => toggle(setFSegments, seg)}
-                                    className="h-3 w-3"
-                                  />
-                                  <span className="truncate">{seg}</span>
-                                </label>
-                              ))}
-                          </div>
-                        )}
                       </div>
 
                       {fSegments.length > 0 && (
@@ -1034,7 +1013,7 @@ const Clients = () => {
               </PopoverContent>
             </Popover>
 
-            {/* Novo Cliente - CORREÇÃO: Modal com scroll seguro e estilos inline */}
+            {/* Novo Cliente */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" className="gap-2" onClick={openCreate}>
@@ -1045,13 +1024,9 @@ const Clients = () => {
 
               <DialogContent
                 className="p-0 sm:max-w-[560px] md:max-w-[600px]"
-                style={{
-                  height: 'min(85vh, 700px)',
-                  overflow: 'visible',
-                  zIndex: 9999
-                }}
+                style={{ height: 'min(85vh, 700px)', overflow: 'visible', zIndex: 59 }}
               >
-                <div className="grid h-full grid-rows-[auto,1fr,auto]" style={{ overflow: 'visible' }}>
+                <div className="grid h-full grid-rows-[auto,1fr,auto]">
                   {/* Header */}
                   <div className="p-6 pb-2 border-b bg-background">
                     <DialogHeader>
@@ -1062,14 +1037,10 @@ const Clients = () => {
                     </DialogHeader>
                   </div>
 
-                  {/* Body rolável - CORREÇÃO: Estilos inline para scroll */}
+                  {/* Body */}
                   <div
                     className="p-6 overflow-y-auto overscroll-contain touch-pan-y"
-                    style={{
-                      WebkitOverflowScrolling: 'touch',
-                      maxHeight: 'calc(85vh - 120px)',
-                      overflow: 'auto'
-                    }}
+                    style={{ WebkitOverflowScrolling: 'touch', maxHeight: 'calc(85vh - 120px)' }}
                   >
                     <form onSubmit={onSubmit} className="space-y-4" id="client-form">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1083,7 +1054,7 @@ const Clients = () => {
                           <Input name="company" value={form.company} onChange={onChange} />
                         </div>
 
-                        {/* Segmentos — combobox multi com modo livre (com FIX de scroll) */}
+                        {/* Segmentos */}
                         <div className="md:col-span-2 space-y-2">
                           <Label>Segmentos</Label>
                           <SegmentosSelect
@@ -1153,9 +1124,9 @@ const Clients = () => {
             </Dialog>
           </div>
 
-          {/* KPI Cards — MOBILE-FRIENDLY - CORREÇÃO: Melhor responsividade do gráfico */}
+          {/* KPI Cards */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {/* Total de clientes — centralizado H/V e compacto */}
+            {/* Total */}
             <div className="rounded-xl border bg-card p-4 min-h-[180px] sm:min-h-[220px] flex items-center justify-center text-center">
               <div>
                 <p className="text-xs text-muted-foreground">Total de clientes (geral)</p>
@@ -1166,13 +1137,11 @@ const Clients = () => {
               </div>
             </div>
 
-            {/* Pizza: Top 10 segmentos — CORREÇÃO: Melhor responsividade */}
+            {/* Pizza */}
             <div className="rounded-xl border bg-card p-3 sm:p-4">
               <p className="text-xs text-muted-foreground px-1 mb-2">Top 10 segmentos (% dos clientes exibidos)</p>
 
-              {/* Layout responsivo melhorado */}
               <div className="flex flex-col space-y-3">
-                {/* Gráfico - CORREÇÃO: Tamanhos mais adequados para mobile */}
                 <div className="w-full h-[200px] sm:h-[240px] lg:h-[220px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -1205,18 +1174,11 @@ const Clients = () => {
                   </ResponsiveContainer>
                 </div>
 
-                {/* Legenda - CORREÇÃO: Melhor layout para mobile */}
-                <div
-                  className="max-h-[120px] overflow-y-auto overscroll-contain touch-pan-y px-1"
-                  style={{ WebkitOverflowScrolling: 'touch' }}
-                >
+                <div className="max-h-[120px] overflow-y-auto overscroll-contain touch-pan-y px-1" style={{ WebkitOverflowScrolling: 'touch' }}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] leading-tight">
                     {pieData.map((d, i) => (
                       <div key={d.name} className="flex items-center gap-2 min-w-0 py-1">
-                        <span
-                          className="inline-block h-3 w-3 rounded-sm flex-shrink-0"
-                          style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
-                        />
+                        <span className="inline-block h-3 w-3 rounded-sm flex-shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
                         <span className="truncate flex-1 text-xs">{d.name}</span>
                         <span className="text-xs font-medium text-muted-foreground flex-shrink-0">
                           {d.value}%
@@ -1332,4 +1294,3 @@ const Clients = () => {
 };
 
 export default Clients;
-
