@@ -74,8 +74,7 @@ const formatPhoneDisplay = (phone) => {
 };
 
 /* ============================================================================
-   SEGMENTOS — grupos + valores
-   (mantive a lista completa que você já usa)
+   SEGMENTOS — grupos + valores (lista completa)
 ============================================================================ */
 const SEGMENTOS_GRUPOS = [
   {
@@ -143,7 +142,95 @@ const SEGMENTOS_GRUPOS = [
       { value: "Moveleiro Industrial", desc: "Linha seriada, usinagem" },
     ],
   },
-  // ... (restante dos grupos IGUAL ao seu arquivo, mantido sem alterações)
+  {
+    group: "Comunicação e Marketing",
+    options: [
+      { value: "Jornalismo", desc: "Repórter, Editor, Assessor" },
+      { value: "Publicidade e Propaganda", desc: "Redator, Direção de Arte, Conteúdo" },
+      { value: "Marketing Digital", desc: "SEO/SEM, Social, Analista" },
+      { value: "Relações Públicas", desc: "RP, Assessoria" },
+      { value: "Gráfica e Comunicação Visual", desc: "Impressão, Plotagem, Sinalização" },
+      { value: "Produtora de Vídeo/Áudio", desc: "Filmagem, Podcast, Estúdio" },
+      { value: "Fotografia", desc: "Estúdio, Ensaios, Still" },
+      { value: "Eventos e Locação", desc: "Som, Luz, Palco, Estruturas" },
+      { value: "Assessoria de Imprensa", desc: "Press kit, media training" },
+      { value: "Influencer Marketing", desc: "Creators, parcerias" },
+      { value: "Branding e Naming", desc: "Posicionamento, identidade" },
+    ],
+  },
+  {
+    group: "Negócios e Finanças",
+    options: [
+      { value: "Administração", desc: "Administrador, GP" },
+      { value: "Contabilidade e Finanças", desc: "Contador, Analista, Auditor, Economista" },
+      { value: "Recursos Humanos", desc: "Analista de RH, Recrutador, GPessoas" },
+      { value: "Vendas e Comércio", desc: "Gerente de Vendas, Consultor, Vendedor" },
+      { value: "Corretora de Seguros", desc: "Auto, Vida, Saúde, Empresarial" },
+      { value: "Correspondente Bancário", desc: "Crédito, Consignado, Empréstimos" },
+      { value: "Franquias", desc: "Expansão, Gestão de Franqueados" },
+      { value: "Atacado e Distribuição", desc: "Cash & carry, distribuidoras" },
+      { value: "Consultoria Empresarial", desc: "Estratégia, processos, finanças" },
+      { value: "BPO e Terceirização", desc: "Backoffice, folha, fiscal" },
+      { value: "Cartórios e Notariais", desc: "Registro civil, títulos" },
+      { value: "Cobrança e Recuperação", desc: "Cobrança extrajudicial, crédito" },
+    ],
+  },
+  {
+    group: "Educação e Cultura",
+    options: [
+      { value: "Ensino", desc: "Professor, Coord. Pedagógico, Tutor" },
+      { value: "Pesquisa", desc: "Pesquisador, Cientista" },
+      { value: "Artes", desc: "Artista, Músico, Ator, Diretor" },
+      { value: "Museologia e História", desc: "Historiador, Curador, Museólogo" },
+      { value: "Biblioteca", desc: "Bibliotecário, Arquivista" },
+      { value: "Escolas e Colégios", desc: "Educação Básica, Técnica" },
+      { value: "Idiomas", desc: "Cursos, Intercâmbio" },
+      { value: "Cursos Profissionalizantes", desc: "TI, Saúde, Indústria" },
+      { value: "Autoescola", desc: "CNH, Reciclagem" },
+      { value: "Esporte e Lazer", desc: "Clubes, Academias, Estúdios" },
+      { value: "Pré-vestibular e Reforço", desc: "Cursinhos, ENEM" },
+      { value: "Escolas de Música e Dança", desc: "Conservatórios, estúdios" },
+      { value: "Produção Cultural", desc: "Editais, projetos, captação" },
+    ],
+  },
+  {
+    group: "Direito e Segurança",
+    options: [
+      { value: "Direito", desc: "Advogado, Juiz, Promotor" },
+      { value: "Segurança Pública", desc: "Policial, Bombeiro, Agente Penitenciário" },
+      { value: "Segurança Privada", desc: "Vigilante, Consultor" },
+      { value: "Perícia", desc: "Perito Criminal/Judicial" },
+      { value: "Compliance e LGPD", desc: "Proteção de Dados, Governança" },
+      { value: "Defesa Civil", desc: "Proteção e resposta a desastres" },
+      { value: "Cartórios e Registros", desc: "Notas, registro de imóveis" },
+      { value: "Detran e Trânsito", desc: "Órgãos, despachantes" },
+    ],
+  },
+  {
+    group: "Serviços e Social",
+    options: [
+      { value: "Hotelaria e Turismo", desc: "Hotel, Guia, Viagens" },
+      { value: "Gastronomia", desc: "Chef, Confeiteiro, Bartender" },
+      { value: "Beleza e Estética", desc: "Cabeleireiro, Esteticista, Maquiador" },
+      { value: "Serviço Social", desc: "Assistente Social, Sociólogo" },
+      { value: "Lavanderia", desc: "Lavagem, Secagem, Passadoria" },
+      { value: "Costura e Ajustes", desc: "Conserto de roupas, Sob medida" },
+      { value: "Chaveiro", desc: "Cópias, Aberturas, Troca de fechaduras" },
+      { value: "Limpeza e Facilities", desc: "Residencial, Comercial, Pós-obra" },
+      { value: "Jardinagem e Paisagismo", desc: "Manutenção, Projetos" },
+      { value: "Dedetização e Sanitização", desc: "Pragas urbanas, Sanitização" },
+      { value: "Mudanças e Carretos", desc: "Local, Interestadual" },
+      { value: "Assistência Técnica", desc: "Eletro, Informática, Celular" },
+      { value: "Coworking e Escritórios", desc: "Salas privativas, Compartilhadas" },
+      { value: "Igrejas e Comunidades", desc: "Templos, Entidades religiosas" },
+      { value: "ONGs e Terceiro Setor", desc: "Associações, Fundações" },
+      { value: "Barbearia", desc: "Cortes, grooming masculino" },
+      { value: "Perfumaria e Cosméticos", desc: "Varejo de beleza" },
+      { value: "Coaching e Mentoria", desc: "Desenvolvimento pessoal e negócios" },
+      { value: "Tradução e Interpretação", desc: "Traduções técnicas, simultânea" },
+      { value: "Agência de Empregos", desc: "RH, recrutamento, temporários" },
+    ],
+  },
   {
     group: "Comércio Varejista",
     options: [
@@ -185,7 +272,81 @@ const SEGMENTOS_GRUPOS = [
       { value: "Doceria Especializada", desc: "Bolos artísticos, brigadeiria" },
     ],
   },
-  // (demais grupos iguais ao seu arquivo atual)
+  {
+    group: "Automotivo",
+    options: [
+      { value: "Oficina Mecânica", desc: "Mecânica leve/pesada" },
+      { value: "Autoelétrica", desc: "Partida, Alternador, Injeção" },
+      { value: "Funilaria e Pintura", desc: "Estética, Reparos" },
+      { value: "Autopeças e Acessórios", desc: "Peças, Som, Película" },
+      { value: "Lava Jato e Estética", desc: "Lavagem, Vitrificação" },
+      { value: "Borracharia", desc: "Pneus, Alinhamento" },
+      { value: "Concessionária/Revenda", desc: "Novos, Seminovos" },
+      { value: "Motocicletas - Oficina e Peças", desc: "Motos, Acessórios" },
+      { value: "Guincho e Socorro", desc: "24h, Reboque" },
+      { value: "Vistoria e Laudos", desc: "Vistorias cautelar e transferência" },
+      { value: "Carros por Assinatura", desc: "Locadoras, mobilidade" },
+      { value: "Estética Automotiva Premium", desc: "Detailing, PPF, vitrificação" },
+    ],
+  },
+  {
+    group: "Construção, Imobiliário e Manutenção",
+    options: [
+      { value: "Materiais de Construção", desc: "Cimento, Ferramentas" },
+      { value: "Loja de Tintas", desc: "Tintas, Acessórios" },
+      { value: "Vidraçaria", desc: "Box, Espelhos, Temperado" },
+      { value: "Serralheria", desc: "Esquadrias, Portões" },
+      { value: "Marcenaria", desc: "Móveis sob medida" },
+      { value: "Marmoraria", desc: "Granito, Quartzo" },
+      { value: "Elétrica e Hidráulica", desc: "Materiais e serviços" },
+      { value: "Ar Condicionado e Refrigeração", desc: "Instalação, PMOC" },
+      { value: "Imobiliária e Condomínios", desc: "Vendas, Locação, Gestão" },
+      { value: "Paisagismo e Irrigação", desc: "Projetos, Manutenção" },
+      { value: "Energia Solar", desc: "Projetos, Instalação" },
+      { value: "Arquitetura e Urbanismo", desc: "Projetos, interiores" },
+      { value: "Condomínios e Síndicos", desc: "Gestão condominial" },
+      { value: "Automação Residencial", desc: "Casa inteligente, CFTV" },
+      { value: "Gesso e Drywall", desc: "Forros, divisórias" },
+      { value: "Topografia e Georreferenciamento", desc: "Levantamentos, GPS" },
+    ],
+  },
+  {
+    group: "Transporte e Logística",
+    options: [
+      { value: "Transporte de Cargas", desc: "Rodoviário, Fracionado" },
+      { value: "Entregas Rápidas/Courier", desc: "Express, Same-day" },
+      { value: "Motoboy", desc: "Delivery urbano" },
+      { value: "Fretamento e Turismo", desc: "Ônibus, Vans" },
+      { value: "Transporte Escolar", desc: "Escolar, Universitário" },
+      { value: "Logística e Armazenagem", desc: "CDs, 3PL" },
+      { value: "Locação de Veículos", desc: "Curto e longo prazo" },
+      { value: "Portos e Navegação", desc: "Cabotagem, terminais" },
+      { value: "Aeroportos e Aviação", desc: "Aviação executiva, hangares" },
+      { value: "Ferrovias", desc: "Transporte ferroviário" },
+      { value: "Frio e Refrigeração Logística", desc: "Cadeia fria" },
+      { value: "Fulfillment e Cross-docking", desc: "Operações e e-commerce" },
+    ],
+  },
+  {
+    group: "Telecomunicações e Mídia",
+    options: [
+      { value: "Telecomunicações", desc: "Operadoras, telefonia, fibra" },
+      { value: "Provedor de Internet (ISP)", desc: "Banda larga, WISP" },
+      { value: "Call Center e Contact Center", desc: "Atendimento, SAC, suporte" },
+      { value: "Streaming e Conteúdo", desc: "Plataformas OTT, produção" },
+      { value: "Radiodifusão", desc: "TV, rádio" },
+    ],
+  },
+  {
+    group: "Energia, Saneamento e Meio Ambiente",
+    options: [
+      { value: "Saneamento Básico", desc: "Água e esgoto" },
+      { value: "Gestão de Resíduos", desc: "Coleta, reciclagem" },
+      { value: "Tratamento de Água", desc: "ETA/ETEs, filtros" },
+      { value: "Eficiência Energética", desc: "Projetos, ESCO" },
+      { value: "ESG e Sustentabilidade", desc: "Ambiental, social e governança" },
+    ],
+  },
 ];
 
 const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap((g) => g.options.map((o) => o.value));
@@ -208,8 +369,8 @@ const ensureArraySegments = (client) => {
 };
 
 /* ============================================================================
-   Combobox multi de segmentos — com busca, grupos e criação de novos (modo livre)
-   >>> Ajustado: Popover com altura fixa + ScrollSafeArea (scroll seguro)
+   Combobox multi de segmentos — com busca, grupos e criação de novos
+   (Popover com altura fixa + ScrollSafeArea + correção de overflow)
 ============================================================================ */
 function SegmentosSelect({ value = [], onChange, onCreate }) {
   const [open, setOpen] = useState(false);
@@ -225,7 +386,8 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
     [value]
   );
 
-  const existsInBase = (label) => baseOptions.some((v) => v.toLowerCase() === label.toLowerCase());
+  const existsInBase = (label) =>
+    baseOptions.some((v) => v.toLowerCase() === label.toLowerCase());
   const existsInValue = (label) => allSelectedLower.has(label.toLowerCase());
 
   const toggle = (label) => {
@@ -268,13 +430,14 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
         sideOffset={6}
         collisionPadding={12}
         className="p-0 z-[70] w-[min(92vw,520px)] bg-background"
-        // impede fechamentos acidentais enquanto rola/arrasta
+        // evita fechar ao rolar/clicar dentro
         onPointerDownOutside={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <ScrollSafeArea className="max-h-[65vh] sm:max-h-[60vh] overflow-y-auto overscroll-contain pb-2 [-webkit-overflow-scrolling:touch]">
-          <Command className="text-[13px] leading-tight">
+          {/* Força overflow visível para não cortar o fim da lista */}
+          <Command className="text-[13px] leading-tight !overflow-visible !rounded-none !border-0 shadow-none [scrollbar-gutter:stable]">
             <div className="sticky top-0 z-10 bg-background">
               <CommandInput
                 placeholder="Buscar ou digitar novo segmento…"
@@ -289,7 +452,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
               />
             </div>
 
-            <CommandList className="max-h-none">
+            <CommandList className="max-h-none pb-4">
               {shouldSuggestCreate && (
                 <CommandGroup heading={<span className="text-[11px] font-semibold text-muted-foreground">Ações</span>}>
                   <CommandItem
@@ -335,7 +498,8 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
                   })}
                 </CommandGroup>
               ))}
-              <div className="h-1" />
+              {/* “respiro” no fim para nunca cortar o último item */}
+              <div className="h-2" />
             </CommandList>
           </Command>
         </ScrollSafeArea>
@@ -345,7 +509,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
 }
 
 /* ============================================================================
-   Página — filtros com altura fixa (header/footer sempre visíveis)
+   Página — filtros com altura fixa (header/footer visíveis) + scroll seguro
 ============================================================================ */
 const Clients = () => {
   const [clients, setClients] = useState([]);
@@ -578,7 +742,6 @@ const Clients = () => {
   const totalClients = clients.length;
   const totalFiltered = filtered.length;
 
-  // contagem por segmento dentro dos exibidos
   const top10Segments = useMemo(() => {
     const map = new Map();
     filtered.forEach((c) => {
@@ -629,22 +792,14 @@ const Clients = () => {
         fHasPhone ? `Telefone: ${fHasPhone === 'sim' ? 'Com telefone' : 'Sem telefone'}` : '',
       ].filter(Boolean).join(' | ') : 'Nenhum filtro aplicado'
     }`,
-    columnStyles: {
-      0: { cellWidth: 40 },
-      1: { cellWidth: 35 },
-      2: { cellWidth: 45 },
-      3: { cellWidth: 35 },
-      4: { cellWidth: 30 },
-    }
+    columnStyles: { 0:{cellWidth:40},1:{cellWidth:35},2:{cellWidth:45},3:{cellWidth:35},4:{cellWidth:30} }
   };
 
   /* ===================== PAGINAÇÃO (15 por página) ===================== */
   const [page, setPage] = useState(1);
   const pageSize = 15;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  useEffect(() => {
-    if (page > totalPages) setPage(1);
-  }, [page, totalPages]);
+  useEffect(() => { if (page > totalPages) setPage(1); }, [page, totalPages]);
 
   const pageItems = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -700,7 +855,7 @@ const Clients = () => {
                 </Button>
               </PopoverTrigger>
 
-              {/* Altura fixa => header/footer SEMPRE visíveis + scroll seguro no corpo */}
+              {/* Altura fixa + scroll seguro no corpo */}
               <PopoverContent
                 align="end"
                 side="bottom"
@@ -997,7 +1152,7 @@ const Clients = () => {
             <div className="rounded-xl border bg-card p-4">
               <p className="text-xs text-muted-foreground">Top 10 segmentos (% dos clientes exibidos)</p>
 
-              {/* layout responsivo: em telas pequenas, legenda abaixo; em ≥sm, lado a lado */}
+              {/* Em mobile, legenda abaixo do gráfico; em ≥sm, lado a lado */}
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
                 <div className="h-[180px] sm:h-[220px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1026,7 +1181,7 @@ const Clients = () => {
                   </ResponsiveContainer>
                 </div>
 
-                {/* legenda compacta, ótima em mobile */}
+                {/* legenda compacta */}
                 <ul className="text-xs space-y-1 sm:max-h-[220px] sm:overflow-y-auto pr-1">
                   {top10Segments.map((d, i) => (
                     <li key={d.name} className="flex items-center justify-between gap-2">
