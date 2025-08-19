@@ -39,15 +39,14 @@ import {
   Filter as FilterIcon,
 } from "lucide-react";
 
+// Gráfico (donut)
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+
 import ExportMenu from "@/components/export/ExportMenu";
-import ScrollSafeArea from "@/components/ScrollSafeArea.jsx";
 
-// KPI (pizza) – Recharts
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-
-/* ============================================================================
-   TELEFONE BR (+55) — normalização/máscara (simplificada)
-============================================================================ */
+/* ========================================================================== */
+/* Utilitários                                                                */
+/* ========================================================================== */
 const normalizePhoneBR = (input) => {
   if (!input) return "";
   const digits = String(input).replace(/\D/g, "");
@@ -73,9 +72,17 @@ const formatPhoneDisplay = (phone) => {
   return phone;
 };
 
-/* ============================================================================
-   SEGMENTOS — grupos + valores (LISTA COMPLETA)
-============================================================================ */
+const ensureArraySegments = (client) => {
+  if (!client) return [];
+  const segs = client.segments || client.segment || [];
+  if (Array.isArray(segs)) return segs.filter(Boolean);
+  if (typeof segs === "string") return segs.split(",").map((s) => s.trim()).filter(Boolean);
+  return [];
+};
+
+/* ========================================================================== */
+/* Segmentos (grupos) — conteúdo completo                                     */
+/* ========================================================================== */
 const SEGMENTOS_GRUPOS = [
   {
     group: "Tecnologia e Informática",
@@ -315,201 +322,186 @@ const SEGMENTOS_GRUPOS = [
     options: [
       { value: "Transporte de Cargas", desc: "Rodoviário, Fracionado" },
       { value: "Entregas Rápidas/Courier", desc: "Express, Same-day" },
-      { value: "Motoboy", desc: "Delivery urbano" },
-      { value: "Fretamento e Turismo", desc: "Ônibus, Vans" },
-      { value: "Transporte Escolar", desc: "Escolar, Universitário" },
-      { value: "Logística e Armazenagem", desc: "CDs, 3PL" },
-      { value: "Locação de Veículos", desc: "Curto e longo prazo" },
-      { value: "Portos e Navegação", desc: "Cabotagem, terminais" },
-      { value: "Aeroportos e Aviação", desc: "Aviação executiva, hangares" },
-      { value: "Ferrovias", desc: "Transporte ferroviário" },
-      { value: "Frio e Refrigeração Logística", desc: "Cadeia fria" },
-      { value: "Fulfillment e Cross-docking", desc: "Operações e e-commerce" },
+      { value: "Transporte de Passageiros", desc: "Fretamento, Turismo" },
+      { value: "Logística e Armazenagem", desc: "CD, WMS, Cross-docking" },
+      { value: "Correios e Postagem", desc: "Franquia, Agência" },
+      { value: "Uber/99/Taxi", desc: "Mobilidade urbana" },
+      { value: "Locação de Veículos", desc: "Carros, Vans, Caminhões" },
+      { value: "Despachante", desc: "Documentação veicular" },
     ],
   },
   {
-    group: "Telecomunicações e Mídia",
+    group: "Agricultura e Pecuária",
     options: [
-      { value: "Telecomunicações", desc: "Operadoras, telefonia, fibra" },
-      { value: "Provedor de Internet (ISP)", desc: "Banda larga, WISP" },
-      { value: "Call Center e Contact Center", desc: "Atendimento, SAC, suporte" },
-      { value: "Streaming e Conteúdo", desc: "Plataformas OTT, produção" },
-      { value: "Radiodifusão", desc: "TV, rádio" },
-    ],
-  },
-  {
-    group: "Energia, Saneamento e Meio Ambiente",
-    options: [
-      { value: "Saneamento Básico", desc: "Água e esgoto" },
-      { value: "Gestão de Resíduos", desc: "Coleta, reciclagem" },
-      { value: "Tratamento de Água", desc: "ETA/ETEs, filtros" },
-      { value: "Eficiência Energética", desc: "Projetos, ESCO" },
-      { value: "ESG e Sustentabilidade", desc: "Ambiental, social e governança" },
+      { value: "Agricultura", desc: "Grãos, Hortaliças, Frutas" },
+      { value: "Pecuária", desc: "Bovinos, Suínos, Aves" },
+      { value: "Agronegócio", desc: "Commodities, Trading" },
+      { value: "Insumos Agrícolas", desc: "Sementes, Defensivos, Fertilizantes" },
+      { value: "Máquinas Agrícolas", desc: "Tratores, Colheitadeiras" },
+      { value: "Cooperativas", desc: "Cooperativismo rural" },
+      { value: "Veterinária Rural", desc: "Grandes animais, reprodução" },
+      { value: "Irrigação", desc: "Sistemas, Pivôs" },
     ],
   },
 ];
 
-const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap((g) => g.options.map((o) => o.value));
+const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap((grp) => grp.options.map((opt) => opt.value));
 
-/* ============================================================================
-   Util: garantir array de segmentos (compatível com campos antigos)
-============================================================================ */
-const ensureArraySegments = (client) => {
-  if (Array.isArray(client?.segments)) return client.segments;
-  if (typeof client?.segment === "string" && client.segment.trim()) {
-    return client.segment.split(",").map((s) => s.trim()).filter(Boolean);
-  }
-  if (typeof client?.segmentos === "string" && client.segmentos.trim()) {
-    return client.segmentos.split(",").map((s) => s.trim()).filter(Boolean);
-  }
-  if (typeof client?.segments === "string" && client.segments.trim()) {
-    return client.segments.split(",").map((s) => s.trim()).filter(Boolean);
-  }
-  return [];
-};
-
-/* ============================================================================
-   Combobox multi de segmentos — com busca, grupos e criação de novos (modo livre)
-   >>> Popover com altura fixa + ScrollSafeArea + overflow fixado
-============================================================================ */
+/* ========================================================================== */
+/* Componente SegmentosSelect — combobox multi com modo livre                 */
+/* CORREÇÃO: Aplicação de estilos inline para forçar overflow visible        */
+/* ========================================================================== */
 function SegmentosSelect({ value = [], onChange, onCreate }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const baseOptions = useMemo(
-    () => SEGMENTOS_GRUPOS.flatMap((g) => g.options.map((o) => o.value)),
-    []
-  );
+  const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
 
-  const allSelectedLower = useMemo(
-    () => new Set(value.map((v) => v.toLowerCase())),
-    [value]
-  );
+  const filteredOptions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const base = [];
+    SEGMENTOS_GRUPOS.forEach((grp) => {
+      grp.options.forEach((opt) => {
+        if (!q || opt.value.toLowerCase().includes(q) || (opt.desc && opt.desc.toLowerCase().includes(q))) {
+          base.push(opt.value);
+        }
+      });
+    });
+    return base;
+  }, [query]);
 
-  const existsInBase = (label) => baseOptions.some((v) => v.toLowerCase() === label.toLowerCase());
-  const existsInValue = (label) => allSelectedLower.has(label.toLowerCase());
-
-  const toggle = (label) => {
-    const exists = value.includes(label);
-    const next = exists ? value.filter((s) => s !== label) : [...value, label];
+  const toggle = (segValue) => {
+    const next = value.includes(segValue)
+      ? value.filter((v) => v !== segValue)
+      : [...value, segValue];
     onChange(next);
   };
 
-  const addCustom = (label) => {
-    const clean = label.trim();
-    if (!clean) return;
-    if (!existsInValue(clean)) onChange([...value, clean]);
-    onCreate?.(clean);
+  const handleCreate = () => {
+    const label = query.trim();
+    if (!label) return;
+    if (value.includes(label)) return;
+    if (baseSegmentSet.has(label)) {
+      toggle(label);
+    } else {
+      onChange([...value, label]);
+      if (onCreate) onCreate(label);
+    }
     setQuery("");
-    setOpen(true);
   };
 
-  const shouldSuggestCreate = useMemo(() => {
-    const t = query.trim();
-    if (!t) return false;
-    return !existsInBase(t) && !existsInValue(t);
-  }, [query, baseOptions, value]);
+  const canCreate = query.trim() && !value.includes(query.trim());
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" className="w-full justify-between">
-          {value.length === 0 ? "Selecionar segmentos" : (
-            <span className="truncate">
-              {value.slice(0, 2).join(", ")}{value.length > 2 ? ` +${value.length - 2}` : ""}
-            </span>
-          )}
+        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
+          Selecionar segmentos
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
 
+      {/* CORREÇÃO: Aplicação de estilos inline para forçar overflow e z-index */}
       <PopoverContent
-        side="bottom"
+        className="w-[min(96vw,600px)] p-0"
+        style={{
+          height: 'min(70vh, 500px)',
+          overflow: 'visible',
+          zIndex: 9999
+        }}
         align="start"
-        sideOffset={6}
+        side="bottom"
+        sideOffset={8}
         collisionPadding={12}
-        className="p-0 z-[70] w-[min(92vw,520px)] bg-background"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onFocusOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
+        avoidCollisions={true}
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <ScrollSafeArea className="max-h-[56vh] sm:max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] pb-3">
-          <Command
-            className="text-[13px] leading-tight !rounded-none !border-0 shadow-none [scrollbar-gutter:stable]"
-            style={{ overflow: "visible", position: "relative" }}
-          >
-            <div className="sticky top-0 z-10 bg-background">
+        <div className="grid h-full grid-rows-[auto,1fr,auto]" style={{ overflow: 'visible' }}>
+          {/* Header com busca */}
+          <div className="p-3 border-b bg-background">
+            <Command>
               <CommandInput
-                placeholder="Buscar ou digitar novo segmento…"
+                placeholder="Buscar ou criar segmento..."
                 value={query}
                 onValueChange={setQuery}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && shouldSuggestCreate) {
-                    e.preventDefault();
-                    addCustom(query);
-                  }
-                }}
+                className="h-9"
               />
-            </div>
+            </Command>
+          </div>
 
-            <CommandList className="max-h-none pb-6">
-              {shouldSuggestCreate && (
-                <CommandGroup heading={<span className="text-[11px] font-semibold text-muted-foreground">Ações</span>}>
-                  <CommandItem
-                    value={`__create:${query}`}
-                    className="flex items-center gap-2 py-2 px-2"
-                    onSelect={() => addCustom(query)}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Adicionar “{query.trim()}” como novo segmento
-                  </CommandItem>
-                </CommandGroup>
-              )}
+          {/* Body rolável - CORREÇÃO: Estilos inline para garantir scroll */}
+          <div
+            className="overflow-y-auto overscroll-contain touch-pan-y"
+            style={{
+              WebkitOverflowScrolling: 'touch',
+              maxHeight: 'calc(70vh - 120px)',
+              overflow: 'auto'
+            }}
+          >
+            <Command style={{ overflow: 'visible' }}>
+              <CommandList className="max-h-none" style={{ overflow: 'visible' }}>
+                {canCreate && (
+                  <CommandGroup>
+                    <CommandItem onSelect={handleCreate} className="cursor-pointer">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Criar "{query.trim()}"
+                    </CommandItem>
+                  </CommandGroup>
+                )}
 
-              {SEGMENTOS_GRUPOS.map((grp) => (
-                <CommandGroup
-                  key={grp.group}
-                  heading={<span className="text-[11px] font-semibold text-muted-foreground">{grp.group}</span>}
-                  className="px-1 py-1"
-                >
-                  {grp.options.map((opt) => {
-                    const checked = value.includes(opt.value);
-                    return (
-                      <CommandItem
-                        key={`${grp.group}-${opt.value}`}
-                        value={`${opt.value} ${opt.desc}`}
-                        className="flex items-start gap-2 py-1 px-2"
-                        onSelect={() => toggle(opt.value)}
-                      >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={() => toggle(opt.value)}
-                          className="mt-0.5 h-3 w-3"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium">{opt.value}</div>
-                          <div className="text-[11px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
-                            {opt.desc}
+                {SEGMENTOS_GRUPOS.map((grp) => {
+                  const q = query.trim().toLowerCase();
+                  const shownOpts = grp.options.filter((opt) =>
+                    !q || opt.value.toLowerCase().includes(q) || (opt.desc && opt.desc.toLowerCase().includes(q))
+                  );
+                  if (shownOpts.length === 0) return null;
+
+                  return (
+                    <CommandGroup key={grp.group} heading={grp.group}>
+                      {shownOpts.map((opt) => (
+                        <CommandItem
+                          key={opt.value}
+                          onSelect={() => toggle(opt.value)}
+                          className="cursor-pointer"
+                        >
+                          <Check
+                            className={`mr-2 h-4 w-4 ${
+                              value.includes(opt.value) ? "opacity-100" : "opacity-0"
+                            }`}
+                          />
+                          <div>
+                            <div className="font-medium">{opt.value}</div>
+                            {opt.desc && <div className="text-xs text-muted-foreground">{opt.desc}</div>}
                           </div>
-                        </div>
-                        {checked && <Check className="h-4 w-4 opacity-70" />}
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              ))}
-              <div className="h-3" />
-            </CommandList>
-          </Command>
-        </ScrollSafeArea>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  );
+                })}
+              </CommandList>
+            </Command>
+          </div>
+
+          {/* Footer */}
+          <div className="p-3 border-t bg-background">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOpen(false)}
+              className="w-full"
+            >
+              Fechar
+            </Button>
+          </div>
+        </div>
       </PopoverContent>
     </Popover>
   );
 }
 
-/* ============================================================================
-   Página — filtros com altura fixa (header/footer sempre visíveis)
-============================================================================ */
+/* ========================================================================== */
+/* Página Clientes — KPIs responsivos + pizza + paginação                     */
+/* ========================================================================== */
 const Clients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -526,6 +518,10 @@ const Clients = () => {
   const [openDelete, setOpenDelete] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  // paginação
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
 
   const [extraSegments, setExtraSegments] = useState([]);
   const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
@@ -700,7 +696,6 @@ const Clients = () => {
     setFSegments((prev) => Array.from(new Set([...prev, ...shownSegmentValues])));
   };
 
-  /* ===================== BUSCA + FILTROS APLICADOS ===================== */
   const filtered = useMemo(() => {
     let list = Array.isArray(clients) ? [...clients] : [];
 
@@ -737,72 +732,34 @@ const Clients = () => {
     return list;
   }, [clients, q, fCompanies, fSegments, fHasEmail, fHasPhone]);
 
-  /* ===================== KPI: TOTAL + TOP10 SEGMENTOS ===================== */
+  // KPI: totais
   const totalClients = clients.length;
-  const totalFiltered = filtered.length;
+  const totalAfterFilters = filtered.length;
 
-  const top10Segments = useMemo(() => {
-    const map = new Map();
+  // Pizza Top 10 — % sobre os exibidos (filtered)
+  const pieData = useMemo(() => {
+    const counts = new Map();
     filtered.forEach((c) => {
       const segs = ensureArraySegments(c);
-      if (!segs || segs.length === 0) return;
-      segs.forEach((s) => map.set(s, (map.get(s) || 0) + 1));
+      if (segs.length === 0) return;
+      segs.forEach((s) => {
+        counts.set(s, (counts.get(s) || 0) + 1);
+      });
     });
-    const items = Array.from(map.entries())
-      .map(([name, count]) => ({
-        name,
-        count,
-        pct: Number(((count / Math.max(1, filtered.length)) * 100).toFixed(1)),
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-    return items;
-  }, [filtered]);
-
-  const PIE_COLORS = ["#ef4444","#f59e0b","#10b981","#3b82f6","#8b5cf6","#ec4899","#14b8a6","#f97316","#22c55e","#64748b"];
-
-  /* ===================== EXPORT ===================== */
-  const exportData = useMemo(() => {
-    return filtered.map((c) => ({
-      name: c.name || "",
-      company: c.company ?? c.company_name ?? c.companyName ?? "",
-      segments: ensureArraySegments(c).join(" | "),
-      email: c.email || "",
-      phone: formatPhoneDisplay(c.phone || ""),
+    const arr = Array.from(counts.entries()).map(([name, count]) => ({ name, count }));
+    arr.sort((a, b) => b.count - a.count);
+    const top10 = arr.slice(0, 10);
+    const base = totalAfterFilters || 1;
+    return top10.map((it) => ({
+      name: it.name,
+      value: Number(((it.count / base) * 100).toFixed(1)), // %
+      count: it.count,
     }));
-  }, [filtered]);
+  }, [filtered, totalAfterFilters]);
 
-  const exportColumns = [
-    { key: 'name', header: 'Nome' },
-    { key: 'company', header: 'Empresa' },
-    { key: 'segments', header: 'Segmentos' },
-    { key: 'email', header: 'E-mail' },
-    { key: 'phone', header: 'Telefone' },
-  ];
+  const PIE_COLORS = ["#F97316","#EF4444","#3B82F6","#22C55E","#A855F7","#06B6D4","#F59E0B","#64748B","#84CC16","#EC4899"];
 
-  const pdfOptions = {
-    title: 'Relatório de Clientes',
-    orientation: 'p',
-    filtersSummary: `Filtros aplicados: ${filtersCount > 0 ?
-      [
-        fCompanies.length > 0 ? `Empresas: ${fCompanies.join(', ')}` : '',
-        fSegments.length > 0 ? `Segmentos: ${fSegments.join(', ')}` : '',
-        fHasEmail ? `E-mail: ${fHasEmail === 'sim' ? 'Com e-mail' : 'Sem e-mail'}` : '',
-        fHasPhone ? `Telefone: ${fHasPhone === 'sim' ? 'Com telefone' : 'Sem telefone'}` : '',
-      ].filter(Boolean).join(' | ') : 'Nenhum filtro aplicado'
-    }`,
-    columnStyles: {
-      0: { cellWidth: 40 },
-      1: { cellWidth: 35 },
-      2: { cellWidth: 45 },
-      3: { cellWidth: 35 },
-      4: { cellWidth: 30 },
-    }
-  };
-
-  /* ===================== PAGINAÇÃO (15 por página) ===================== */
-  const [page, setPage] = useState(1);
-  const pageSize = 15;
+  // paginação derivada
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   useEffect(() => {
     if (page > totalPages) setPage(1);
@@ -830,17 +787,33 @@ const Clients = () => {
             </div>
             <div className="ml-auto">
               <ExportMenu
-                data={exportData}
-                columns={exportColumns}
+                data={filtered.map((c) => ({
+                  name: c.name || "",
+                  company: c.company ?? c.company_name ?? c.companyName ?? "",
+                  segments: ensureArraySegments(c).join(" | "),
+                  email: c.email || "",
+                  phone: formatPhoneDisplay(c.phone || ""),
+                }))}
+                columns={[
+                  { key: 'name', header: 'Nome' },
+                  { key: 'company', header: 'Empresa' },
+                  { key: 'segments', header: 'Segmentos' },
+                  { key: 'email', header: 'E-mail' },
+                  { key: 'phone', header: 'Telefone' },
+                ]}
                 filename="clientes"
-                pdfOptions={pdfOptions}
+                pdfOptions={{
+                  title: 'Relatório de Clientes',
+                  orientation: 'p',
+                  filtersSummary: `Exibidos: ${totalAfterFilters} / ${totalClients}`,
+                }}
               />
             </div>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* Busca geral + Filtros + Novo */}
+          {/* Busca + Filtros + Novo */}
           <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
             <div className="relative flex-1 w-full md:w-[320px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -852,7 +825,7 @@ const Clients = () => {
               />
             </div>
 
-            {/* ====== FILTROS AVANÇADOS ====== */}
+            {/* ====== FILTROS AVANÇADOS - CORREÇÃO: Estilos inline para overflow ====== */}
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
@@ -862,20 +835,23 @@ const Clients = () => {
                 </Button>
               </PopoverTrigger>
 
-              {/* Altura fixa => header/footer SEMPRE visíveis + scroll seguro no corpo */}
               <PopoverContent
                 align="end"
                 side="bottom"
                 sideOffset={8}
                 collisionPadding={12}
-                className="w-[min(96vw,860px)] p-0 overflow-hidden z-[60]"
-                style={{ height: 'min(72vh, 600px)' }}
-                onPointerDownOutside={(e) => e.preventDefault()}
-                onFocusOutside={(e) => e.preventDefault()}
+                className="w-[min(96vw,860px)] p-0"
+                style={{
+                  height: 'min(72vh, 600px)',
+                  overflow: 'visible',
+                  zIndex: 9999
+                }}
+                avoidCollisions={true}
+                onOpenAutoFocus={(e) => e.preventDefault()}
               >
-                <div className="grid h-full grid-rows-[auto,1fr,auto] text-[12px] leading-tight">
-                  {/* HEADER (fixo) */}
-                  <div className="px-3 py-2 border-b flex items-center justify-between">
+                <div className="grid h-full grid-rows-[auto,1fr,auto] text-[12px] leading-tight" style={{ overflow: 'visible' }}>
+                  {/* HEADER */}
+                  <div className="px-3 py-2 border-b flex items-center justify-between bg-background">
                     <div>
                       <p className="text-[13px] font-medium">Filtrar clientes</p>
                       <p className="text-[11px] text-muted-foreground">Refine os resultados com seletores.</p>
@@ -891,12 +867,22 @@ const Clients = () => {
                     </Button>
                   </div>
 
-                  {/* BODY (rolável) – ScrollSafeArea */}
-                  <ScrollSafeArea className="p-3 grid md:grid-cols-2 gap-3 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
+                  {/* BODY (rolável) - CORREÇÃO: Estilos inline para scroll seguro */}
+                  <div
+                    className="p-3 grid md:grid-cols-2 gap-3 overflow-y-auto overscroll-contain touch-pan-y pr-2"
+                    style={{
+                      WebkitOverflowScrolling: 'touch',
+                      maxHeight: 'calc(72vh - 120px)',
+                      overflow: 'auto'
+                    }}
+                  >
                     {/* Empresas */}
                     <div className="space-y-1.5">
                       <Label className="text-[12px]">Empresas</Label>
-                      <div className="max-h-[40vh] overflow-y-auto pr-1">
+                      <div
+                        className="max-h-[40vh] overflow-y-auto overscroll-contain touch-pan-y pr-1"
+                        style={{ WebkitOverflowScrolling: 'touch' }}
+                      >
                         {uniqueCompanies.length === 0 ? (
                           <p className="text-[11px] text-muted-foreground">—</p>
                         ) : uniqueCompanies.map((comp) => (
@@ -921,7 +907,7 @@ const Clients = () => {
                       )}
                     </div>
 
-                    {/* Segmentos (agrupados + personalizados) */}
+                    {/* Segmentos (agrupados + personalizados) - CORREÇÃO: Scroll seguro */}
                     <div className="space-y-1.5">
                       <Label className="flex items-center justify-between text-[12px]">
                         <span>Segmentos</span>
@@ -949,7 +935,10 @@ const Clients = () => {
                         </Button>
                       </div>
 
-                      <div className="max-h-[40vh] overflow-y-auto pr-1">
+                      <div
+                        className="max-h-[40vh] overflow-y-auto overscroll-contain touch-pan-y pr-1"
+                        style={{ WebkitOverflowScrolling: 'touch' }}
+                      >
                         {SEGMENTOS_GRUPOS.map((grp) => {
                           const q = fSegmentsQuery.trim().toLowerCase();
                           const shownOpts = grp.options.filter((opt) =>
@@ -958,43 +947,43 @@ const Clients = () => {
                           if (shownOpts.length === 0) return null;
                           return (
                             <div key={grp.group} className="mb-2">
-                              <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">{grp.group}</p>
-                              <div className="space-y-1">
-                                {shownOpts.map((opt) => (
-                                  <label key={opt.value} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
-                                    <Checkbox checked={fSegments.includes(opt.value)} onCheckedChange={() => toggle(setFSegments, opt.value)} className="h-3 w-3" />
-                                    <span className="truncate">{opt.value}</span>
-                                  </label>
-                                ))}
-                              </div>
-                              <Separator className="my-2" />
+                              <p className="text-[11px] font-medium text-muted-foreground mb-1">{grp.group}</p>
+                              {shownOpts.map((opt) => (
+                                <label key={opt.value} className="flex items-center gap-1.5 text-[12px] cursor-pointer mb-1">
+                                  <Checkbox
+                                    checked={fSegments.includes(opt.value)}
+                                    onCheckedChange={() => toggle(setFSegments, opt.value)}
+                                    className="h-3 w-3"
+                                  />
+                                  <span className="truncate">{opt.value}</span>
+                                </label>
+                              ))}
                             </div>
                           );
                         })}
 
-                        {/* Grupo: Personalizados (dinâmico) */}
-                        {(() => {
-                          const q = fSegmentsQuery.trim().toLowerCase();
-                          const list = customSegmentsFromData.filter((s) => !q || s.toLowerCase().includes(q));
-                          if (list.length === 0) return null;
-                          return (
-                            <div className="mb-2">
-                              <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">Personalizados</p>
-                              <div className="space-y-1">
-                                {list.map((opt) => (
-                                  <label key={opt} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
-                                    <Checkbox checked={fSegments.includes(opt)} onCheckedChange={() => toggle(setFSegments, opt)} className="h-3 w-3" />
-                                    <span className="truncate">{opt}</span>
-                                  </label>
-                                ))}
-                              </div>
-                              <Separator className="my-2" />
-                            </div>
-                          );
-                        })()}
+                        {customSegmentsFromData.length > 0 && (
+                          <div className="mb-2">
+                            <p className="text-[11px] font-medium text-muted-foreground mb-1">Personalizados</p>
+                            {customSegmentsFromData
+                              .filter((s) => {
+                                const q = fSegmentsQuery.trim().toLowerCase();
+                                return !q || s.toLowerCase().includes(q);
+                              })
+                              .map((seg) => (
+                                <label key={seg} className="flex items-center gap-1.5 text-[12px] cursor-pointer mb-1">
+                                  <Checkbox
+                                    checked={fSegments.includes(seg)}
+                                    onCheckedChange={() => toggle(setFSegments, seg)}
+                                    className="h-3 w-3"
+                                  />
+                                  <span className="truncate">{seg}</span>
+                                </label>
+                              ))}
+                          </div>
+                        )}
                       </div>
 
-                      {/* Chips dos segmentos selecionados (compactos) */}
                       {fSegments.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {fSegments.map((s) => (
@@ -1009,7 +998,7 @@ const Clients = () => {
                       )}
                     </div>
 
-                    {/* E-mail / Telefone (compactos) */}
+                    {/* E-mail e Telefone */}
                     <div className="space-y-1.5">
                       <Label className="text-[12px]">E-mail</Label>
                       <select
@@ -1034,9 +1023,9 @@ const Clients = () => {
                         <option value="nao">Sem telefone</option>
                       </select>
                     </div>
-                  </ScrollSafeArea>
+                  </div>
 
-                  {/* FOOTER (fixo) */}
+                  {/* FOOTER */}
                   <div className="px-3 py-2 border-t flex justify-end gap-2 items-center bg-background">
                     <Button variant="outline" size="sm" className="h-8 px-2 text-[12px]" onClick={() => setFiltersOpen(false)}>Fechar</Button>
                     <Button size="sm" className="h-8 px-3 text-[12px]" onClick={() => setFiltersOpen(false)}>Aplicar</Button>
@@ -1045,7 +1034,7 @@ const Clients = () => {
               </PopoverContent>
             </Popover>
 
-            {/* Novo Cliente */}
+            {/* Novo Cliente - CORREÇÃO: Modal com scroll seguro e estilos inline */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" className="gap-2" onClick={openCreate}>
@@ -1054,154 +1043,188 @@ const Clients = () => {
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="p-0 sm:max-w-[560px] md:max-w-[600px]">
-                {/* Conteúdo com rolagem SEGURA e altura fixa */}
-                <ScrollSafeArea className="max-h-[80vh] overflow-y-auto p-6">
-                  <DialogHeader className="pb-2">
-                    <DialogTitle>{mode === "create" ? "Novo Cliente" : "Editar Cliente"}</DialogTitle>
-                    <DialogDescription>
-                      {mode === "create" ? "Cadastre um novo cliente." : "Atualize os dados do cliente."}
-                    </DialogDescription>
-                  </DialogHeader>
+              <DialogContent
+                className="p-0 sm:max-w-[560px] md:max-w-[600px]"
+                style={{
+                  height: 'min(85vh, 700px)',
+                  overflow: 'visible',
+                  zIndex: 9999
+                }}
+              >
+                <div className="grid h-full grid-rows-[auto,1fr,auto]" style={{ overflow: 'visible' }}>
+                  {/* Header */}
+                  <div className="p-6 pb-2 border-b bg-background">
+                    <DialogHeader>
+                      <DialogTitle>{mode === "create" ? "Novo Cliente" : "Editar Cliente"}</DialogTitle>
+                      <DialogDescription>
+                        {mode === "create" ? "Cadastre um novo cliente." : "Atualize os dados do cliente."}
+                      </DialogDescription>
+                    </DialogHeader>
+                  </div>
 
-                  <form onSubmit={onSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="md:col-span-2">
-                        <Label>Nome</Label>
-                        <Input name="name" value={form.name} onChange={onChange} required />
+                  {/* Body rolável - CORREÇÃO: Estilos inline para scroll */}
+                  <div
+                    className="p-6 overflow-y-auto overscroll-contain touch-pan-y"
+                    style={{
+                      WebkitOverflowScrolling: 'touch',
+                      maxHeight: 'calc(85vh - 120px)',
+                      overflow: 'auto'
+                    }}
+                  >
+                    <form onSubmit={onSubmit} className="space-y-4" id="client-form">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="md:col-span-2">
+                          <Label>Nome</Label>
+                          <Input name="name" value={form.name} onChange={onChange} required />
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <Label>Empresa</Label>
+                          <Input name="company" value={form.company} onChange={onChange} />
+                        </div>
+
+                        {/* Segmentos — combobox multi com modo livre (com FIX de scroll) */}
+                        <div className="md:col-span-2 space-y-2">
+                          <Label>Segmentos</Label>
+                          <SegmentosSelect
+                            value={form.segments}
+                            onChange={(next) => setForm((f) => ({ ...f, segments: next }))}
+                            onCreate={(label) => {
+                              setExtraSegments((prev) => (prev.includes(label) ? prev : [...prev, label]));
+                            }}
+                          />
+                          {form.segments.length > 0 && (
+                            <div className="flex flex-wrap gap-2 justify-start">
+                              {form.segments.map((s) => (
+                                <Badge key={s} variant="secondary" className="gap-1">
+                                  {s}
+                                  <button
+                                    type="button"
+                                    className="ml-1 opacity-70 hover:opacity-100"
+                                    onClick={() =>
+                                      setForm((f) => ({ ...f, segments: f.segments.filter((x) => x !== s) }))
+                                    }
+                                    title="Remover"
+                                  >
+                                    <X className="size-3" />
+                                  </button>
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <Label>E-mail</Label>
+                          <Input name="email" type="email" value={form.email} onChange={onChange} />
+                        </div>
+
+                        <div>
+                          <Label>Telefone</Label>
+                          <Input
+                            name="phone"
+                            value={form.phone}
+                            onChange={onChange}
+                            placeholder="+55(DD)Número"
+                          />
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <Label>Observações</Label>
+                          <Textarea name="notes" value={form.notes} onChange={onChange} />
+                        </div>
                       </div>
+                    </form>
+                  </div>
 
-                      <div className="md:col-span-2">
-                        <Label>Empresa</Label>
-                        <Input name="company" value={form.company} onChange={onChange} />
-                      </div>
-
-                      {/* Segmentos — combobox multi com modo livre */}
-                      <div className="md:col-span-2 space-y-2">
-                        <Label>Segmentos</Label>
-                        <SegmentosSelect
-                          value={form.segments}
-                          onChange={(next) => setForm((f) => ({ ...f, segments: next }))}
-                          onCreate={(label) => {
-                            setExtraSegments((prev) => (prev.includes(label) ? prev : [...prev, label]));
-                          }}
-                        />
-                        {form.segments.length > 0 && (
-                          <div className="flex flex-wrap gap-2 justify-start">
-                            {form.segments.map((s) => (
-                              <Badge key={s} variant="secondary" className="gap-1">
-                                {s}
-                                <button
-                                  type="button"
-                                  className="ml-1 opacity-70 hover:opacity-100"
-                                  onClick={() =>
-                                    setForm((f) => ({ ...f, segments: f.segments.filter((x) => x !== s) }))
-                                  }
-                                  title="Remover"
-                                >
-                                  <X className="size-3" />
-                                </button>
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <Label>E-mail</Label>
-                        <Input name="email" type="email" value={form.email} onChange={onChange} />
-                      </div>
-
-                      <div>
-                        <Label>Telefone</Label>
-                        <Input
-                          name="phone"
-                          value={form.phone}
-                          onChange={onChange}
-                          placeholder="+55(DD)Número"
-                        />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <Label>Observações</Label>
-                        <Textarea name="notes" value={form.notes} onChange={onChange} />
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-2">
+                  {/* Footer */}
+                  <div className="p-6 pt-2 border-t bg-background">
+                    <div className="flex justify-end gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
                         Cancelar
                       </Button>
-                      <Button type="submit" size="sm" disabled={saving}>
+                      <Button type="submit" size="sm" disabled={saving} form="client-form">
                         {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
                       </Button>
                     </div>
-                  </form>
-                </ScrollSafeArea>
+                  </div>
+                </div>
               </DialogContent>
             </Dialog>
           </div>
 
-          {/* KPIs – compactos e responsivos */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* TOTAL */}
+          {/* KPI Cards — MOBILE-FRIENDLY - CORREÇÃO: Melhor responsividade do gráfico */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {/* Total de clientes — centralizado H/V e compacto */}
             <div className="rounded-xl border bg-card p-4 min-h-[180px] sm:min-h-[220px] flex items-center justify-center text-center">
               <div>
                 <p className="text-xs text-muted-foreground">Total de clientes (geral)</p>
-                <p className="mt-1 text-5xl sm:text-6xl font-bold leading-none">{totalClients}</p>
+                <div className="mt-1 text-5xl sm:text-6xl font-bold leading-none">{totalClients}</div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Exibidos após filtros: <b>{totalFiltered}</b>
+                  Exibidos após filtros: <b>{totalAfterFilters}</b>
                 </p>
               </div>
             </div>
 
-            {/* TOP 10 SEGMENTOS (pizza/anel) */}
-            <div className="rounded-xl border bg-card p-4">
-              <p className="text-xs text-muted-foreground">Top 10 segmentos (% dos clientes exibidos)</p>
+            {/* Pizza: Top 10 segmentos — CORREÇÃO: Melhor responsividade */}
+            <div className="rounded-xl border bg-card p-3 sm:p-4">
+              <p className="text-xs text-muted-foreground px-1 mb-2">Top 10 segmentos (% dos clientes exibidos)</p>
 
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-                <div className="h-[180px] sm:h-[220px]">
+              {/* Layout responsivo melhorado */}
+              <div className="flex flex-col space-y-3">
+                {/* Gráfico - CORREÇÃO: Tamanhos mais adequados para mobile */}
+                <div className="w-full h-[200px] sm:h-[240px] lg:h-[220px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                    <PieChart>
                       <Pie
-                        data={top10Segments}
-                        dataKey="count"
+                        data={pieData}
+                        dataKey="value"
                         nameKey="name"
+                        cx="50%"
+                        cy="50%"
                         innerRadius="45%"
-                        outerRadius="72%"
-                        paddingAngle={2}
+                        outerRadius="75%"
+                        paddingAngle={1}
                         strokeWidth={1}
                       >
-                        {top10Segments.map((d, i) => (
-                          <Cell key={d.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        {pieData.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(value, _name, props) => {
-                          const count = Number(value || 0);
-                          const pct = ((count / Math.max(1, totalFiltered)) * 100).toFixed(1) + "%";
-                          return [`${pct} (${count})`, props?.payload?.name];
+                        formatter={(val, name, props) => [`${val}% (${props?.payload?.count})`, name]}
+                        contentStyle={{
+                          fontSize: '12px',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid #e2e8f0',
+                          backgroundColor: 'white'
                         }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
 
-                {/* legenda compacta */}
-                <ul className="text-xs space-y-1 sm:max-h-[220px] sm:overflow-y-auto pr-1">
-                  {top10Segments.map((d, i) => (
-                    <li key={d.name} className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
+                {/* Legenda - CORREÇÃO: Melhor layout para mobile */}
+                <div
+                  className="max-h-[120px] overflow-y-auto overscroll-contain touch-pan-y px-1"
+                  style={{ WebkitOverflowScrolling: 'touch' }}
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] leading-tight">
+                    {pieData.map((d, i) => (
+                      <div key={d.name} className="flex items-center gap-2 min-w-0 py-1">
                         <span
-                          className="inline-block h-2.5 w-2.5 rounded-sm"
+                          className="inline-block h-3 w-3 rounded-sm flex-shrink-0"
                           style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
                         />
-                        <span className="truncate">{d.name}</span>
+                        <span className="truncate flex-1 text-xs">{d.name}</span>
+                        <span className="text-xs font-medium text-muted-foreground flex-shrink-0">
+                          {d.value}%
+                        </span>
                       </div>
-                      <span className="shrink-0 tabular-nums">{d.pct}%</span>
-                    </li>
-                  ))}
-                </ul>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1267,12 +1290,15 @@ const Clients = () => {
           {/* Paginação */}
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
-              Página <b>{page}</b> / <b>{totalPages}</b> — exibindo <b>{pageItems.length}</b> de <b>{filtered.length}</b>
+              Exibindo <b>{pageItems.length}</b> de <b>{filtered.length}</b> registros
             </p>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
                 Anterior
               </Button>
+              <div className="text-xs text-muted-foreground">
+                Página <b>{page}</b> / <b>{totalPages}</b>
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -1306,3 +1332,4 @@ const Clients = () => {
 };
 
 export default Clients;
+
