@@ -20,7 +20,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -40,33 +39,28 @@ import {
   Filter as FilterIcon,
 } from "lucide-react";
 
-// Mantido: ExportMenu do arquivo novo
+// Botão único de exportação (igual ao que você está usando no print)
 import ExportMenu from "@/components/export/ExportMenu";
 
 /* ============================================================================
-   TELEFONE BR (+55) — normalização/máscara (mantido)
+   TELEFONE BR (+55) — normalização/máscara (simplificada)
 ============================================================================ */
 const normalizePhoneBR = (input) => {
   if (!input) return "";
-  const digits = input.replace(/\D/g, "");
+  const digits = String(input).replace(/\D/g, "");
   let clean = digits.startsWith("55") ? digits.slice(2) : digits;
-
-  if (clean.length === 11 && clean[2] === "9") {
-    return `+55${clean}`;
-  } else if (clean.length === 10) {
-    return `+55${clean}`;
-  }
+  if (clean.length === 11 && clean[2] === "9") return `+55${clean}`;
+  if (clean.length === 10) return `+55${clean}`;
   return input;
 };
 
 const formatPhoneDisplay = (phone) => {
   if (!phone) return "";
-  const digits = phone.replace(/\D/g, "");
+  const digits = String(phone).replace(/\D/g, "");
   if (digits.startsWith("55") && digits.length >= 12) {
     const clean = digits.slice(2);
     const ddd = clean.slice(0, 2);
     const number = clean.slice(2);
-
     if (number.length === 9 && number[0] === "9") {
       return `+55 (${ddd}) ${number.slice(0, 5)}-${number.slice(5)}`;
     } else if (number.length === 8) {
@@ -78,8 +72,7 @@ const formatPhoneDisplay = (phone) => {
 
 /* ============================================================================
    SEGMENTOS — grupos + valores (EXPANDIDO)
-   - Mantive todos os anteriores
-   - Acrescentei novos nichos sem duplicar 'value'
+   - Mantém os anteriores e inclui novos nichos (sem duplicatas)
 ============================================================================ */
 const SEGMENTOS_GRUPOS = [
   // ===== Tecnologia e Informática =====
@@ -435,7 +428,6 @@ const ensureArraySegments = (client) => {
 
 /* ============================================================================
    Combobox multi de segmentos — com busca, grupos e criação de novos (modo livre)
-   (mantido, sem mudanças além da lista expandida)
 ============================================================================ */
 function SegmentosSelect({ value = [], onChange, onCreate }) {
   const [open, setOpen] = useState(false);
@@ -510,7 +502,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
         className="p-0 z-[70] w-[min(92vw,320px)] sm:w-[360px] bg-background"
       >
         <div
-          className="max-h=[45vh] max-h-[45vh] overflow-y-auto overscroll-contain pb-2"
+          className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2"
           style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
           onWheel={stopScrollProp}
           onTouchMove={stopScrollProp}
@@ -531,6 +523,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
             </div>
 
             <CommandList className="max-h-none">
+              {/* Sugerir criação */}
               {shouldSuggestCreate && (
                 <CommandGroup heading={<span className="text-[11px] font-semibold text-muted-foreground">Ações</span>}>
                   <CommandItem
@@ -544,6 +537,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
                 </CommandGroup>
               )}
 
+              {/* Grupos base (filtrados visualmente) */}
               {SEGMENTOS_GRUPOS.map((grp) => {
                 const opts = grp.options.filter(
                   (opt) => filterMatch(opt.value) || (opt.desc && filterMatch(opt.desc))
@@ -592,7 +586,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
 }
 
 /* ============================================================================
-   Página (mantida) — adicionei apenas: busca rápida por segmento dentro do Popover de Filtros
+   Página — com “Selecionar exibidos” e Popover de Filtros com footer fixo
 ============================================================================ */
 const Clients = () => {
   const [clients, setClients] = useState([]);
@@ -603,6 +597,7 @@ const Clients = () => {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("create");
   const [form, setForm] = useState({
+    id: null,
     name: "", company: "", email: "", phone: "", segments: [], notes: ""
   });
   const [saving, setSaving] = useState(false);
@@ -616,7 +611,7 @@ const Clients = () => {
   const [extraSegments, setExtraSegments] = useState([]);
   const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
 
-  // Carregar clientes (mantido)
+  // Carregar clientes
   const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
@@ -634,7 +629,7 @@ const Clients = () => {
     fetchClients();
   }, [fetchClients]);
 
-  // Form handlers (mantido)
+  // Form handlers
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm(prev => ({
@@ -645,13 +640,14 @@ const Clients = () => {
 
   const openCreate = () => {
     setMode("create");
-    setForm({ name: "", company: "", email: "", phone: "", segments: [], notes: "" });
+    setForm({ id: null, name: "", company: "", email: "", phone: "", segments: [], notes: "" });
     setOpen(true);
   };
 
   const openEdit = (client) => {
     setMode("edit");
     setForm({
+      id: client.id ?? client._id ?? client.uuid ?? null,
       name: client.name || "",
       company: client.company || client.company_name || client.companyName || "",
       email: client.email || "",
@@ -671,11 +667,19 @@ const Clients = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = { ...form };
+      const payload = {
+        name: form.name,
+        company: form.company,
+        email: form.email,
+        phone: form.phone,
+        segments: form.segments,
+        notes: form.notes,
+      };
       if (mode === "create") {
         await api.post("/clients", payload);
       } else {
-        const id = rowToDelete?.id ?? rowToDelete?._id ?? rowToDelete?.uuid;
+        const id = form.id;
+        if (!id) throw new Error("ID do registro não encontrado para edição.");
         await api.put(`/clients/${id}`, payload);
       }
       setOpen(false);
@@ -706,15 +710,13 @@ const Clients = () => {
     }
   }
 
-  /* ===================== FILTROS (mantidos) ===================== */
+  /* ===================== FILTROS ===================== */
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [fCompanies, setFCompanies] = useState([]); // múltipla
   const [fSegments, setFSegments] = useState([]);  // múltipla
   const [fHasEmail, setFHasEmail] = useState("");  // '', 'sim', 'nao'
   const [fHasPhone, setFHasPhone] = useState("");  // '', 'sim', 'nao'
-
-  // NOVO: busca rápida por segmento dentro dos Filtros
-  const [fSegmentsQuery, setFSegmentsQuery] = useState("");
+  const [fSegmentsQuery, setFSegmentsQuery] = useState(""); // busca rápida de segmentos
 
   const uniqueCompanies = useMemo(() => {
     const s = new Set();
@@ -725,7 +727,7 @@ const Clients = () => {
     return Array.from(s).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [clients]);
 
-  // Segs personalizados vindos dos dados + os digitados nesta sessão
+  // Segs personalizados vindos dos dados + digitados nesta sessão
   const customSegmentsFromData = useMemo(() => {
     const s = new Set();
     clients.forEach((c) => {
@@ -757,6 +759,31 @@ const Clients = () => {
     (fSegments.length ? 1 : 0) +
     (fHasEmail ? 1 : 0) +
     (fHasPhone ? 1 : 0);
+
+  // Lista de segmentos EXIBIDOS no painel (base + personalizados), já filtrados pela busca
+  const shownSegmentValues = useMemo(() => {
+    const q = fSegmentsQuery.trim().toLowerCase();
+    const base = [];
+    SEGMENTOS_GRUPOS.forEach((grp) => {
+      grp.options.forEach((opt) => {
+        if (!q || opt.value.toLowerCase().includes(q) || (opt.desc && opt.desc.toLowerCase().includes(q))) {
+          base.push(opt.value);
+        }
+      });
+    });
+    const custom = customSegmentsFromData.filter((s) => !q || s.toLowerCase().includes(q));
+    return Array.from(new Set([...base, ...custom]));
+  }, [fSegmentsQuery, customSegmentsFromData]);
+
+  const allShownAlreadySelected = useMemo(
+    () => shownSegmentValues.length > 0 && shownSegmentValues.every((v) => fSegments.includes(v)),
+    [shownSegmentValues, fSegments]
+  );
+
+  const selectShownSegments = () => {
+    if (shownSegmentValues.length === 0) return;
+    setFSegments((prev) => Array.from(new Set([...prev, ...shownSegmentValues])));
+  };
 
   /* --------- Lista filtrada --------- */
   const filtered = useMemo(() => {
@@ -795,7 +822,7 @@ const Clients = () => {
     return list;
   }, [clients, q, fCompanies, fSegments, fHasEmail, fHasPhone]);
 
-  // Exportações (mantido)
+  // Exportações (via ExportMenu)
   const exportData = useMemo(() => {
     return filtered.map((c) => ({
       name: c.name || "",
@@ -883,30 +910,32 @@ const Clients = () => {
                 </Button>
               </PopoverTrigger>
 
+              {/* >>> FIX DO SCROLL/FOOTER: container com altura limitada e body rolável <<< */}
               <PopoverContent
                 align="end"
                 side="bottom"
                 sideOffset={8}
                 collisionPadding={12}
-                className="w-[min(92vw,720px)] p-0"
+                className="w-[min(92vw,720px)] p-0 overflow-hidden"
+                style={{ maxHeight: 'min(80vh, calc(100vh - 120px))' }}
               >
-                {/* flex column: header fixo, body rolável, footer fixo */}
-                <div className="flex flex-col max-h-[calc(100vh-120px)]">
-                  <div className="px-4 py-3 border-b">
+                <div className="flex h-full flex-col">
+                  {/* HEADER (fixo) */}
+                  <div className="px-4 py-3 border-b shrink-0">
                     <p className="text-sm font-medium">Filtrar clientes</p>
                     <p className="text-xs text-muted-foreground">Refine os resultados com seletores.</p>
                   </div>
 
-                  {/* BODY */}
+                  {/* BODY (rolável) */}
                   <div
-                    className="p-4 grid md:grid-cols-2 gap-4 flex-1 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+                    className="p-4 grid md:grid-cols-2 gap-4 flex-1 min-h-0 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
                     onWheel={(e) => e.stopPropagation()}
                     onTouchMove={(e) => e.stopPropagation()}
                   >
                     {/* Empresas */}
                     <div className="space-y-2">
                       <Label>Empresas</Label>
-                      <div className="max-h=[32vh] max-h-[32vh] overflow-y-auto pr-1">
+                      <div className="max-h-[32vh] overflow-y-auto pr-1">
                         {uniqueCompanies.length === 0 ? (
                           <p className="text-xs text-muted-foreground">—</p>
                         ) : uniqueCompanies.map((comp) => (
@@ -938,27 +967,40 @@ const Clients = () => {
                         <span>Segmentos</span>
                       </Label>
 
-                      {/* NOVO: busca rápida por segmento (filtra a lista abaixo) */}
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                        <Input
-                          className="pl-9"
-                          placeholder="Buscar segmento nos filtros..."
-                          value={fSegmentsQuery}
-                          onChange={(e) => setFSegmentsQuery(e.target.value)}
-                        />
+                      {/* Busca rápida por segmento (filtra a lista abaixo) + Selecionar exibidos */}
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                          <Input
+                            className="pl-9"
+                            placeholder="Buscar segmento nos filtros..."
+                            value={fSegmentsQuery}
+                            onChange={(e) => setFSegmentsQuery(e.target.value)}
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={shownSegmentValues.length === 0 || allShownAlreadySelected}
+                          onClick={selectShownSegments}
+                          title={
+                            shownSegmentValues.length === 0
+                              ? "Nenhum segmento sendo exibido"
+                              : allShownAlreadySelected
+                                ? "Todos os exibidos já estão selecionados"
+                                : "Selecionar todos os segmentos exibidos"
+                          }
+                        >
+                          Selecionar exibidos
+                        </Button>
                       </div>
 
                       <div className="max-h-[48vh] overflow-y-auto pr-1">
                         {SEGMENTOS_GRUPOS.map((grp) => {
-                          const shownOpts = grp.options.filter((opt) => {
-                            const q = fSegmentsQuery.trim().toLowerCase();
-                            if (!q) return true;
-                            return (
-                              opt.value.toLowerCase().includes(q) ||
-                              (opt.desc && opt.desc.toLowerCase().includes(q))
-                            );
-                          });
+                          const q = fSegmentsQuery.trim().toLowerCase();
+                          const shownOpts = grp.options.filter((opt) =>
+                            !q || opt.value.toLowerCase().includes(q) || (opt.desc && opt.desc.toLowerCase().includes(q))
+                          );
                           if (shownOpts.length === 0) return null;
                           return (
                             <div key={grp.group} className="mb-3">
@@ -979,9 +1021,7 @@ const Clients = () => {
                         {/* Grupo: Personalizados (dinâmico) */}
                         {(() => {
                           const q = fSegmentsQuery.trim().toLowerCase();
-                          const list = customSegmentsFromData.filter((s) =>
-                            !q ? true : s.toLowerCase().includes(q)
-                          );
+                          const list = customSegmentsFromData.filter((s) => !q || s.toLowerCase().includes(q));
                           if (list.length === 0) return null;
                           return (
                             <div className="mb-3">
@@ -1000,7 +1040,7 @@ const Clients = () => {
                         })()}
                       </div>
 
-                      {/* Chips dos selecionados */}
+                      {/* Chips dos segmentos selecionados */}
                       {fSegments.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                           {fSegments.map((s) => (
@@ -1042,7 +1082,8 @@ const Clients = () => {
                     </div>
                   </div>
 
-                  <div className="px-4 py-3 border-t flex justify-between">
+                  {/* FOOTER (fixo) */}
+                  <div className="px-4 py-3 border-t flex justify-between shrink-0 bg-background">
                     <Button variant="ghost" size="sm" onClick={clearFilters}>Limpar filtros</Button>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={() => setFiltersOpen(false)}>Fechar</Button>
@@ -1053,7 +1094,7 @@ const Clients = () => {
               </PopoverContent>
             </Popover>
 
-            {/* Novo Cliente (mantido) */}
+            {/* Novo Cliente */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" className="gap-2" onClick={openCreate}>
