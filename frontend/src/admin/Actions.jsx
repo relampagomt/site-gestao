@@ -18,8 +18,7 @@ import ImagePreview from "@/components/ImagePreview.jsx";
 
 import {
   Plus, Edit, Trash2, Search, Calendar as CalendarIcon, Layers, X,
-  CheckCircle, Loader2, Clock, UploadCloud, Filter as FilterIcon,
-  ChevronLeft, ChevronRight, PlusCircle
+  UploadCloud, Filter as FilterIcon, ChevronLeft, ChevronRight, PlusCircle
 } from "lucide-react";
 
 import { formatDateBR } from "@/utils/dates.js";
@@ -52,47 +51,95 @@ const ensureArrayTypes = (item) => {
 
 const periodOptions = ["Manhã", "Tarde", "Noite"];
 
+/* Datas */
 const ymdToBR = (ymd) => {
   if (!ymd || !/^\d{4}-\d{2}-\d{2}/.test(ymd)) return "";
   const [y, m, d] = ymd.slice(0, 10).split("-");
   return `${d}/${m}/${y}`;
 };
-
 const brToYMD = (br) => {
   if (!br || !/^\d{2}\/\d{2}\/\d{4}/.test(br)) return "";
   const [d, m, y] = br.split("/");
   return `${y}-${m}-${d}`;
 };
-
 const deriveStatusFromItem = (item) => {
   if (item?.status) return item.status;
   return item?.active === false ? "concluido" : "aguardando";
 };
+const activeFromStatus = (status) => status !== "concluido";
 
-const activeFromStatus = (status) => {
-  return status !== "concluido";
+/* ===================== Time/Date utils (corrigindo timezone e hora) ===================== */
+// sempre tratar "data pura" local (sem UTC)
+const toLocalDateFromYMD = (ymd) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd || ""))) return null;
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d); // local midnight
 };
-
-/* ========= Datas utilitárias p/ calendário ========= */
-const toDate = (s) => {
-  if (!s) return null;
-  const t = String(s);
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(t)) return new Date(t);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) { const [y,m,d]=t.split("-").map(Number); return new Date(y,m-1,d); }
-  return null;
+// normaliza HH:MM (ex.: "0730" -> "07:30")
+const normalizeHHMM = (s) => {
+  const digits = String(s || "").replace(/\D/g, "").slice(0, 4);
+  if (digits.length === 0) return "";
+  let hh = digits.slice(0, 2);
+  let mm = digits.slice(2, 4);
+  if (hh.length === 1) hh = `0${hh}`;
+  if (mm.length === 1) mm = `0${mm}`;
+  if (!mm) mm = "00";
+  // limites
+  const hNum = Math.min(23, Math.max(0, parseInt(hh || "0", 10)));
+  const mNum = Math.min(59, Math.max(0, parseInt(mm || "0", 10)));
+  return `${String(hNum).padStart(2, "0")}:${String(mNum).padStart(2, "0")}`;
 };
-const toYMD = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
-const addDays = (dt,n)=>{const d=new Date(dt);d.setDate(d.getDate()+n);return d;};
-const diffDaysInclusive=(a,b)=>{const aa=new Date(a.getFullYear(),a.getMonth(),a.getDate());const bb=new Date(b.getFullYear(),b.getMonth(),b.getDate());return Math.round((bb-aa)/86400000)+1;};
-const startOfMonth = (dt)=>new Date(dt.getFullYear(),dt.getMonth(),1);
-const endOfMonth = (dt)=>new Date(dt.getFullYear(),dt.getMonth()+1,0);
-const startOfWeekMon = (dt)=>{const d=new Date(dt);const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);d.setHours(0,0,0,0);return d;};
-const endOfWeekMon = (dt)=>addDays(startOfWeekMon(dt),6);
-const monthTitlePtBR = (dt)=>dt.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
-const WEEKDAYS_PT = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
-const statusChipClass = (s)=> s==="andamento"?"bg-blue-100 text-blue-800 border-blue-300":(s==="concluido"?"bg-green-100 text-green-800 border-green-300":"bg-amber-100 text-amber-800 border-amber-300");
+// compõe datetime local SEM timezone (evita deslocamentos)
+const composeISO = (dateBr, timeHHMM) => {
+  const ymd = brToYMD(dateBr);
+  if (!ymd) return null;
+  const hhmm = normalizeHHMM(timeHHMM || "");
+  const t = /^\d{2}:\d{2}$/.test(hhmm) ? `${hhmm}:00` : "00:00:00";
+  return `${ymd}T${t}`; // sem Z
+};
+// extrai YMD a partir de strings que podem vir com datetime
+const pickYMD = (obj) => {
+  const s =
+    obj?.start_date ||
+    (obj?.start_datetime ? String(obj.start_datetime).slice(0, 10) : "") ||
+    "";
+  const e =
+    obj?.end_date ||
+    (obj?.end_datetime ? String(obj.end_datetime).slice(0, 10) : s) ||
+    s;
+  return { sYMD: s, eYMD: e };
+};
+// dia atual para string YMD
+const toYMD = (dt) =>
+  `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(
+    dt.getDate()
+  ).padStart(2, "0")}`;
+const addDays = (dt, n) => {
+  const d = new Date(dt);
+  d.setDate(d.getDate() + n);
+  return d;
+};
+const startOfMonth = (dt) => new Date(dt.getFullYear(), dt.getMonth(), 1);
+const endOfMonth = (dt) => new Date(dt.getFullYear(), dt.getMonth() + 1, 0);
+const startOfWeekMon = (dt) => {
+  const d = new Date(dt);
+  const day = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+const endOfWeekMon = (dt) => addDays(startOfWeekMon(dt), 6);
+const monthTitlePtBR = (dt) =>
+  dt.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+const WEEKDAYS_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const statusChipClass = (s) =>
+  s === "andamento"
+    ? "bg-blue-100 text-blue-800 border-blue-300"
+    : s === "concluido"
+    ? "bg-green-100 text-green-800 border-green-300"
+    : "bg-amber-100 text-amber-800 border-amber-300";
 
-/* ========= TypeSelector (reintroduzido e robusto) ========= */
+/* ========= TypeSelector ========= */
 const TypeSelector = ({ value = [], onChange }) => {
   const [open, setOpen] = React.useState(false);
   const selected = Array.isArray(value) ? value : [];
@@ -180,93 +227,197 @@ const TypeSelector = ({ value = [], onChange }) => {
   );
 };
 
-/* ========= Célula de dia (calendário) ========= */
-function DayCell({ dateObj, inMonth, isToday, events, onNewOnDate, onOpenEdit, onMoveAction }) {
+/* ========= Célula (calendário) ========= */
+function DayCell({
+  dateObj,
+  inMonth,
+  isToday,
+  events,
+  onNewOnDate,
+  onOpenEdit,
+  onMoveAction,
+}) {
   const key = toYMD(dateObj);
   const maxVisible = 3;
-  const onDragOver = (e)=>e.preventDefault();
-  const onDrop = (e)=>{
+  const onDragOver = (e) => e.preventDefault();
+  const onDrop = (e) => {
     e.preventDefault();
-    try{
-      const { action, start, end } = JSON.parse(e.dataTransfer.getData("text/plain"));
-      if(!action?.id||!start||!end) return;
-      const dur = diffDaysInclusive(toDate(start), toDate(end));
+    try {
+      const { action, sYMD, eYMD } = JSON.parse(
+        e.dataTransfer.getData("text/plain")
+      );
+      if (!action?.id || !sYMD || !eYMD) return;
+      // duração em dias (inclusivo)
+      const start = toLocalDateFromYMD(sYMD);
+      const end = toLocalDateFromYMD(eYMD);
+      const days =
+        Math.round(
+          (toLocalDateFromYMD(eYMD) - toLocalDateFromYMD(sYMD)) / 86400000
+        ) + 1;
       const newStart = key;
-      const newEnd = toYMD(addDays(dateObj, dur-1));
-      onMoveAction(action,newStart,newEnd);
-    }catch(_){}
+      const newEnd = toYMD(addDays(dateObj, days - 1));
+      onMoveAction(action, newStart, newEnd);
+    } catch {}
   };
   return (
-    <div className={`bg-card min-h-[112px] sm:min-h-[130px] p-1.5 sm:p-2 flex flex-col ${inMonth?"":"opacity-50"}`} onDragOver={onDragOver} onDrop={onDrop}>
+    <div
+      className={`bg-card min-h-[112px] sm:min-h-[130px] p-1.5 sm:p-2 flex flex-col ${
+        inMonth ? "" : "opacity-50"
+      }`}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       <div className="flex items-center justify-between mb-1">
-        <button onClick={()=>onNewOnDate(key)} className={`text-xs rounded px-1 ${isToday?"bg-primary text-primary-foreground":"text-foreground/80 hover:bg-accent"}`}>{dateObj.getDate()}</button>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={()=>onNewOnDate(key)} title="Nova ação">
+        <button
+          onClick={() => onNewOnDate(key)}
+          className={`text-xs rounded px-1 ${
+            isToday ? "bg-primary text-primary-foreground" : "text-foreground/80 hover:bg-accent"
+          }`}
+        >
+          {dateObj.getDate()}
+        </button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={() => onNewOnDate(key)}
+          title="Nova ação"
+        >
           <PlusCircle className="size-3.5" />
         </Button>
       </div>
       <div className="flex-1 space-y-1 overflow-hidden">
-        {events.slice(0,maxVisible).map((a)=> {
+        {events.slice(0, maxVisible).map((a) => {
           const st = deriveStatusFromItem(a);
           const sup = a.supervisor ? ` • Sup: ${a.supervisor}` : "";
-          const start = (a.start_datetime || a.start_date || "").slice(0,10);
-          const end = (a.end_datetime || a.end_date || a.start_datetime || a.start_date || "").slice(0,10);
-          const onDragStart=(e)=>{e.dataTransfer.setData("text/plain",JSON.stringify({action:a,start,end}));e.dataTransfer.effectAllowed="move";};
+          // arrasta/move por data pura (YMD)
+          const { sYMD, eYMD } = pickYMD(a);
+          const onDragStart = (e) => {
+            e.dataTransfer.setData(
+              "text/plain",
+              JSON.stringify({ action: a, sYMD, eYMD })
+            );
+            e.dataTransfer.effectAllowed = "move";
+          };
           return (
-            <button key={`${a.id}-${key}`} onClick={()=>onOpenEdit(a)} draggable onDragStart={onDragStart}
-              className={`w-full text-left text-[10px] sm:text-xs border rounded px-1.5 py-1 ${statusChipClass(st)} hover:brightness-95 cursor-grab active:cursor-grabbing`}
-              title={(a.client_name||a.company_name||"Ação")}
+            <button
+              key={`${a.id}-${key}`}
+              onClick={() => onOpenEdit(a)}
+              draggable
+              onDragStart={onDragStart}
+              className={`w-full text-left text-[10px] sm:text-xs border rounded px-1.5 py-1 ${statusChipClass(
+                st
+              )} hover:brightness-95 cursor-grab active:cursor-grabbing`}
+              title={a.client_name || a.company_name || "Ação"}
             >
-              <span className="truncate">{(a.client_name||a.company_name||"Ação") + sup}</span>
+              <span className="truncate">
+                {(a.client_name || a.company_name || "Ação") + sup}
+              </span>
             </button>
           );
         })}
-        {events.length>maxVisible && <div className="text-[10px] sm:text-xs text-muted-foreground">+{events.length-maxVisible} mais…</div>}
+        {events.length > maxVisible && (
+          <div className="text-[10px] sm:text-xs text-muted-foreground">
+            +{events.length - maxVisible} mais…
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/* ========= Visões de Calendário ========= */
-const CalendarMonth = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, onMoveAction }) => {
+/* ========= Visões ========= */
+const CalendarMonth = ({
+  actions,
+  cursor,
+  setCursor,
+  onNewOnDate,
+  onOpenEdit,
+  onMoveAction,
+}) => {
   const gridStart = startOfWeekMon(startOfMonth(cursor));
   const gridEnd = endOfWeekMon(endOfMonth(cursor));
+
+  // agrupa usando APENAS as datas puras (YMD) -> evita timezone
   const daysMap = useMemo(() => {
     const map = new Map();
-    for (let d = new Date(gridStart); d <= gridEnd; d = addDays(d, 1)) map.set(toYMD(d), []);
-    for (const a of actions) {
-      const s = toDate(a.start_datetime || a.start_date);
-      const e = toDate(a.end_datetime || a.end_date || a.start_datetime || a.start_date);
-      if (!s || !e) continue;
-      let cur = new Date(Math.max(s.getTime(), gridStart.getTime()));
-      const last = new Date(Math.min(e.getTime(), gridEnd.getTime()));
-      while (cur <= last) { const k = toYMD(cur); if (map.has(k)) map.get(k).push(a); cur = addDays(cur, 1); }
+    for (let d = new Date(gridStart); d <= gridEnd; d = addDays(d, 1)) {
+      map.set(toYMD(d), []);
     }
-    const order = { andamento:0, aguardando:1, concluido:2 };
-    for (const [k,list] of map.entries()) list.sort((a,b)=>(order[deriveStatusFromItem(a)]??3)-(order[deriveStatusFromItem(b)]??3));
+    for (const a of actions) {
+      const { sYMD, eYMD } = pickYMD(a);
+      if (!sYMD || !eYMD) continue;
+      let cur = toLocalDateFromYMD(sYMD);
+      const last = toLocalDateFromYMD(eYMD);
+      if (!cur || !last) continue;
+      while (cur <= last) {
+        const k = toYMD(cur);
+        if (map.has(k)) map.get(k).push(a);
+        cur = addDays(cur, 1);
+      }
+    }
+    const order = { andamento: 0, aguardando: 1, concluido: 2 };
+    for (const [k, list] of map.entries()) {
+      list.sort(
+        (a, b) =>
+          (order[deriveStatusFromItem(a)] ?? 3) -
+          (order[deriveStatusFromItem(b)] ?? 3)
+      );
+    }
     return map;
   }, [actions, cursor]);
 
   const weeks = [];
-  for (let d = new Date(gridStart); d <= gridEnd; d = addDays(d, 7)) weeks.push([0,1,2,3,4,5,6].map(i=>addDays(d,i)));
+  for (let d = new Date(gridStart); d <= gridEnd; d = addDays(d, 7)) {
+    weeks.push([0, 1, 2, 3, 4, 5, 6].map((i) => addDays(d, i)));
+  }
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <CardTitle className="text-lg md:text-xl font-semibold">Calendário</CardTitle>
+            <CardTitle className="text-lg md:text-xl font-semibold">
+              Calendário
+            </CardTitle>
             <CardDescription>Visualização mensal das ações</CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={()=>setCursor(startOfMonth(new Date()))}>Hoje</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCursor(startOfMonth(new Date()))}
+            >
+              Hoje
+            </Button>
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" onClick={()=>setCursor(addDays(startOfMonth(cursor), -1))}><ChevronLeft className="size-4" /></Button>
-              <Button variant="outline" size="icon" onClick={()=>setCursor(addDays(endOfMonth(cursor), 1))}><ChevronRight className="size-4" /></Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setCursor(addDays(startOfMonth(cursor), -1))}
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setCursor(addDays(endOfMonth(cursor), 1))}
+              >
+                <ChevronRight className="size-4" />
+              </Button>
             </div>
           </div>
         </div>
-        <div className="text-sm text-muted-foreground">{monthTitlePtBR(cursor)}</div>
-        <div className="grid grid-cols-7 text-xs font-medium text-muted-foreground mt-1">{WEEKDAYS_PT.map((d)=><div key={d} className="px-2 py-1">{d}</div>)}</div>
+        <div className="text-sm text-muted-foreground">
+          {monthTitlePtBR(cursor)}
+        </div>
+        <div className="grid grid-cols-7 text-xs font-medium text-muted-foreground mt-1">
+          {WEEKDAYS_PT.map((d) => (
+            <div key={d} className="px-2 py-1">
+              {d}
+            </div>
+          ))}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-7 gap-[1px] bg-border rounded-lg overflow-hidden">
@@ -277,36 +428,67 @@ const CalendarMonth = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, on
               const isToday = key === toYMD(new Date());
               const events = daysMap.get(key) || [];
               return (
-                <DayCell key={`${wi}-${key}`} dateObj={day} inMonth={inMonth} isToday={isToday}
-                  events={events} onNewOnDate={onNewOnDate} onOpenEdit={onOpenEdit} onMoveAction={onMoveAction} />
+                <DayCell
+                  key={`${wi}-${key}`}
+                  dateObj={day}
+                  inMonth={inMonth}
+                  isToday={isToday}
+                  events={events}
+                  onNewOnDate={onNewOnDate}
+                  onOpenEdit={onOpenEdit}
+                  onMoveAction={onMoveAction}
+                />
               );
             })
           )}
         </div>
 
         <div className="flex flex-wrap gap-3 mt-3 text-xs">
-          <div className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded bg-amber-200 border border-amber-300" /> Aguardando</div>
-          <div className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded bg-blue-200 border border-blue-300" /> Andamento</div>
-          <div className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded bg-green-200 border border-green-300" /> Concluída</div>
+          <div className="inline-flex items-center gap-2">
+            <span className="h-3 w-3 rounded bg-amber-200 border border-amber-300" />{" "}
+            Aguardando
+          </div>
+          <div className="inline-flex items-center gap-2">
+            <span className="h-3 w-3 rounded bg-blue-200 border border-blue-300" />{" "}
+            Andamento
+          </div>
+          <div className="inline-flex items-center gap-2">
+            <span className="h-3 w-3 rounded bg-green-200 border border-green-300" />{" "}
+            Concluída
+          </div>
         </div>
       </CardContent>
     </Card>
   );
 };
 
-const CalendarWeek = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, onMoveAction }) => {
+const CalendarWeek = ({
+  actions,
+  cursor,
+  setCursor,
+  onNewOnDate,
+  onOpenEdit,
+  onMoveAction,
+}) => {
   const weekStart = startOfWeekMon(cursor);
-  const days = [0,1,2,3,4,5,6].map(i=>addDays(weekStart,i));
+  const days = [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(weekStart, i));
   const groups = useMemo(() => {
-    const map = new Map(days.map(d => [toYMD(d), []]));
+    const map = new Map(days.map((d) => [toYMD(d), []]));
     for (const a of actions) {
-      const s = toDate(a.start_datetime || a.start_date);
-      const e = toDate(a.end_datetime || a.end_date || a.start_datetime || a.start_date);
-      if (!s || !e) continue;
+      const { sYMD, eYMD } = pickYMD(a);
+      if (!sYMD || !eYMD) continue;
+      const s = toLocalDateFromYMD(sYMD);
+      const e = toLocalDateFromYMD(eYMD);
       for (const d of days) if (s <= d && d <= e) map.get(toYMD(d)).push(a);
     }
-    const order = { andamento:0, aguardando:1, concluido:2 };
-    for (const [k,list] of map.entries()) list.sort((a,b)=>(order[deriveStatusFromItem(a)]??3)-(order[deriveStatusFromItem(b)]??3));
+    const order = { andamento: 0, aguardando: 1, concluido: 2 };
+    for (const [k, list] of map.entries()) {
+      list.sort(
+        (a, b) =>
+          (order[deriveStatusFromItem(a)] ?? 3) -
+          (order[deriveStatusFromItem(b)] ?? 3)
+      );
+    }
     return map;
   }, [actions, cursor]);
 
@@ -315,25 +497,52 @@ const CalendarWeek = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, onM
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <CardTitle className="text-lg md:text-xl font-semibold">Semana</CardTitle>
-            <CardDescription>{ymdToBR(toYMD(weekStart))} – {ymdToBR(toYMD(addDays(weekStart,6)))}</CardDescription>
+            <CardTitle className="text-lg md:text-xl font-semibold">
+              Semana
+            </CardTitle>
+            <CardDescription>
+              {ymdToBR(toYMD(weekStart))} – {ymdToBR(toYMD(addDays(weekStart, 6)))}
+            </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={()=>setCursor(new Date())}>Hoje</Button>
+            <Button variant="outline" size="sm" onClick={() => setCursor(new Date())}>
+              Hoje
+            </Button>
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" onClick={()=>setCursor(addDays(weekStart,-1))}><ChevronLeft className="size-4" /></Button>
-              <Button variant="outline" size="icon" onClick={()=>setCursor(addDays(weekStart,7))}><ChevronRight className="size-4" /></Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setCursor(addDays(weekStart, -1))}
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setCursor(addDays(weekStart, 7))}
+              >
+                <ChevronRight className="size-4" />
+              </Button>
             </div>
           </div>
         </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-7 gap-[1px] bg-border rounded-lg overflow-hidden">
-          {days.map((d)=>{
-            const key=toYMD(d), isToday= key===toYMD(new Date());
+          {days.map((d) => {
+            const key = toYMD(d),
+              isToday = key === toYMD(new Date());
             return (
-              <DayCell key={key} dateObj={d} inMonth={true} isToday={isToday}
-                events={groups.get(key)||[]} onNewOnDate={onNewOnDate} onOpenEdit={onOpenEdit} onMoveAction={onMoveAction} />
+              <DayCell
+                key={key}
+                dateObj={d}
+                inMonth={true}
+                isToday={isToday}
+                events={groups.get(key) || []}
+                onNewOnDate={onNewOnDate}
+                onOpenEdit={onOpenEdit}
+                onMoveAction={onMoveAction}
+              />
             );
           })}
         </div>
@@ -346,15 +555,20 @@ const AgendaList = ({ actions, cursor, setCursor, onOpenEdit }) => {
   const monthStart = startOfMonth(cursor);
   const monthEnd = endOfMonth(cursor);
   const rows = useMemo(() => {
-    const list=[];
-    for(const a of actions){
-      const s=toDate(a.start_datetime||a.start_date);
-      const e=toDate(a.end_datetime||a.end_date||a.start_datetime||a.start_date);
-      if(!s||!e) continue;
-      if(e<monthStart || s>monthEnd) continue;
+    const list = [];
+    for (const a of actions) {
+      const { sYMD, eYMD } = pickYMD(a);
+      if (!sYMD || !eYMD) continue;
+      const s = toLocalDateFromYMD(sYMD);
+      const e = toLocalDateFromYMD(eYMD);
+      if (e < monthStart || s > monthEnd) continue;
       list.push(a);
     }
-    list.sort((a,b)=>(a.start_datetime||a.start_date||"").localeCompare(b.start_datetime||b.start_date||""));
+    list.sort((a, b) =>
+      (a.start_date || a.start_datetime || "").localeCompare(
+        b.start_date || b.start_datetime || ""
+      )
+    );
     return list;
   }, [actions, cursor]);
 
@@ -363,32 +577,59 @@ const AgendaList = ({ actions, cursor, setCursor, onOpenEdit }) => {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <CardTitle className="text-lg md:text-xl font-semibold">Agenda</CardTitle>
+            <CardTitle className="text-lg md:text-xl font-semibold">
+              Agenda
+            </CardTitle>
             <CardDescription>{monthTitlePtBR(cursor)}</CardDescription>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" onClick={()=>setCursor(addDays(startOfMonth(cursor),-1))}><ChevronLeft className="size-4" /></Button>
-            <Button variant="outline" size="icon" onClick={()=>setCursor(addDays(endOfMonth(cursor),1))}><ChevronRight className="size-4" /></Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setCursor(addDays(startOfMonth(cursor), -1))}
+            >
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setCursor(addDays(endOfMonth(cursor), 1))}
+            >
+              <ChevronRight className="size-4" />
+            </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        {rows.length===0 ? (
-          <div className="text-sm text-muted-foreground">Nenhuma ação no período.</div>
+        {rows.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            Nenhuma ação no período.
+          </div>
         ) : (
           <div className="space-y-2">
-            {rows.map((a)=>{
+            {rows.map((a) => {
               const st = deriveStatusFromItem(a);
               const start = a.start_datetime || a.start_date || "";
               const end = a.end_datetime || a.end_date || "";
               const sup = a.supervisor ? ` • Sup: ${a.supervisor}` : "";
               return (
-                <button key={a.id} onClick={()=>onOpenEdit(a)} className={`w-full text-left border rounded px-3 py-2 ${statusChipClass(st)} hover:brightness-95`}>
-                  <div className="text-sm font-medium truncate">{(a.client_name||a.company_name||"Ação")+sup}</div>
-                  <div className="text-xs opacity-80 truncate">
-                    {start?formatDateBR(start):""}{end?" → "+formatDateBR(end):""}
+                <button
+                  key={a.id}
+                  onClick={() => onOpenEdit(a)}
+                  className={`w-full text-left border rounded px-3 py-2 ${statusChipClass(
+                    st
+                  )} hover:brightness-95`}
+                >
+                  <div className="text-sm font-medium truncate">
+                    {(a.client_name || a.company_name || "Ação") + sup}
                   </div>
-                  <div className="text-[11px] opacity-70 truncate">{ensureArrayTypes(a).join(" • ")||"—"}</div>
+                  <div className="text-xs opacity-80 truncate">
+                    {start ? formatDateBR(start) : ""}
+                    {end ? " → " + formatDateBR(end) : ""}
+                  </div>
+                  <div className="text-[11px] opacity-70 truncate">
+                    {ensureArrayTypes(a).join(" • ") || "—"}
+                  </div>
                 </button>
               );
             })}
@@ -408,20 +649,24 @@ const Actions = () => {
 
   // sugestões (staff/users — se falhar, ignora)
   const [people, setPeople] = useState([]);
-  useEffect(()=>{(async()=>{
-    try{
-      const [s1,s2] = await Promise.all([
-        api.get("/staff").catch(()=>({data:[]})),
-        api.get("/users").catch(()=>({data:[]})),
-      ]);
-      const names = new Set();
-      [...(s1.data||[]),(s2.data||[])].forEach(p=>{
-        const n = p?.name || p?.full_name || p?.username || p?.email || "";
-        if(n) names.add(String(n));
-      });
-      setPeople(Array.from(names).sort());
-    }catch{ setPeople([]); }
-  })();},[]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const [s1, s2] = await Promise.all([
+          api.get("/staff").catch(() => ({ data: [] })),
+          api.get("/users").catch(() => ({ data: [] })),
+        ]);
+        const names = new Set();
+        [...(s1.data || []), ...(s2.data || [])].forEach((p) => {
+          const n = p?.name || p?.full_name || p?.username || p?.email || "";
+          if (n) names.add(String(n));
+        });
+        setPeople(Array.from(names).sort());
+      } catch {
+        setPeople([]);
+      }
+    })();
+  }, []);
 
   // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -460,7 +705,7 @@ const Actions = () => {
 
   // View (calendário)
   const [view, setView] = useState("month");
-  const [cursor, setCursor] = useState(()=>startOfMonth(new Date()));
+  const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
 
   // Load actions
   const loadActions = async () => {
@@ -483,6 +728,9 @@ const Actions = () => {
   // Form handlers
   const onChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+  const onTimeChange = (field) => (e) => {
+    onChange(field, normalizeHHMM(e.target.value));
   };
 
   const resetForm = () => {
@@ -534,7 +782,8 @@ const Actions = () => {
     if (!n) return;
     setForm((f) => ({ ...f, team: f.team.includes(n) ? f.team : [...f.team, n] }));
   };
-  const removeTeamMember = (name) => setForm((f) => ({ ...f, team: f.team.filter((x) => x !== name) }));
+  const removeTeamMember = (name) =>
+    setForm((f) => ({ ...f, team: f.team.filter((x) => x !== name) }));
 
   // Upload handler
   const uploadFile = async (file) => {
@@ -568,9 +817,6 @@ const Actions = () => {
     }
   };
 
-  // Aux payload datas/horas
-  const composeISO=(dateBr,time)=>{const d=brToYMD(dateBr); if(!d) return null; const t=time&&/^\d{2}:\d{2}$/.test(time)?`${time}:00`:"00:00:00"; return `${d}T${t}`;};
-
   // CRUD operations
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -589,9 +835,9 @@ const Actions = () => {
         company_name: form.company_name,
         types: form.types,
         type: form.types.join(", "),
-        start_date: startISO || null,
-        end_date: endISO || null,
-        start_datetime: startDT || null,
+        start_date: startISO || null, // YMD puro
+        end_date: endISO || null,     // YMD puro
+        start_datetime: startDT || null, // HH:MM opcional (sem Z)
         end_datetime: endDT || null,
         day_periods: form.day_periods,
         material_qty: Number(form.material_qty || 0),
@@ -614,18 +860,22 @@ const Actions = () => {
 
   const openEdit = (item) => {
     setEditing(item);
-    const s = toDate(item.start_datetime || item.start_date || "");
-    const e = toDate(item.end_datetime || item.end_date || "");
-    const pick=(dt)=>dt?`${String(dt.getHours()).padStart(2,"0")}:${String(dt.getMinutes()).padStart(2,"0")}`:"";
+    const { sYMD, eYMD } = pickYMD(item);
+
+    // tenta extrair HH:MM da string datetime (se vier)
+    const hhmm = (dt) => {
+      const m = String(dt || "").match(/T(\d{2}):(\d{2})/);
+      return m ? `${m[1]}:${m[2]}` : "";
+    };
 
     setForm({
       client_name: item.client_name || "",
       company_name: item.company_name || "",
       types: ensureArrayTypes(item),
-      startBr: s ? ymdToBR(toYMD(s)) : "",
-      endBr: e ? ymdToBR(toYMD(e)) : "",
-      startTime: pick(s),
-      endTime: pick(e),
+      startBr: ymdToBR(sYMD) || "",
+      endBr: ymdToBR(eYMD) || "",
+      startTime: hhmm(item.start_datetime),
+      endTime: hhmm(item.end_datetime),
       day_periods: Array.isArray(item.day_periods) ? item.day_periods : [],
       material_qty: item.material_qty ?? "",
       material_photo_url: item.material_photo_url || "",
@@ -691,19 +941,19 @@ const Actions = () => {
     }
   };
 
-  // mover (drag & drop no calendário)
+  // mover (drag & drop no calendário) — usa datas puras
   const handleMoveAction = async (action, startYMD, endYMD) => {
-    try{
+    try {
       await api.put(`/actions/${action.id}`, {
         ...action,
         start_date: startYMD,
         end_date: endYMD,
-        // mantém datetimes se existirem:
+        // preserva HH:MM se já existe (ou põe default)
         start_datetime: action.start_datetime || `${startYMD}T00:00:00`,
         end_datetime: action.end_datetime || `${endYMD}T23:59:59`,
       });
       await loadActions();
-    }catch(e){
+    } catch (e) {
       alert("Não foi possível mover a ação.");
     }
   };
@@ -728,10 +978,10 @@ const Actions = () => {
   }, [actions]);
 
   const toggleFilter = (setter, value) => {
-    setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
+    setter((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
   };
-
-  const toggleFilterType = (type) => toggleFilter(setFTypes, type);
 
   const onFilterDateChange = (setter) => (e) => {
     let v = e.target.value.replace(/\D/g, "");
@@ -756,7 +1006,7 @@ const Actions = () => {
     (fTypes.length ? 1 : 0) +
     (fPeriods.length ? 1 : 0) +
     (fStatus.length ? 1 : 0) +
-    ((fStartBr || fEndBr) ? 1 : 0);
+    (fStartBr || fEndBr ? 1 : 0);
 
   // Filtered data (lista/tabela)
   const filtered = useMemo(() => {
@@ -767,7 +1017,9 @@ const Actions = () => {
     if (k) {
       list = list.filter((a) => {
         const types = ensureArrayTypes(a).join(" ");
-        const periods = Array.isArray(a.day_periods) ? a.day_periods.join(" ") : "";
+        const periods = Array.isArray(a.day_periods)
+          ? a.day_periods.join(" ")
+          : "";
         return [a.client_name, a.company_name, types, periods, a.notes, a.supervisor]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(k));
@@ -789,7 +1041,9 @@ const Actions = () => {
     }
     if (fPeriods.length > 0) {
       const set = new Set(fPeriods);
-      list = list.filter((a) => Array.isArray(a.day_periods) && a.day_periods.some((p) => set.has(p)));
+      list = list.filter(
+        (a) => Array.isArray(a.day_periods) && a.day_periods.some((p) => set.has(p))
+      );
     }
     if (fStatus.length > 0) {
       const set = new Set(fStatus);
@@ -799,16 +1053,17 @@ const Actions = () => {
       const start = brToYMD(fStartBr) || "0000-01-01";
       const end = brToYMD(fEndBr) || "9999-12-31";
       list = list.filter((a) => {
-        const aStart = a.start_date ? a.start_date.slice(0, 10) : "0000-01-01";
-        const aEnd = a.end_date ? a.end_date.slice(0, 10) : "9999-12-31";
+        const { sYMD, eYMD } = pickYMD(a);
+        const aStart = sYMD || "0000-01-01";
+        const aEnd = eYMD || "9999-12-31";
         return aStart <= end && aEnd >= start;
       });
     }
 
     // Sort by start date desc
     list.sort((a, b) => {
-      const aDate = a.start_date || "0000-01-01";
-      const bDate = b.start_date || "0000-01-01";
+      const aDate = pickYMD(a).sYMD || "0000-01-01";
+      const bDate = pickYMD(b).sYMD || "0000-01-01";
       return bDate.localeCompare(aDate);
     });
 
@@ -820,8 +1075,8 @@ const Actions = () => {
     return filtered.map((a) => {
       const types = ensureArrayTypes(a).join(" | ");
       const periods = Array.isArray(a?.day_periods) ? a.day_periods.join(" | ") : "";
-      const start = a.start_date ? formatDateBR(a.start_date) : "";
-      const end = a.end_date ? formatDateBR(a.end_date) : "";
+      const start = pickYMD(a).sYMD ? formatDateBR(pickYMD(a).sYMD) : "";
+      const end = pickYMD(a).eYMD ? formatDateBR(pickYMD(a).eYMD) : "";
       const status = deriveStatusFromItem(a);
       return {
         cliente: a.client_name || "",
@@ -841,37 +1096,52 @@ const Actions = () => {
   }, [filtered]);
 
   const exportColumns = [
-    { key: 'cliente', header: 'Cliente' },
-    { key: 'empresa', header: 'Empresa' },
-    { key: 'tipos', header: 'Tipos' },
-    { key: 'periodos', header: 'Períodos' },
-    { key: 'inicio', header: 'Início' },
-    { key: 'termino', header: 'Término' },
-    { key: 'quantidade_material', header: 'Qtd. Material' },
-    { key: 'status', header: 'Status' },
-    { key: 'supervisor', header: 'Supervisor' },
-    { key: 'equipe', header: 'Equipe' },
-    { key: 'observacoes', header: 'Observações' },
-    { key: 'foto_url', header: 'Foto (URL)' },
+    { key: "cliente", header: "Cliente" },
+    { key: "empresa", header: "Empresa" },
+    { key: "tipos", header: "Tipos" },
+    { key: "periodos", header: "Períodos" },
+    { key: "inicio", header: "Início" },
+    { key: "termino", header: "Término" },
+    { key: "quantidade_material", header: "Qtd. Material" },
+    { key: "status", header: "Status" },
+    { key: "supervisor", header: "Supervisor" },
+    { key: "equipe", header: "Equipe" },
+    { key: "observacoes", header: "Observações" },
+    { key: "foto_url", header: "Foto (URL)" },
   ];
 
   const pdfOptions = {
-    title: 'Relatório de Ações',
-    orientation: 'l',
-    filtersSummary: `Filtros aplicados: ${(
-      (fClients.length ? `Clientes: ${fClients.join(', ')}` : '') + ' ' +
-      (fCompanies.length ? `Empresas: ${fCompanies.join(', ')}` : '') + ' ' +
-      (fTypes.length ? `Tipos: ${fTypes.join(', ')}` : '') + ' ' +
-      (fPeriods.length ? `Períodos: ${fPeriods.join(', ')}` : '') + ' ' +
-      (fStatus.length ? `Status: ${fStatus.join(', ')}` : '') + ' ' +
-      ((fStartBr || fEndBr) ? `Período: ${fStartBr || '...'} - ${fEndBr || '...'}` : '')
-    ).trim() || 'Nenhum filtro aplicado'}`,
+    title: "Relatório de Ações",
+    orientation: "l",
+    filtersSummary: `Filtros aplicados: ${
+      (
+        (fClients.length ? `Clientes: ${fClients.join(", ")}` : "") +
+        " " +
+        (fCompanies.length ? `Empresas: ${fCompanies.join(", ")}` : "") +
+        " " +
+        (fTypes.length ? `Tipos: ${fTypes.join(", ")}` : "") +
+        " " +
+        (fPeriods.length ? `Períodos: ${fPeriods.join(", ")}` : "") +
+        " " +
+        (fStatus.length ? `Status: ${fStatus.join(", ")}` : "") +
+        " " +
+        (fStartBr || fEndBr
+          ? `Período: ${fStartBr || "..."} - ${fEndBr || "..."}`
+          : "")
+      ).trim() || "Nenhum filtro aplicado"
+    }`,
   };
 
   // UI helpers (nova ação no dia X via calendário)
   const newOnDate = (ymd) => {
     setIsCreateOpen(true);
-    setForm((f)=>({ ...f, startBr: ymdToBR(ymd), endBr: ymdToBR(ymd), startTime: "08:00", endTime: "18:00" }));
+    setForm((f) => ({
+      ...f,
+      startBr: ymdToBR(ymd),
+      endBr: ymdToBR(ymd),
+      startTime: "08:00",
+      endTime: "18:00",
+    }));
   };
 
   return (
@@ -883,9 +1153,30 @@ const Actions = () => {
       {/* CALENDÁRIO: alternador de visão */}
       <div className="mb-4 flex items-center gap-2">
         <div className="inline-flex border rounded-lg overflow-hidden">
-          <button className={`px-3 py-1.5 text-sm ${view==='month'?'bg-primary text-primary-foreground':'hover:bg-accent'}`} onClick={()=>setView('month')}>Mês</button>
-          <button className={`px-3 py-1.5 text-sm ${view==='week'?'bg-primary text-primary-foreground':'hover:bg-accent'}`} onClick={()=>setView('week')}>Semana</button>
-          <button className={`px-3 py-1.5 text-sm ${view==='agenda'?'bg-primary text-primary-foreground':'hover:bg-accent'}`} onClick={()=>setView('agenda')}>Agenda</button>
+          <button
+            className={`px-3 py-1.5 text-sm ${
+              view === "month" ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+            }`}
+            onClick={() => setView("month")}
+          >
+            Mês
+          </button>
+          <button
+            className={`px-3 py-1.5 text-sm ${
+              view === "week" ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+            }`}
+            onClick={() => setView("week")}
+          >
+            Semana
+          </button>
+          <button
+            className={`px-3 py-1.5 text-sm ${
+              view === "agenda" ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+            }`}
+            onClick={() => setView("agenda")}
+          >
+            Agenda
+          </button>
         </div>
       </div>
 
@@ -1038,18 +1329,6 @@ const Actions = () => {
                           </label>
                         ))}
                       </div>
-                      {fStatus.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {fStatus.map((s) => (
-                            <Badge key={s} variant="secondary" className="gap-1">
-                              {s}
-                              <button type="button" onClick={() => toggleFilter(setFStatus, s)} className="ml-1 opacity-70 hover:opacity-100">
-                                <X className="size-3" />
-                              </button>
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
                     </div>
 
                     {/* Períodos */}
@@ -1063,18 +1342,6 @@ const Actions = () => {
                           </label>
                         ))}
                       </div>
-                      {fPeriods.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {fPeriods.map((p) => (
-                            <Badge key={p} variant="secondary" className="gap-1">
-                              {p}
-                              <button type="button" onClick={() => toggleFilter(setFPeriods, p)} className="ml-1 opacity-70 hover:opacity-100">
-                                <X className="size-3" />
-                              </button>
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
                     </div>
 
                     {/* Date range */}
@@ -1152,14 +1419,14 @@ const Actions = () => {
                         <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
                         <div className="flex gap-2">
                           <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.startBr} onChange={onDateChange("startBr")} />
-                          <Input placeholder="HH:MM" value={form.startTime} onChange={(e)=>onChange("startTime", e.target.value)} />
+                          <Input placeholder="HH:MM" inputMode="numeric" value={form.startTime} onChange={onTimeChange("startTime")} />
                         </div>
                       </div>
                       <div className="space-y-1.5">
                         <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
                         <div className="flex gap-2">
                           <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.endBr} onChange={onDateChange("endBr")} />
-                          <Input placeholder="HH:MM" value={form.endTime} onChange={(e)=>onChange("endTime", e.target.value)} />
+                          <Input placeholder="HH:MM" inputMode="numeric" value={form.endTime} onChange={onTimeChange("endTime")} />
                         </div>
                       </div>
 
@@ -1178,26 +1445,35 @@ const Actions = () => {
                       {/* Supervisor & Equipe */}
                       <div className="space-y-1.5">
                         <Label>Supervisor</Label>
-                        <Input placeholder="Nome do supervisor" value={form.supervisor} onChange={(e)=>onChange("supervisor", e.target.value)} list="__people__" />
+                        <Input placeholder="Nome do supervisor" value={form.supervisor} onChange={(e) => onChange("supervisor", e.target.value)} list="__people__" />
                       </div>
                       <div className="space-y-1.5">
                         <Label>Adicionar integrante da equipe</Label>
                         <div className="flex gap-2">
                           <Input id="__team_input" placeholder="Nome" list="__people__" />
-                          <Button type="button" variant="outline" onClick={()=>{
-                            const el=document.getElementById("__team_input");
-                            addTeamMember(el?.value||""); if(el) el.value="";
-                          }}>Adicionar</Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              const el = document.getElementById("__team_input");
+                              addTeamMember(el?.value || "");
+                              if (el) el.value = "";
+                            }}
+                          >
+                            Adicionar
+                          </Button>
                         </div>
                         <datalist id="__people__">
-                          {people.map((p)=><option key={p} value={p} />)}
+                          {people.map((p) => (
+                            <option key={p} value={p} />
+                          ))}
                         </datalist>
-                        {form.team.length>0 && (
+                        {form.team.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-1">
-                            {form.team.map((n)=>(
+                            {form.team.map((n) => (
                               <Badge key={n} variant="secondary" className="gap-1">
                                 {n}
-                                <button type="button" onClick={()=>removeTeamMember(n)} className="ml-1 opacity-70 hover:opacity-100">
+                                <button type="button" onClick={() => removeTeamMember(n)} className="ml-1 opacity-70 hover:opacity-100">
                                   <X className="size-3" />
                                 </button>
                               </Badge>
@@ -1289,15 +1565,28 @@ const Actions = () => {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={11} className="text-center py-6">Carregando…</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={11} className="text-center py-6">
+                      Carregando…
+                    </TableCell>
+                  </TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={11} className="text-center py-6">Nenhum registro</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={11} className="text-center py-6">
+                      Nenhum registro
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   filtered.map((a) => {
                     const types = ensureArrayTypes(a);
                     const periods = Array.isArray(a.day_periods) ? a.day_periods : [];
                     const status = deriveStatusFromItem(a);
-                    const statusColor = status === "concluido" ? "default" : status === "andamento" ? "secondary" : "outline";
+                    const statusColor =
+                      status === "concluido"
+                        ? "default"
+                        : status === "andamento"
+                        ? "secondary"
+                        : "outline";
 
                     return (
                       <TableRow key={a.id}>
@@ -1306,31 +1595,53 @@ const Actions = () => {
                         <TableCell className="text-center">
                           <div className="flex flex-wrap gap-1 justify-center">
                             {types.slice(0, 2).map((t) => (
-                              <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
+                              <Badge key={t} variant="secondary" className="text-xs">
+                                {t}
+                              </Badge>
                             ))}
-                            {types.length > 2 && <Badge variant="outline" className="text-xs">+{types.length - 2}</Badge>}
+                            {types.length > 2 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{types.length - 2}
+                              </Badge>
+                            )}
                             {types.length === 0 && <span className="text-muted-foreground">—</span>}
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex flex-wrap gap-1 justify-center">
                             {periods.map((p) => (
-                              <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
+                              <Badge key={p} variant="outline" className="text-xs">
+                                {p}
+                              </Badge>
                             ))}
                             {periods.length === 0 && <span className="text-muted-foreground">—</span>}
                           </div>
                         </TableCell>
-                        <TableCell className="text-center">{a.start_date ? formatDateBR(a.start_date) : "—"}</TableCell>
-                        <TableCell className="text-center">{a.end_date ? formatDateBR(a.end_date) : "—"}</TableCell>
+                        <TableCell className="text-center">
+                          {pickYMD(a).sYMD ? formatDateBR(pickYMD(a).sYMD) : "—"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {pickYMD(a).eYMD ? formatDateBR(pickYMD(a).eYMD) : "—"}
+                        </TableCell>
                         <TableCell className="text-center">{a.material_qty ?? "—"}</TableCell>
                         <TableCell className="text-center">{a.supervisor || "—"}</TableCell>
                         <TableCell className="text-center">
-                          {Array.isArray(a.team_members) && a.team_members.length>0
-                            ? <div className="flex flex-wrap gap-1 justify-center">{a.team_members.map((n)=> <Badge key={n} variant="outline" className="text-xs">{n}</Badge>)}</div>
-                            : "—"}
+                          {Array.isArray(a.team_members) && a.team_members.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 justify-center">
+                              {a.team_members.map((n) => (
+                                <Badge key={n} variant="outline" className="text-xs">
+                                  {n}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant={statusColor} className="capitalize">{status}</Badge>
+                          <Badge variant={statusColor} className="capitalize">
+                            {status}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex justify-center gap-2">
@@ -1356,7 +1667,16 @@ const Actions = () => {
       </Card>
 
       {/* Edit Modal */}
-      <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) { setEditing(null); resetForm(); } }}>
+      <Dialog
+        open={isEditOpen}
+        onOpenChange={(v) => {
+          setIsEditOpen(v);
+          if (!v) {
+            setEditing(null);
+            resetForm();
+          }
+        }}
+      >
         <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
           <div className="px-5 pt-5 pb-3 border-b">
             <DialogHeader>
@@ -1379,10 +1699,7 @@ const Actions = () => {
 
                 <div className="space-y-1.5 md:col-span-2">
                   <Label>Tipo(s) de ação</Label>
-                  <TypeSelector
-                    value={form.types}
-                    onChange={(arr) => onChange("types", arr)}
-                  />
+                  <TypeSelector value={form.types} onChange={(arr) => onChange("types", arr)} />
                   {form.types.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
                       {form.types.map((t) => (
@@ -1401,14 +1718,14 @@ const Actions = () => {
                   <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
                   <div className="flex gap-2">
                     <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.startBr} onChange={onDateChange("startBr")} />
-                    <Input placeholder="HH:MM" value={form.startTime} onChange={(e)=>onChange("startTime", e.target.value)} />
+                    <Input placeholder="HH:MM" inputMode="numeric" value={form.startTime} onChange={onTimeChange("startTime")} />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
                   <div className="flex gap-2">
                     <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.endBr} onChange={onDateChange("endBr")} />
-                    <Input placeholder="HH:MM" value={form.endTime} onChange={(e)=>onChange("endTime", e.target.value)} />
+                    <Input placeholder="HH:MM" inputMode="numeric" value={form.endTime} onChange={onTimeChange("endTime")} />
                   </div>
                 </div>
 
@@ -1427,23 +1744,30 @@ const Actions = () => {
                 {/* Supervisor & Equipe */}
                 <div className="space-y-1.5">
                   <Label>Supervisor</Label>
-                  <Input placeholder="Nome do supervisor" value={form.supervisor} onChange={(e)=>onChange("supervisor", e.target.value)} list="__people__" />
+                  <Input placeholder="Nome do supervisor" value={form.supervisor} onChange={(e) => onChange("supervisor", e.target.value)} list="__people__" />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Equipe</Label>
                   <div className="flex gap-2">
                     <Input id="__team_input_edit" placeholder="Nome" list="__people__" />
-                    <Button type="button" variant="outline" onClick={()=>{
-                      const el=document.getElementById("__team_input_edit");
-                      addTeamMember(el?.value||""); if(el) el.value="";
-                    }}>Adicionar</Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        const el = document.getElementById("__team_input_edit");
+                        addTeamMember(el?.value || "");
+                        if (el) el.value = "";
+                      }}
+                    >
+                      Adicionar
+                    </Button>
                   </div>
-                  {form.team.length>0 && (
+                  {form.team.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-1">
-                      {form.team.map((n)=>(
+                      {form.team.map((n) => (
                         <Badge key={n} variant="secondary" className="gap-1">
                           {n}
-                          <button type="button" onClick={()=>removeTeamMember(n)} className="ml-1 opacity-70 hover:opacity-100">
+                          <button type="button" onClick={() => removeTeamMember(n)} className="ml-1 opacity-70 hover:opacity-100">
                             <X className="size-3" />
                           </button>
                         </Badge>
