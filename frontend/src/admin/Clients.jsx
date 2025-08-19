@@ -1,3 +1,4 @@
+// frontend/src/admin/Clients.jsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import api from "@/services/api";
 
@@ -39,11 +40,11 @@ import {
   Filter as FilterIcon,
 } from "lucide-react";
 
-// Import the new ExportMenu component
+// Import the new ExportMenu component (mantido do arquivo novo)
 import ExportMenu from "@/components/export/ExportMenu";
 
 /* ============================================================================
-   TELEFONE BR (+55) — normalização e máscara com celular/fixo
+   TELEFONE BR (+55) — normalização e máscara com celular/fixo (versão do arquivo novo mantida)
    Regras:
    - Prefixo +55 sempre
    - Celular: 9 dígitos iniciando com 9
@@ -54,54 +55,419 @@ import ExportMenu from "@/components/export/ExportMenu";
 const normalizePhoneBR = (input) => {
   if (!input) return "";
   const digits = input.replace(/\D/g, "");
-  
-  // Se começa com 55, remove
   let clean = digits.startsWith("55") ? digits.slice(2) : digits;
-  
-  // Se tem 11 dígitos e o terceiro é 9 (celular), ou 10 dígitos (fixo)
+
   if (clean.length === 11 && clean[2] === "9") {
     return `+55${clean}`;
   } else if (clean.length === 10) {
     return `+55${clean}`;
   }
-  
-  // Retorna como está se não se encaixa nos padrões
   return input;
 };
 
 const formatPhoneDisplay = (phone) => {
   if (!phone) return "";
   const digits = phone.replace(/\D/g, "");
-  
   if (digits.startsWith("55") && digits.length >= 12) {
     const clean = digits.slice(2);
     const ddd = clean.slice(0, 2);
     const number = clean.slice(2);
-    
+
     if (number.length === 9 && number[0] === "9") {
-      // Celular: +55 (DD) 9XXXX-XXXX
       return `+55 (${ddd}) ${number.slice(0, 5)}-${number.slice(5)}`;
     } else if (number.length === 8) {
-      // Fixo: +55 (DD) XXXX-XXXX
       return `+55 (${ddd}) ${number.slice(0, 4)}-${number.slice(4)}`;
     }
   }
-  
   return phone;
 };
 
 /* ============================================================================
-   SEGMENTOS — base + customizados
+   SEGMENTOS — mesmos grupos/itens e comportamento da sua versão anterior
+   - SEGMENTOS_GRUPOS: lista completa em grupos
+   - SEGMENTOS: lista plana derivada
 ============================================================================ */
 
-const baseSegments = [
-  "Administrativo", "Alimentação", "Automotivo", "Beleza", "Construção",
-  "Educação", "Eletrônicos", "Energia", "Entretenimento", "Esportes",
-  "Farmacêutico", "Financeiro", "Imobiliário", "Industrial", "Jurídico",
-  "Logística", "Moda", "Petróleo", "Saúde", "Tecnologia", "Telecomunicações",
-  "Turismo", "Varejo"
+const SEGMENTOS_GRUPOS = [
+  {
+    group: "Tecnologia e Informática",
+    options: [
+      { value: "Desenvolvimento de Software", desc: "Programador, Dev Web, Eng. Software" },
+      { value: "Segurança da Informação", desc: "Analista/Eng. Segurança, Hacker Ético" },
+      { value: "Ciência de Dados", desc: "Cientista/Analista de Dados, Eng. ML" },
+      { value: "Infraestrutura e Redes", desc: "Adm. Sistemas, Eng. Redes, Suporte" },
+      { value: "Design Digital", desc: "UX/UI, Web, Jogos" },
+      { value: "Suporte e Help Desk", desc: "Atendimento técnico, Field" },
+      { value: "Consultoria em TI", desc: "Implantação, Governança, RPA" },
+      { value: "E-commerce & Marketplaces", desc: "Lojas virtuais, Marketplaces" },
+    ],
+  },
+
+  {
+    group: "Saúde e Bem-Estar",
+    options: [
+      { value: "Medicina", desc: "Clínico, Cirurgião, Pediatra, Gineco" },
+      { value: "Enfermagem", desc: "Enfermeiro, Téc. Enfermagem" },
+      { value: "Terapias e Reabilitação", desc: "Fisio, TO, Fono" },
+      { value: "Nutrição", desc: "Clínico, Esportivo" },
+      { value: "Saúde Mental", desc: "Psicólogo, Psiquiatra, Psicanalista" },
+      { value: "Odontologia", desc: "Dentista, Clínica Odontológica" },
+      { value: "Oftalmologia", desc: "Oftalmo, Exames" },
+      { value: "Laboratório de Análises", desc: "Exames, Coleta" },
+      { value: "Clínicas Populares", desc: "Multiespecialidades" },
+      { value: "Clínica Veterinária", desc: "Consultas, Cirurgias, Exames" },
+      { value: "Farmácia e Drogaria", desc: "Medicamentos, Manipulação" },
+    ],
+  },
+
+  {
+    group: "Engenharia e Indústria",
+    options: [
+      { value: "Engenharia Civil", desc: "Eng. Civil, Arquiteto, Téc. Edificações" },
+      { value: "Engenharia Mecânica", desc: "Eng. Mecânico, Manutenção" },
+      { value: "Engenharia Elétrica", desc: "Eng. Eletricista, Eletrotécnico" },
+      { value: "Engenharia de Produção", desc: "Eng. Produção, GP Industrial" },
+      { value: "Indústria", desc: "Operador de Máquinas, Automação" },
+      { value: "Manutenção Industrial", desc: "PCM, Caldeiraria, Solda" },
+      { value: "Energias Renováveis", desc: "Solar, Eólica, Projetos" },
+    ],
+  },
+
+  {
+    group: "Comunicação e Marketing",
+    options: [
+      { value: "Jornalismo", desc: "Repórter, Editor, Assessor" },
+      { value: "Publicidade e Propaganda", desc: "Redator, Direção de Arte, Conteúdo" },
+      { value: "Marketing Digital", desc: "SEO/SEM, Social, Analista" },
+      { value: "Relações Públicas", desc: "RP, Assessoria" },
+      { value: "Gráfica e Comunicação Visual", desc: "Impressão, Plotagem, Sinalização" },
+      { value: "Produtora de Vídeo/Áudio", desc: "Filmagem, Podcast, Estúdio" },
+      { value: "Fotografia", desc: "Estúdio, Ensaios, Still" },
+      { value: "Eventos e Locação", desc: "Som, Luz, Palco, Estruturas" },
+    ],
+  },
+
+  {
+    group: "Negócios e Finanças",
+    options: [
+      { value: "Administração", desc: "Administrador, GP" },
+      { value: "Contabilidade e Finanças", desc: "Contador, Analista, Auditor, Economista" },
+      { value: "Recursos Humanos", desc: "Analista de RH, Recrutador, GPessoas" },
+      { value: "Vendas e Comércio", desc: "Gerente de Vendas, Consultor, Vendedor" },
+      { value: "Corretora de Seguros", desc: "Auto, Vida, Saúde, Empresarial" },
+      { value: "Correspondente Bancário", desc: "Crédito, Consignado, Empréstimos" },
+      { value: "Franquias", desc: "Expansão, Gestão de Franqueados" },
+    ],
+  },
+
+  {
+    group: "Educação e Cultura",
+    options: [
+      { value: "Ensino", desc: "Professor, Coord. Pedagógico, Tutor" },
+      { value: "Pesquisa", desc: "Pesquisador, Cientista" },
+      { value: "Artes", desc: "Artista, Músico, Ator, Diretor" },
+      { value: "Museologia e História", desc: "Historiador, Curador, Museólogo" },
+      { value: "Biblioteca", desc: "Bibliotecário, Arquivista" },
+      { value: "Escolas e Colégios", desc: "Educação Básica, Técnica" },
+      { value: "Idiomas", desc: "Cursos, Intercâmbio" },
+      { value: "Cursos Profissionalizantes", desc: "TI, Saúde, Indústria" },
+      { value: "Autoescola", desc: "CNH, Reciclagem" },
+      { value: "Esporte e Lazer", desc: "Clubes, Academias, Estúdios" },
+    ],
+  },
+
+  {
+    group: "Direito e Segurança",
+    options: [
+      { value: "Direito", desc: "Advogado, Juiz, Promotor" },
+      { value: "Segurança Pública", desc: "Policial, Bombeiro, Agente Penitenciário" },
+      { value: "Segurança Privada", desc: "Vigilante, Consultor" },
+      { value: "Perícia", desc: "Perito Criminal/Judicial" },
+      { value: "Compliance e LGPD", desc: "Proteção de Dados, Governança" },
+      { value: "Defesa Civil", desc: "Proteção e resposta a desastres" },
+    ],
+  },
+
+  {
+    group: "Serviços e Social",
+    options: [
+      { value: "Hotelaria e Turismo", desc: "Hotel, Guia, Viagens" },
+      { value: "Gastronomia", desc: "Chef, Confeiteiro, Bartender" },
+      { value: "Beleza e Estética", desc: "Cabeleireiro, Esteticista, Maquiador" },
+      { value: "Serviço Social", desc: "Assistente Social, Sociólogo" },
+      { value: "Lavanderia", desc: "Lavagem, Secagem, Passadoria" },
+      { value: "Costura e Ajustes", desc: "Conserto de roupas, Sob medida" },
+      { value: "Chaveiro", desc: "Cópias, Aberturas, Troca de fechaduras" },
+      { value: "Limpeza e Facilities", desc: "Residencial, Comercial, Pós-obra" },
+      { value: "Jardinagem e Paisagismo", desc: "Manutenção, Projetos" },
+      { value: "Dedetização e Sanitização", desc: "Pragas urbanas, Sanitização" },
+      { value: "Mudanças e Carretos", desc: "Local, Interestadual" },
+      { value: "Assistência Técnica", desc: "Eletro, Informática, Celular" },
+      { value: "Coworking e Escritórios", desc: "Salas privativas, Compartilhadas" },
+      { value: "Igrejas e Comunidades", desc: "Templos, Entidades religiosas" },
+      { value: "ONGs e Terceiro Setor", desc: "Associações, Fundações" },
+    ],
+  },
+
+  {
+    group: "Comércio Varejista",
+    options: [
+      { value: "Supermercado e Mercearia", desc: "Supermercado, Mini-mercado, Atacado" },
+      { value: "Padaria e Confeitaria", desc: "Padaria, Doceria, Bolos" },
+      { value: "Açougue", desc: "Carnes, Frios" },
+      { value: "Hortifruti", desc: "Frutas, Verduras, Legumes" },
+      { value: "Ótica", desc: "Óculos, Lentes, Consultoria" },
+      { value: "Loja de Roupas e Acessórios", desc: "Moda, Boutique, Lingerie" },
+      { value: "Calçados", desc: "Sapataria, Sneakers" },
+      { value: "Joalheria e Relojoaria", desc: "Semi-joias, Relógios" },
+      { value: "Móveis e Decoração", desc: "Planejados, Colchões, Utilidades" },
+      { value: "Eletro e Eletrônicos", desc: "TV, Som, Informática" },
+      { value: "Livraria e Papelaria", desc: "Livros, Materiais escolares" },
+      { value: "Floricultura", desc: "Flores, Presentes" },
+      { value: "Loja de Utilidades", desc: "Variedades, 1,99" },
+      { value: "Pet Shop", desc: "Rações, Acessórios, Banho e Tosa" },
+    ],
+  },
+
+  {
+    group: "Alimentação e Bebidas (Foodservice)",
+    options: [
+      { value: "Restaurante", desc: "À la carte, Self-service" },
+      { value: "Pizzaria", desc: "Forno a lenha, Delivery" },
+      { value: "Lanchonete", desc: "Sanduíches, Pastéis" },
+      { value: "Hamburgueria", desc: "Artesanal, Smash" },
+      { value: "Churrascaria", desc: "Rodízio, Espetos" },
+      { value: "Cafeteria", desc: "Café, Brunch" },
+      { value: "Sorveteria e Açaíteria", desc: "Gelatos, Açaí, Milk-shake" },
+      { value: "Food Truck", desc: "Eventos, Itinerante" },
+      { value: "Cozinha Industrial e Marmitaria", desc: "Corporativo, PF" },
+      { value: "Delivery/Cozinha Fantasma", desc: "Somente entrega" },
+      { value: "Bares e Pubs", desc: "Drinks, Petiscos, Música" },
+    ],
+  },
+
+  {
+    group: "Automotivo",
+    options: [
+      { value: "Oficina Mecânica", desc: "Mecânica leve/pesada" },
+      { value: "Autoelétrica", desc: "Partida, Alternador, Injeção" },
+      { value: "Funilaria e Pintura", desc: "Estética, Reparos" },
+      { value: "Autopeças e Acessórios", desc: "Peças, Som, Película" },
+      { value: "Lava Jato e Estética", desc: "Lavagem, Vitrificação" },
+      { value: "Borracharia", desc: "Pneus, Alinhamento" },
+      { value: "Concessionária/Revenda", desc: "Novos, Seminovos" },
+      { value: "Motocicletas - Oficina e Peças", desc: "Motos, Acessórios" },
+      { value: "Guincho e Socorro", desc: "24h, Reboque" },
+    ],
+  },
+
+  {
+    group: "Construção, Imobiliário e Manutenção",
+    options: [
+      { value: "Materiais de Construção", desc: "Cimento, Ferramentas" },
+      { value: "Loja de Tintas", desc: "Tintas, Acessórios" },
+      { value: "Vidraçaria", desc: "Box, Espelhos, Temperado" },
+      { value: "Serralheria", desc: "Esquadrias, Portões" },
+      { value: "Marcenaria", desc: "Móveis sob medida" },
+      { value: "Marmoraria", desc: "Granito, Quartzo" },
+      { value: "Elétrica e Hidráulica", desc: "Materiais e serviços" },
+      { value: "Ar Condicionado e Refrigeração", desc: "Instalação, PMOC" },
+      { value: "Imobiliária e Condomínios", desc: "Vendas, Locação, Gestão" },
+      { value: "Paisagismo e Irrigação", desc: "Projetos, Manutenção" },
+      { value: "Energia Solar", desc: "Projetos, Instalação" },
+    ],
+  },
+
+  {
+    group: "Transporte e Logística",
+    options: [
+      { value: "Transporte de Cargas", desc: "Rodoviário, Fracionado" },
+      { value: "Entregas Rápidas/Courier", desc: "Express, Same-day" },
+      { value: "Motoboy", desc: "Delivery urbano" },
+      { value: "Fretamento e Turismo", desc: "Ônibus, Vans" },
+      { value: "Transporte Escolar", desc: "Escolar, Universitário" },
+      { value: "Logística e Armazenagem", desc: "CDs, 3PL" },
+      { value: "Locação de Veículos", desc: "Curto e longo prazo" },
+    ],
+  },
+
+  {
+    group: "Agro, Campo e Insumos",
+    options: [
+      { value: "Agropecuária", desc: "Fazendas, Cooperativas" },
+      { value: "Casa Agropecuária", desc: "Rações, Insumos" },
+      { value: "Sementes e Defensivos", desc: "Distribuidores, Revendas" },
+      { value: "Madeireira", desc: "Madeiras, Compensados" },
+      { value: "Veterinária Rural", desc: "Bovinos, Equinos" },
+      { value: "Frigorífico/Entreposto", desc: "Abate, Processamento" },
+    ],
+  },
 ];
 
+const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap((g) => g.options.map((o) => o.value));
+
+/* ============================================================================
+   Util: garantir array de segmentos (compatível com campos antigos)
+============================================================================ */
+const ensureArraySegments = (client) => {
+  if (Array.isArray(client?.segments)) return client.segments;
+  if (typeof client?.segment === "string" && client.segment.trim()) {
+    return client.segment.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  if (typeof client?.segmentos === "string" && client.segmentos.trim()) {
+    return client.segmentos.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  if (typeof client?.segments === "string" && client.segments.trim()) {
+    return client.segments.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+};
+
+/* ============================================================================
+   Combobox multi de segmentos — com busca, grupos e criação de novos (modo livre)
+   (Mesmo comportamento e layout da sua versão anterior)
+============================================================================ */
+function SegmentosSelect({ value = [], onChange, onCreate }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const baseOptions = useMemo(
+    () => SEGMENTOS_GRUPOS.flatMap((g) => g.options.map((o) => o.value)),
+    []
+  );
+
+  const allSelectedLower = useMemo(
+    () => new Set(value.map((v) => v.toLowerCase())),
+    [value]
+  );
+
+  const existsInBase = (label) => baseOptions.some((v) => v.toLowerCase() === label.toLowerCase());
+  const existsInValue = (label) => allSelectedLower.has(label.toLowerCase());
+
+  const toggle = (label) => {
+    const exists = value.includes(label);
+    const next = exists ? value.filter((s) => s !== label) : [...value, label];
+    onChange(next);
+  };
+
+  const addCustom = (label) => {
+    const clean = label.trim();
+    if (!clean) return;
+    if (!existsInValue(clean)) {
+      onChange([...value, clean]);
+    }
+    onCreate?.(clean);
+    setQuery("");
+    setOpen(true);
+  };
+
+  const stopScrollProp = useCallback((e) => e.stopPropagation(), []);
+
+  const shouldSuggestCreate = useMemo(() => {
+    const t = query.trim();
+    if (!t) return false;
+    return !existsInBase(t) && !existsInValue(t);
+  }, [query, baseOptions, value]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" className="w-full justify-between">
+          {value.length === 0 ? "Selecionar segmentos" : (
+            <span className="truncate">
+              {value.slice(0, 2).join(", ")}{value.length > 2 ? ` +${value.length - 2}` : ""}
+            </span>
+          )}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        collisionPadding={32}
+        className="p-0 z-[70] w-[min(92vw,320px)] sm:w-[360px] bg-background"
+      >
+        <div
+          className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2"
+          style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+          onWheel={stopScrollProp}
+          onTouchMove={stopScrollProp}
+        >
+          <Command className="text-[13px] leading-tight">
+            <div className="sticky top-0 z-10 bg-background">
+              <CommandInput
+                placeholder="Buscar ou digitar novo segmento…"
+                value={query}
+                onValueChange={setQuery}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && shouldSuggestCreate) {
+                    e.preventDefault();
+                    addCustom(query);
+                  }
+                }}
+              />
+            </div>
+
+            <CommandList className="max-h-none">
+              {shouldSuggestCreate && (
+                <CommandGroup heading={<span className="text-[11px] font-semibold text-muted-foreground">Ações</span>}>
+                  <CommandItem
+                    value={`__create:${query}`}
+                    className="flex items-center gap-2 py-2 px-2"
+                    onSelect={() => addCustom(query)}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Adicionar “{query.trim()}” como novo segmento
+                  </CommandItem>
+                </CommandGroup>
+              )}
+
+              {SEGMENTOS_GRUPOS.map((grp) => (
+                <CommandGroup
+                  key={grp.group}
+                  heading={<span className="text-[11px] font-semibold text-muted-foreground">{grp.group}</span>}
+                  className="px-1 py-1"
+                >
+                  {grp.options.map((opt) => {
+                    const checked = value.includes(opt.value);
+                    return (
+                      <CommandItem
+                        key={`${grp.group}-${opt.value}`}
+                        value={`${opt.value} ${opt.desc}`}
+                        className="flex items-start gap-2 py-1 px-2"
+                        onSelect={() => toggle(opt.value)}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => toggle(opt.value)}
+                          className="mt-0.5"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium">{opt.value}</div>
+                          <div className="text-[11px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
+                            {opt.desc}
+                          </div>
+                        </div>
+                        {checked && <Check className="h-4 w-4 opacity-70" />}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              ))}
+              <div className="h-1" />
+            </CommandList>
+          </Command>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ============================================================================
+   Página
+============================================================================ */
 const Clients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -122,9 +488,9 @@ const Clients = () => {
 
   // Segmentos extras (digitados pelo usuário nesta sessão)
   const [extraSegments, setExtraSegments] = useState([]);
-  const baseSegmentSet = useMemo(() => new Set(baseSegments), []);
+  const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
 
-  // Buscar clientes
+  // Buscar clientes (mantido)
   const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
@@ -142,15 +508,7 @@ const Clients = () => {
     fetchClients();
   }, [fetchClients]);
 
-  // Garantir que segments seja sempre array
-  const ensureArraySegments = (client) => {
-    const segs = client?.segments;
-    if (Array.isArray(segs)) return segs;
-    if (typeof segs === "string") return segs.split(",").map(s => s.trim()).filter(Boolean);
-    return [];
-  };
-
-  // Handlers do formulário
+  // Handlers do formulário (mantido, com normalização de telefone)
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm(prev => ({
@@ -183,7 +541,7 @@ const Clients = () => {
     setOpenDelete(true);
   };
 
-  // Submissão do formulário
+  // Submissão do formulário (mantida conforme arquivo novo)
   async function onSubmit(e) {
     e.preventDefault();
     setSaving(true);
@@ -223,7 +581,7 @@ const Clients = () => {
     }
   }
 
-  /* ===================== FILTROS (NOVO) ===================== */
+  /* ===================== FILTROS (mantidos, agora com grupos + personalizados) ===================== */
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [fCompanies, setFCompanies] = useState([]);     // múltipla
   const [fSegments, setFSegments] = useState([]);      // múltipla
@@ -275,7 +633,6 @@ const Clients = () => {
   const filtered = useMemo(() => {
     let list = Array.isArray(clients) ? [...clients] : [];
 
-    // busca por digitação (mantida)
     const k = q.trim().toLowerCase();
     if (k) {
       list = list.filter((c) => {
@@ -286,7 +643,6 @@ const Clients = () => {
       });
     }
 
-    // filtros avançados
     if (fCompanies.length > 0) {
       const set = new Set(fCompanies);
       list = list.filter((c) => set.has((c.company ?? c.company_name ?? c.companyName ?? "").trim()));
@@ -310,7 +666,7 @@ const Clients = () => {
     return list;
   }, [clients, q, fCompanies, fSegments, fHasEmail, fHasPhone]);
 
-  // Prepare data for export
+  // Dados para exportação (mantidos)
   const exportData = useMemo(() => {
     return filtered.map((c) => ({
       name: c.name || "",
@@ -332,7 +688,7 @@ const Clients = () => {
   const pdfOptions = {
     title: 'Relatório de Clientes',
     orientation: 'p',
-    filtersSummary: `Filtros aplicados: ${filtersCount > 0 ? 
+    filtersSummary: `Filtros aplicados: ${filtersCount > 0 ?
       [
         fCompanies.length > 0 ? `Empresas: ${fCompanies.join(', ')}` : '',
         fSegments.length > 0 ? `Segmentos: ${fSegments.join(', ')}` : '',
@@ -374,6 +730,7 @@ const Clients = () => {
             </div>
           </div>
         </CardHeader>
+
         <CardContent className="space-y-4">
           {/* Filtros + botões */}
           <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
@@ -420,7 +777,7 @@ const Clients = () => {
                     {/* Empresas */}
                     <div className="space-y-2">
                       <Label>Empresas</Label>
-                      <div className="max-h-[32vh] overflow-y-auto pr-1">
+                      <div className="max-h=[32vh] max-h-[32vh] overflow-y-auto pr-1">
                         {uniqueCompanies.length === 0 ? (
                           <p className="text-xs text-muted-foreground">—</p>
                         ) : uniqueCompanies.map((comp) => (
@@ -446,24 +803,40 @@ const Clients = () => {
                       )}
                     </div>
 
-                    {/* Segmentos */}
+                    {/* Segmentos (agrupados + personalizados) */}
                     <div className="space-y-2">
                       <Label>Segmentos</Label>
-                      <div className="max-h-[32vh] overflow-y-auto pr-1">
-                        {/* Base */}
-                        {baseSegments.map((seg) => (
-                          <label key={seg} className="flex items-center gap-2 text-sm cursor-pointer">
-                            <Checkbox checked={fSegments.includes(seg)} onCheckedChange={() => toggle(setFSegments, seg)} />
-                            <span className="truncate">{seg}</span>
-                          </label>
+                      <div className="max-h-[48vh] overflow-y-auto pr-1">
+                        {SEGMENTOS_GRUPOS.map((grp) => (
+                          <div key={grp.group} className="mb-3">
+                            <p className="text-xs font-semibold text-muted-foreground mb-2">{grp.group}</p>
+                            <div className="space-y-1.5">
+                              {grp.options.map((opt) => (
+                                <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <Checkbox checked={fSegments.includes(opt.value)} onCheckedChange={() => toggle(setFSegments, opt.value)} />
+                                  <span className="truncate">{opt.value}</span>
+                                </label>
+                              ))}
+                            </div>
+                            <Separator className="my-3" />
+                          </div>
                         ))}
-                        {/* Customizados */}
-                        {customSegmentsFromData.map((seg) => (
-                          <label key={seg} className="flex items-center gap-2 text-sm cursor-pointer">
-                            <Checkbox checked={fSegments.includes(seg)} onCheckedChange={() => toggle(setFSegments, seg)} />
-                            <span className="truncate italic text-muted-foreground">{seg}</span>
-                          </label>
-                        ))}
+
+                        {/* Grupo: Personalizados (dinâmico) */}
+                        {customSegmentsFromData.length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-xs font-semibold text-muted-foreground mb-2">Personalizados</p>
+                            <div className="space-y-1.5">
+                              {customSegmentsFromData.map((opt) => (
+                                <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <Checkbox checked={fSegments.includes(opt)} onCheckedChange={() => toggle(setFSegments, opt)} />
+                                  <span className="truncate">{opt}</span>
+                                </label>
+                              ))}
+                            </div>
+                            <Separator className="my-3" />
+                          </div>
+                        )}
                       </div>
 
                       {/* Chips dos selecionados */}
@@ -519,7 +892,7 @@ const Clients = () => {
               </PopoverContent>
             </Popover>
 
-            {/* Novo Cliente */}
+            {/* Novo Cliente (modal com a mesma disposição da sua versão anterior) */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" className="gap-2" onClick={openCreate}>
@@ -528,7 +901,6 @@ const Clients = () => {
                 </Button>
               </DialogTrigger>
 
-              {/* Modal mais estreito e centralizado */}
               <DialogContent className="p-0 sm:max-w-[560px] md:max-w-[600px]">
                 <div className="max-h-[80vh] overflow-y-auto p-6">
                   <DialogHeader className="pb-2">
@@ -550,6 +922,37 @@ const Clients = () => {
                         <Input name="company" value={form.company} onChange={onChange} />
                       </div>
 
+                      {/* Segmentos — combobox multi com modo livre */}
+                      <div className="md:col-span-2 space-y-2">
+                        <Label>Segmentos</Label>
+                        <SegmentosSelect
+                          value={form.segments}
+                          onChange={(next) => setForm((f) => ({ ...f, segments: next }))}
+                          onCreate={(label) => {
+                            setExtraSegments((prev) => (prev.includes(label) ? prev : [...prev, label]));
+                          }}
+                        />
+                        {form.segments.length > 0 && (
+                          <div className="flex flex-wrap gap-2 justify-start">
+                            {form.segments.map((s) => (
+                              <Badge key={s} variant="secondary" className="gap-1">
+                                {s}
+                                <button
+                                  type="button"
+                                  className="ml-1 opacity-70 hover:opacity-100"
+                                  onClick={() =>
+                                    setForm((f) => ({ ...f, segments: f.segments.filter((x) => x !== s) }))
+                                  }
+                                  title="Remover"
+                                >
+                                  <X className="size-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
                       <div>
                         <Label>E-mail</Label>
                         <Input name="email" type="email" value={form.email} onChange={onChange} />
@@ -563,91 +966,6 @@ const Clients = () => {
                           onChange={onChange}
                           placeholder="+55(DD)Número"
                         />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <Label>Segmentos</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className="w-full justify-between">
-                              {form.segments.length > 0 ? `${form.segments.length} selecionado(s)` : "Selecionar segmentos"}
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-full p-0">
-                            <Command>
-                              <CommandInput placeholder="Buscar segmento..." />
-                              <CommandList>
-                                <CommandEmpty>Nenhum segmento encontrado.</CommandEmpty>
-                                <CommandGroup>
-                                  {baseSegments.map((segment) => (
-                                    <CommandItem
-                                      key={segment}
-                                      onSelect={() => {
-                                        setForm(prev => ({
-                                          ...prev,
-                                          segments: prev.segments.includes(segment)
-                                            ? prev.segments.filter(s => s !== segment)
-                                            : [...prev.segments, segment]
-                                        }));
-                                      }}
-                                    >
-                                      <Check
-                                        className={`mr-2 h-4 w-4 ${
-                                          form.segments.includes(segment) ? "opacity-100" : "opacity-0"
-                                        }`}
-                                      />
-                                      {segment}
-                                    </CommandItem>
-                                  ))}
-                                  {customSegmentsFromData.map((segment) => (
-                                    <CommandItem
-                                      key={segment}
-                                      onSelect={() => {
-                                        setForm(prev => ({
-                                          ...prev,
-                                          segments: prev.segments.includes(segment)
-                                            ? prev.segments.filter(s => s !== segment)
-                                            : [...prev.segments, segment]
-                                        }));
-                                      }}
-                                    >
-                                      <Check
-                                        className={`mr-2 h-4 w-4 ${
-                                          form.segments.includes(segment) ? "opacity-100" : "opacity-0"
-                                        }`}
-                                      />
-                                      <span className="italic text-muted-foreground">{segment}</span>
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                        
-                        {/* Chips dos segmentos selecionados */}
-                        {form.segments.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {form.segments.map((segment) => (
-                              <Badge key={segment} variant="secondary" className="gap-1">
-                                {segment}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setForm(prev => ({
-                                      ...prev,
-                                      segments: prev.segments.filter(s => s !== segment)
-                                    }));
-                                  }}
-                                  className="ml-1 opacity-70 hover:opacity-100"
-                                >
-                                  <X className="size-3" />
-                                </button>
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
                       </div>
 
                       <div className="md:col-span-2">
@@ -730,7 +1048,7 @@ const Clients = () => {
         </CardContent>
       </Card>
 
-      {/* Dialog de exclusão */}
+      {/* Dialog de exclusão (mantido) */}
       <Dialog open={openDelete} onOpenChange={setOpenDelete}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -750,4 +1068,3 @@ const Clients = () => {
 };
 
 export default Clients;
-
