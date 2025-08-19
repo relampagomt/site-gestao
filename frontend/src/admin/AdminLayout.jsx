@@ -54,6 +54,7 @@ export default function AdminLayout() {
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Mantém o estado do menu no <html data-sidebar="..."> para o CSS do shell
   useEffect(() => {
     document.documentElement.setAttribute(
       "data-sidebar",
@@ -62,6 +63,7 @@ export default function AdminLayout() {
     localStorage.setItem("admin.sidebarCollapsed", collapsed ? "1" : "0");
   }, [collapsed]);
 
+  // Monta o menu conforme o papel do usuário
   const menu = useMemo(() => {
     const baseMenu = [
       { to: "/admin", label: "Dashboard", icon: Home, end: true },
@@ -100,14 +102,14 @@ export default function AdminLayout() {
         className={cn(
           "hidden md:flex fixed inset-y-0 left-0 z-40 border-r bg-card/50 flex-col",
           "transition-[width] duration-200 ease-in-out",
-          collapsed ? "w-16" : "w-64"
+          collapsed ? "w-16" : "w-64" // combina com --sidebar-w (64px / 256px)
         )}
         aria-label="Menu lateral"
       >
         {/* Cabeçalho da Sidebar */}
         <div className="h-16 flex items-center justify-between px-3">
           {collapsed ? (
-            /* ===== Logo recolhido: QUADRADO 32x32, cantos retos, conteúdo central ===== */
+            // Logo recolhido — quadrado
             <div
               className="grid place-items-center box-border h-8 w-8 bg-white border-2 border-red-600 text-red-600 rounded-none select-none shrink-0"
               title="Relâmpago"
@@ -116,7 +118,7 @@ export default function AdminLayout() {
               <span className="font-bold leading-none text-base">R</span>
             </div>
           ) : (
-            /* ===== Logo expandido: RETANGULAR, cantos retos, conteúdo central ===== */
+            // Logo expandido — retangular
             <div className="grid place-items-center box-border h-8 bg-white border-2 border-red-600 rounded-none px-3 shrink-0">
               <span className="font-bold text-red-600 text-xl tracking-wide leading-none">
                 Relâmpago
@@ -124,12 +126,21 @@ export default function AdminLayout() {
             </div>
           )}
 
+          {/* Botão de expandir/recolher — afinado para não ficar “pílula” cinza no recolhido */}
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setCollapsed((v) => !v)}
             title={collapsed ? "Expandir menu" : "Recolher menu"}
             aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+            className={cn(
+              "shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+              collapsed
+                // Recolhido: quadrado, sem bg no hover (fica elegante ao lado do “R”)
+                ? "h-8 w-8 rounded-none hover:bg-transparent focus-visible:ring-red-500"
+                // Expandido: como estava, redondinho e com hover suave
+                : "h-8 w-8 rounded-full hover:bg-muted focus-visible:ring-ring"
+            )}
           >
             {collapsed ? (
               <ChevronsRight className="w-5 h-5" />
@@ -163,7 +174,6 @@ export default function AdminLayout() {
         aria-label="Menu lateral (mobile)"
       >
         <div className="h-16 px-6 flex items-center">
-          {/* ===== Logo mobile: RETANGULAR, cantos retos, conteúdo central ===== */}
           <div className="grid place-items-center box-border h-8 bg-white border-2 border-red-600 rounded-none px-3">
             <span className="font-bold text-red-600 text-lg tracking-wide leading-none">
               Relâmpago
