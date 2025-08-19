@@ -74,7 +74,7 @@ const formatPhoneDisplay = (phone) => {
 };
 
 /* ============================================================================
-   SEGMENTOS — grupos + valores (lista completa)
+   SEGMENTOS — grupos + valores (LISTA COMPLETA)
 ============================================================================ */
 const SEGMENTOS_GRUPOS = [
   {
@@ -369,8 +369,8 @@ const ensureArraySegments = (client) => {
 };
 
 /* ============================================================================
-   Combobox multi de segmentos — com busca, grupos e criação de novos
-   (Popover com altura fixa + ScrollSafeArea + correção de overflow)
+   Combobox multi de segmentos — com busca, grupos e criação de novos (modo livre)
+   >>> Popover com altura fixa + ScrollSafeArea + overflow fixado
 ============================================================================ */
 function SegmentosSelect({ value = [], onChange, onCreate }) {
   const [open, setOpen] = useState(false);
@@ -386,8 +386,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
     [value]
   );
 
-  const existsInBase = (label) =>
-    baseOptions.some((v) => v.toLowerCase() === label.toLowerCase());
+  const existsInBase = (label) => baseOptions.some((v) => v.toLowerCase() === label.toLowerCase());
   const existsInValue = (label) => allSelectedLower.has(label.toLowerCase());
 
   const toggle = (label) => {
@@ -430,14 +429,15 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
         sideOffset={6}
         collisionPadding={12}
         className="p-0 z-[70] w-[min(92vw,520px)] bg-background"
-        // evita fechar ao rolar/clicar dentro
         onPointerDownOutside={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        <ScrollSafeArea className="max-h-[65vh] sm:max-h-[60vh] overflow-y-auto overscroll-contain pb-2 [-webkit-overflow-scrolling:touch]">
-          {/* Força overflow visível para não cortar o fim da lista */}
-          <Command className="text-[13px] leading-tight !overflow-visible !rounded-none !border-0 shadow-none [scrollbar-gutter:stable]">
+        <ScrollSafeArea className="max-h-[56vh] sm:max-h-[60vh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] pb-3">
+          <Command
+            className="text-[13px] leading-tight !rounded-none !border-0 shadow-none [scrollbar-gutter:stable]"
+            style={{ overflow: "visible", position: "relative" }}
+          >
             <div className="sticky top-0 z-10 bg-background">
               <CommandInput
                 placeholder="Buscar ou digitar novo segmento…"
@@ -452,7 +452,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
               />
             </div>
 
-            <CommandList className="max-h-none pb-4">
+            <CommandList className="max-h-none pb-6">
               {shouldSuggestCreate && (
                 <CommandGroup heading={<span className="text-[11px] font-semibold text-muted-foreground">Ações</span>}>
                   <CommandItem
@@ -498,8 +498,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
                   })}
                 </CommandGroup>
               ))}
-              {/* “respiro” no fim para nunca cortar o último item */}
-              <div className="h-2" />
+              <div className="h-3" />
             </CommandList>
           </Command>
         </ScrollSafeArea>
@@ -509,7 +508,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
 }
 
 /* ============================================================================
-   Página — filtros com altura fixa (header/footer visíveis) + scroll seguro
+   Página — filtros com altura fixa (header/footer sempre visíveis)
 ============================================================================ */
 const Clients = () => {
   const [clients, setClients] = useState([]);
@@ -792,14 +791,22 @@ const Clients = () => {
         fHasPhone ? `Telefone: ${fHasPhone === 'sim' ? 'Com telefone' : 'Sem telefone'}` : '',
       ].filter(Boolean).join(' | ') : 'Nenhum filtro aplicado'
     }`,
-    columnStyles: { 0:{cellWidth:40},1:{cellWidth:35},2:{cellWidth:45},3:{cellWidth:35},4:{cellWidth:30} }
+    columnStyles: {
+      0: { cellWidth: 40 },
+      1: { cellWidth: 35 },
+      2: { cellWidth: 45 },
+      3: { cellWidth: 35 },
+      4: { cellWidth: 30 },
+    }
   };
 
   /* ===================== PAGINAÇÃO (15 por página) ===================== */
   const [page, setPage] = useState(1);
   const pageSize = 15;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  useEffect(() => { if (page > totalPages) setPage(1); }, [page, totalPages]);
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [page, totalPages]);
 
   const pageItems = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -855,7 +862,7 @@ const Clients = () => {
                 </Button>
               </PopoverTrigger>
 
-              {/* Altura fixa + scroll seguro no corpo */}
+              {/* Altura fixa => header/footer SEMPRE visíveis + scroll seguro no corpo */}
               <PopoverContent
                 align="end"
                 side="bottom"
@@ -1152,7 +1159,6 @@ const Clients = () => {
             <div className="rounded-xl border bg-card p-4">
               <p className="text-xs text-muted-foreground">Top 10 segmentos (% dos clientes exibidos)</p>
 
-              {/* Em mobile, legenda abaixo do gráfico; em ≥sm, lado a lado */}
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
                 <div className="h-[180px] sm:h-[220px]">
                   <ResponsiveContainer width="100%" height="100%">
