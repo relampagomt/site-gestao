@@ -60,7 +60,7 @@ const toYMD = (dt) =>
 const toLocalDateFromYMD = (ymd) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd || "")) return null;
   const [y, m, d] = ymd.split("-").map(Number);
-  return new Date(y, m - 1, d);
+  return new Date(y, m - 1, d, 12);
 };
 const addDays = (dt, n) => { const d = new Date(dt); d.setDate(d.getDate() + n); return d; };
 const startOfMonth = (dt) => new Date(dt.getFullYear(), dt.getMonth(), 1);
@@ -520,7 +520,9 @@ const Actions = () => {
     if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
     if (sYMD && eYMD) {
       // compara em horário local, sem Z
-      if (new Date(sDT) > new Date(eDT)) return alert("Data/hora de término não pode ser anterior ao início.");
+      const startDate = new Date(sYMD + "T" + sHM + ":00");
+      const endDate = new Date(eYMD + "T" + eHM + ":00");
+      if (startDate > endDate) return alert("Data/hora de término não pode ser anterior ao início.");
     }
 
     try {
@@ -574,7 +576,11 @@ const Actions = () => {
     const eDT  = eYMD ? `${eYMD}T${eHM}:00` : null;
 
     if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
-    if (sYMD && eYMD && new Date(sDT) > new Date(eDT)) return alert("Data/hora de término não pode ser anterior ao início.");
+    if (sYMD && eYMD) {
+      const startDate = new Date(sYMD + "T" + sHM + ":00");
+      const endDate = new Date(eYMD + "T" + eHM + ":00");
+      if (startDate > endDate) return alert("Data/hora de término não pode ser anterior ao início.");
+    }
 
     try {
       const payload = {
