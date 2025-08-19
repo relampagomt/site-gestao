@@ -629,7 +629,8 @@ const Materials = () => {
 
           {/* Tabela */}
           <div className="overflow-x-auto rounded-xl border bg-card">
-            <Table>
+            {/* Reforço global: centraliza TODOS os th/td desta tabela */}
+            <Table className="[&_th]:!text-center [&_td]:!text-center">
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-xs md:text-sm !text-center">Data</TableHead>
