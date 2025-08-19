@@ -39,19 +39,10 @@ import {
   Filter as FilterIcon,
 } from "lucide-react";
 
+// Gráfico (donut)
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+
 import ExportMenu from "@/components/export/ExportMenu";
-
-// === Recharts (pizza) ===
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-} from "recharts";
-
-const fmtInt = new Intl.NumberFormat("pt-BR");
 
 /* ============================================================================
    TELEFONE BR (+55) — normalização/máscara (simplificada)
@@ -83,6 +74,7 @@ const formatPhoneDisplay = (phone) => {
 
 /* ============================================================================
    SEGMENTOS — grupos + valores (EXPANDIDO)
+   (mantido integral; sem “otimizações”, como você pediu)
 ============================================================================ */
 const SEGMENTOS_GRUPOS = [
   {
@@ -378,6 +370,7 @@ const ensureArraySegments = (client) => {
 
 /* ============================================================================
    Combobox multi de segmentos — com busca, grupos e criação de novos (modo livre)
+   >>> FIX: Popover dentro do Dialog não fecha ao rolar (modal={false} + handlers)
 ============================================================================ */
 function SegmentosSelect({ value = [], onChange, onCreate }) {
   const [open, setOpen] = useState(false);
@@ -418,7 +411,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
   }, [query, baseOptions, value]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
       <PopoverTrigger asChild>
         <Button variant="outline" role="combobox" className="w-full justify-between">
           {value.length === 0 ? "Selecionar segmentos" : (
@@ -436,6 +429,9 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
         sideOffset={6}
         collisionPadding={32}
         className="p-0 z-[70] w-[min(92vw,320px)] sm:w-[360px] bg-background"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onFocusOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <div className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2 [-webkit-overflow-scrolling:touch]">
           <Command className="text-[13px] leading-tight">
@@ -509,21 +505,12 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
 }
 
 /* ============================================================================
-   Página — filtros, KDIs compactos, pizza e paginação (15 por página)
+   Página — filtros, KPI cards, pizza, paginação 15/pg
 ============================================================================ */
-const PIE_COLORS = [
-  "#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6",
-  "#ec4899", "#14b8a6", "#f97316", "#22c55e", "#6366f1"
-];
-
 const Clients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-
-  // paginação
-  const [page, setPage] = useState(1);
-  const pageSize = 15;
 
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("create");
@@ -536,6 +523,10 @@ const Clients = () => {
   const [openDelete, setOpenDelete] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  // paginação
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
 
   const [extraSegments, setExtraSegments] = useState([]);
   const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
@@ -710,7 +701,6 @@ const Clients = () => {
     setFSegments((prev) => Array.from(new Set([...prev, ...shownSegmentValues])));
   };
 
-  // ===== Lista filtrada =====
   const filtered = useMemo(() => {
     let list = Array.isArray(clients) ? [...clients] : [];
 
@@ -747,26 +737,34 @@ const Clients = () => {
     return list;
   }, [clients, q, fCompanies, fSegments, fHasEmail, fHasPhone]);
 
-  // ===== KPIs e Pizza =====
-  const totalClientesGeral = clients.length;
-  const totalExibidos = filtered.length;
+  // KPI: totais
+  const totalClients = clients.length;
+  const totalAfterFilters = filtered.length;
 
+  // Pizza Top 10 — % sobre os exibidos (filtered)
   const pieData = useMemo(() => {
-    const map = new Map();
+    const counts = new Map();
     filtered.forEach((c) => {
-      ensureArraySegments(c).forEach((s) => {
-        if (!s) return;
-        map.set(s, (map.get(s) || 0) + 1);
+      const segs = ensureArraySegments(c);
+      if (segs.length === 0) return;
+      segs.forEach((s) => {
+        counts.set(s, (counts.get(s) || 0) + 1);
       });
     });
-    const arr = Array.from(map.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-    return arr;
-  }, [filtered]);
+    const arr = Array.from(counts.entries()).map(([name, count]) => ({ name, count }));
+    arr.sort((a, b) => b.count - a.count);
+    const top10 = arr.slice(0, 10);
+    const base = totalAfterFilters || 1;
+    return top10.map((it) => ({
+      name: it.name,
+      value: Number(((it.count / base) * 100).toFixed(1)), // percentual
+      count: it.count,
+    }));
+  }, [filtered, totalAfterFilters]);
 
-  // ===== Paginação =====
+  const PIE_COLORS = ["#F97316","#EF4444","#3B82F6","#22C55E","#A855F7","#06B6D4","#F59E0B","#64748B","#84CC16","#EC4899"];
+
+  // paginação derivada
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   useEffect(() => {
     if (page > totalPages) setPage(1);
@@ -776,66 +774,6 @@ const Clients = () => {
     const start = (page - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
   }, [filtered, page]);
-
-  // Legend custom (com % e contagem)
-  const legendContent = (props) => {
-    const payload = props?.payload || [];
-    return (
-      <div className="text-[10px] sm:text-xs space-y-1">
-        {payload.map((item) => {
-          const name = item?.value;
-          const val = pieData.find((p) => p.name === name)?.value ?? 0;
-          const pct = totalExibidos > 0 ? ((val / totalExibidos) * 100).toFixed(1) : "0.0";
-          return (
-            <div key={name} className="flex items-center gap-2">
-              <span className="inline-block h-2 w-2 rounded-sm" style={{ background: item.color }} />
-              <span className="truncate">
-                {name} — {pct}% ({fmtInt.format(val)})
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const exportData = useMemo(() => {
-    return filtered.map((c) => ({
-      name: c.name || "",
-      company: c.company ?? c.company_name ?? c.companyName ?? "",
-      segments: ensureArraySegments(c).join(" | "),
-      email: c.email || "",
-      phone: formatPhoneDisplay(c.phone || ""),
-    }));
-  }, [filtered]);
-
-  const exportColumns = [
-    { key: 'name', header: 'Nome' },
-    { key: 'company', header: 'Empresa' },
-    { key: 'segments', header: 'Segmentos' },
-    { key: 'email', header: 'E-mail' },
-    { key: 'phone', header: 'Telefone' },
-  ];
-
-  const pdfOptions = {
-    title: 'Relatório de Clientes',
-    orientation: 'p',
-    filtersSummary: `Filtros aplicados: ${filtersCount > 0 ?
-      [
-        fCompanies.length > 0 ? `Empresas: ${fCompanies.join(', ')}` : '',
-        fSegments.length > 0 ? `Segmentos: ${fSegments.join(', ')}` : '',
-        fHasEmail ? `E-mail: ${fHasEmail === 'sim' ? 'Com e-mail' : 'Sem e-mail'}` : '',
-        fHasPhone ? `Telefone: ${fHasPhone === 'sim' ? 'Com telefone' : 'Sem telefone'}` : '',
-      ].filter(Boolean).join(' | ') : 'Nenhum filtro aplicado'
-    }`,
-    columnStyles: {
-      0: { cellWidth: 40 },
-      1: { cellWidth: 35 },
-      2: { cellWidth: 45 },
-      3: { cellWidth: 35 },
-      4: { cellWidth: 30 },
-    }
-  };
 
   /* ===================== UI ===================== */
 
@@ -854,17 +792,33 @@ const Clients = () => {
             </div>
             <div className="ml-auto">
               <ExportMenu
-                data={exportData}
-                columns={exportColumns}
+                data={filtered.map((c) => ({
+                  name: c.name || "",
+                  company: c.company ?? c.company_name ?? c.companyName ?? "",
+                  segments: ensureArraySegments(c).join(" | "),
+                  email: c.email || "",
+                  phone: formatPhoneDisplay(c.phone || ""),
+                }))}
+                columns={[
+                  { key: 'name', header: 'Nome' },
+                  { key: 'company', header: 'Empresa' },
+                  { key: 'segments', header: 'Segmentos' },
+                  { key: 'email', header: 'E-mail' },
+                  { key: 'phone', header: 'Telefone' },
+                ]}
                 filename="clientes"
-                pdfOptions={pdfOptions}
+                pdfOptions={{
+                  title: 'Relatório de Clientes',
+                  orientation: 'p',
+                  filtersSummary: `Exibidos: ${totalAfterFilters} / ${totalClients}`,
+                }}
               />
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-3">
-          {/* Busca geral + Filtros + Novo */}
+        <CardContent className="space-y-4">
+          {/* Busca + Filtros + Novo */}
           <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
             <div className="relative flex-1 w-full md:w-[320px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -1099,7 +1053,7 @@ const Clients = () => {
                         <Input name="company" value={form.company} onChange={onChange} />
                       </div>
 
-                      {/* Segmentos — combobox multi com modo livre */}
+                      {/* Segmentos — combobox multi com modo livre (FIX aplicado) */}
                       <div className="md:col-span-2 space-y-2">
                         <Label>Segmentos</Label>
                         <SegmentosSelect
@@ -1165,69 +1119,49 @@ const Clients = () => {
             </Dialog>
           </div>
 
-          {/* -------- KDIs (compactos + número maior) -------- */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            {/* KPI: Total de clientes */}
-            <div className="rounded-lg border bg-card p-2 sm:p-3">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] sm:text-xs text-muted-foreground">
-                  Total de clientes (geral)
+          {/* KPI Cards (compactos) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Total de clientes — CENTRALIZADO (H e V) */}
+            <div className="rounded-xl border bg-card p-4 min-h-[220px] sm:min-h-[240px] flex items-center justify-center text-center">
+              <div>
+                <p className="text-xs text-muted-foreground">Total de clientes (geral)</p>
+                <div className="mt-1 text-5xl sm:text-6xl font-bold leading-none">{totalClients}</div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Exibidos após filtros: <b>{totalAfterFilters}</b>
                 </p>
               </div>
-
-              <p className="mt-0.5 text-3xl sm:text-4xl font-extrabold leading-none tracking-tight">
-                {fmtInt.format(totalClientesGeral)}
-              </p>
-
-              <p className="mt-1 text-[10px] sm:text-xs text-muted-foreground">
-                Exibidos após filtros: <b>{fmtInt.format(totalExibidos)}</b>
-              </p>
             </div>
 
-            {/* KPI: Top 10 segmentos (pizza) */}
-            <div className="rounded-lg border bg-card p-2 sm:p-3 md:col-span-2">
-              <p className="text-[10px] sm:text-xs text-muted-foreground">
-                Top 10 segmentos (% dos clientes exibidos)
-              </p>
-
-              {pieData.length === 0 ? (
-                <div className="text-sm text-muted-foreground mt-2">—</div>
-              ) : (
-                <div className="w-full h-[200px] sm:h-[220px] mt-0.5">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={pieData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="45%"
-                        cy="50%"
-                        innerRadius={44}
-                        outerRadius={82}
-                        paddingAngle={1}
-                      >
-                        {pieData.map((entry, i) => (
-                          <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                        ))}
-                      </Pie>
-
-                      <Tooltip
-                        formatter={(value, _name, { payload }) => {
-                          const pct = totalExibidos > 0 ? ((value / totalExibidos) * 100).toFixed(1) + "%" : "0%";
-                          return [`${fmtInt.format(value)} (${pct})`, payload.name];
-                        }}
-                      />
-
-                      <Legend
-                        verticalAlign="middle"
-                        align="right"
-                        layout="vertical"
-                        content={legendContent}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
+            {/* Pizza: Top 10 segmentos */}
+            <div className="rounded-xl border bg-card p-3 sm:p-4 min-h-[220px] sm:min-h-[240px]">
+              <p className="text-xs text-muted-foreground px-1">Top 10 segmentos (% dos clientes exibidos)</p>
+              <div className="w-full h-[180px] sm:h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={2}
+                    >
+                      {pieData.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(val, name, props) => [`${val}% (${props?.payload?.count})`, name]}
+                    />
+                    <Legend
+                      verticalAlign="middle"
+                      align="right"
+                      layout="vertical"
+                      wrapperStyle={{ paddingLeft: 8 }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 
@@ -1295,20 +1229,19 @@ const Clients = () => {
               Exibindo <b>{pageItems.length}</b> de <b>{filtered.length}</b> registros
             </p>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(1)}>
-                «
-              </Button>
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
                 Anterior
               </Button>
               <div className="text-xs text-muted-foreground">
                 Página <b>{page}</b> / <b>{totalPages}</b>
               </div>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
                 Próxima
-              </Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>
-                »
               </Button>
             </div>
           </div>
