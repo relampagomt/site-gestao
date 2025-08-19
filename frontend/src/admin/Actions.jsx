@@ -22,31 +22,25 @@ import {
 } from "lucide-react";
 
 import ExportMenu from "@/components/export/ExportMenu";
-import { formatDateBR } from "@/utils/dates.js";
+import { formatDateBR, brToYMD, ymdToBR, normalizeHM, composeLocalISO } from "@/utils/dates.js";
 
-/* ========= Tipos de ação ========= */
+/* ========= Tipos ========= */
 const ACTION_OPTIONS = [
   { group: "Serviços de Panfletagem e Distribuição", items: ["PAP (Porta a Porta)", "Arrastão", "Semáforos", "Ponto fixo", "Distribuição em eventos", "Carro de Som", "Entrega personalizada"] },
   { group: "Serviços de Ações Promocionais e Interação", items: ["Distribuição de Amostras (Sampling)", "Degustação", "Demonstração", "Blitz promocional", "Captação de cadastros", "Distribuição de Brindes"] },
   { group: "Serviços Complementares", items: ["Criação e design", "Confecção e produção", "Impressão", "Logística (Coleta e Entrega)", "Planejamento estratégico", "Relatório e monitoramento"] },
 ];
 
-/* ========= Helpers (datas sem timezone) ========= */
-const ymdToBR = (ymd) => /^\d{4}-\d{2}-\d{2}$/.test(ymd || "") ? ymd.split("-").reverse().join("/") : "";
-const brToYMD = (br) => /^\d{2}\/\d{2}\/\d{4}$/.test(br || "") ? br.split("/").reverse().join("-") : "";
-
-// NÃO usa new Date() para evitar UTC: extrai YMD por string
+/* ========= Helpers sem timezone ========= */
 const extractYMDStrict = (v) => {
   if (!v) return "";
   const s = String(v);
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m = s.match(/^(\d{4}-\d{2}-\d{2})T/); // YYYY-MM-DDTHH:mm...
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})T/);
   if (m) return m[1];
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return brToYMD(s);
   return "";
 };
-
-// extrai HH:MM de "HH:MM" ou "...T(HH):(MM)"
 const extractHMStrict = (v) => {
   if (!v) return "";
   const s = String(v);
@@ -60,7 +54,7 @@ const toYMD = (dt) =>
 const toLocalDateFromYMD = (ymd) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd || "")) return null;
   const [y, m, d] = ymd.split("-").map(Number);
-  return new Date(y, m - 1, d, 12);
+  return new Date(y, m - 1, d);
 };
 const addDays = (dt, n) => { const d = new Date(dt); d.setDate(d.getDate() + n); return d; };
 const startOfMonth = (dt) => new Date(dt.getFullYear(), dt.getMonth(), 1);
@@ -70,34 +64,24 @@ const endOfWeekMon   = (dt) => addDays(startOfWeekMon(dt), 6);
 const monthTitlePtBR = (dt) => dt.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 const WEEKDAYS_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
-const composeISO = (dateBr, hhmm) => {
-  const ymd = brToYMD(dateBr);
-  if (!ymd) return null;
-  const hm = /^\d{2}:\d{2}$/.test(hhmm || "") ? hhmm : "00:00";
-  // SEM 'Z' -> horário local, sem UTC
-  return `${ymd}T${hm}:00`;
-};
-
 const ensureArrayTypes = (item) => {
   if (Array.isArray(item?.types)) return item.types;
-  if (typeof item?.type === "string" && item.type.trim()) {
-    return item.type.split(",").map((s) => s.trim()).filter(Boolean);
-  }
+  if (typeof item?.type === "string" && item.type.trim()) return item.type.split(",").map((s)=>s.trim()).filter(Boolean);
   return [];
 };
 const periodOptions = ["Manhã", "Tarde", "Noite"];
 const deriveStatusFromItem = (item) => item?.status ? item.status : (item?.active === false ? "concluido" : "aguardando");
 const activeFromStatus = (status) => status !== "concluido";
+const statusChipClass = (s) =>
+  s === "andamento" ? "bg-blue-100 text-blue-800 border-blue-300"
+  : s === "concluido" ? "bg-green-100 text-green-800 border-green-300"
+  : "bg-amber-100 text-amber-800 border-amber-300";
 
 const pickYMD = (obj) => {
   const s = extractYMDStrict(obj?.start_date) || extractYMDStrict(obj?.start_datetime);
   const e = extractYMDStrict(obj?.end_date)   || extractYMDStrict(obj?.end_datetime) || s;
   return { sYMD: s, eYMD: e };
 };
-const statusChipClass = (s) =>
-  s === "andamento" ? "bg-blue-100 text-blue-800 border-blue-300"
-  : s === "concluido" ? "bg-green-100 text-green-800 border-green-300"
-  : "bg-amber-100 text-amber-800 border-amber-300";
 
 /* ========= TypeSelector ========= */
 const TypeSelector = ({ value = [], onChange }) => {
@@ -150,21 +134,20 @@ const TypeSelector = ({ value = [], onChange }) => {
   );
 };
 
-/* ========= Célula do calendário ========= */
+/* ========= DayCell ========= */
 function DayCell({ dateObj, inMonth, isToday, events, onNewOnDate, onOpenEdit, onMoveAction }) {
   const key = toYMD(dateObj);
   const maxVisible = 3;
+
   const onDragOver = (e) => e.preventDefault();
   const onDrop = (e) => {
     e.preventDefault();
     try {
       const { action, sYMD, eYMD } = JSON.parse(e.dataTransfer.getData("text/plain"));
       if (!action?.id || !sYMD || !eYMD) return;
-      // duração inclusiva
       const start = toLocalDateFromYMD(sYMD);
       const end   = toLocalDateFromYMD(eYMD);
-      if (!start || !end) return;
-      const days = Math.round((end - start) / 86400000) + 1;
+      const days  = Math.round((end - start) / 86400000) + 1; // inclusivo
       const newStart = key;
       const newEnd   = toYMD(addDays(dateObj, days - 1));
       onMoveAction(action, newStart, newEnd);
@@ -207,23 +190,20 @@ function DayCell({ dateObj, inMonth, isToday, events, onNewOnDate, onOpenEdit, o
   );
 }
 
-/* ========= Visões ========= */
+/* ========= Views ========= */
 const CalendarMonth = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, onMoveAction }) => {
   const gridStart = startOfWeekMon(startOfMonth(cursor));
   const gridEnd   = endOfWeekMon(endOfMonth(cursor));
 
   const daysMap = useMemo(() => {
     const map = new Map();
-    for (let d = new Date(gridStart); d <= gridEnd; d = addDays(d, 1)) {
-      map.set(toYMD(d), []);
-    }
+    for (let d = new Date(gridStart); d <= gridEnd; d = addDays(d, 1)) map.set(toYMD(d), []);
     for (const a of actions) {
       const { sYMD, eYMD } = pickYMD(a);
       if (!sYMD || !eYMD) continue;
       let cur = toLocalDateFromYMD(sYMD);
       const end = toLocalDateFromYMD(eYMD);
-      if (!cur || !end) continue;
-      while (cur <= end) {
+      while (cur && end && cur <= end) {
         const k = toYMD(cur);
         if (map.has(k)) map.get(k).push(a);
         cur = addDays(cur, 1);
@@ -349,7 +329,7 @@ const AgendaList = ({ actions, cursor, setCursor, onOpenEdit }) => {
       if (e < monthStart || s > monthEnd) continue;
       out.push(a);
     }
-    out.sort((a,b)=> (a.start_date||a.start_datetime||"").localeCompare(b.start_date||b.start_datetime||""));
+    out.sort((a,b)=> (pickYMD(a).sYMD || "0000-01-01").localeCompare(pickYMD(b).sYMD || "0000-01-01"));
     return out;
   }, [actions, cursor]);
 
@@ -375,14 +355,13 @@ const AgendaList = ({ actions, cursor, setCursor, onOpenEdit }) => {
             {rows.map((a) => {
               const st   = deriveStatusFromItem(a);
               const sup  = a.supervisor ? ` • Sup: ${a.supervisor}` : "";
-              const start = a.start_datetime || a.start_date || "";
-              const end   = a.end_datetime   || a.end_date   || "";
+              const { sYMD, eYMD } = pickYMD(a);
               return (
                 <button key={a.id} onClick={()=>onOpenEdit(a)}
                         className={`w-full text-left border rounded px-3 py-2 ${statusChipClass(st)} hover:brightness-95`}>
                   <div className="text-sm font-medium truncate">{(a.client_name || a.company_name || "Ação") + sup}</div>
                   <div className="text-xs opacity-80 truncate">
-                    {start ? formatDateBR(start) : ""}{end ? " → " + formatDateBR(end) : ""}
+                    {sYMD ? formatDateBR(sYMD) : ""}{eYMD ? " → " + formatDateBR(eYMD) : ""}
                   </div>
                   <div className="text-[11px] opacity-70 truncate">{ensureArrayTypes(a).join(" • ") || "—"}</div>
                 </button>
@@ -402,7 +381,6 @@ const Actions = () => {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
-  // staff (auto-sugestão)
   const [people, setPeople] = useState([]);
   useEffect(() => {
     (async () => {
@@ -421,12 +399,10 @@ const Actions = () => {
     })();
   }, []);
 
-  // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editing, setEditing] = useState(null);
 
-  // Form
   const [form, setForm] = useState({
     client_name: "", company_name: "", types: [],
     startBr: "", endBr: "", startTime: "", endTime: "",
@@ -436,7 +412,6 @@ const Actions = () => {
 
   const [uploadingMaterial, setUploadingMaterial] = useState(false);
 
-  // Filtros
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [fClients, setFClients] = useState([]);
   const [fCompanies, setFCompanies] = useState([]);
@@ -446,7 +421,6 @@ const Actions = () => {
   const [fStartBr, setFStartBr] = useState("");
   const [fEndBr, setFEndBr] = useState("");
 
-  // Visão calendário
   const [view, setView] = useState("month");
   const [cursor, setCursor] = useState(()=>startOfMonth(new Date()));
 
@@ -463,7 +437,6 @@ const Actions = () => {
   };
   useEffect(()=>{ loadActions(); }, []);
 
-  // Handlers
   const onChange = (field, value) => setForm((f)=>({ ...f, [field]: value }));
   const onDateChange = (field) => (e) => {
     let v = e.target.value.replace(/\D/g, "");
@@ -471,6 +444,10 @@ const Actions = () => {
     if (v.length >= 6) v = v.slice(0, 5) + "/" + v.slice(5, 9);
     onChange(field, v);
   };
+  const onTimeChange = (field) => (e) => {
+    onChange(field, normalizeHM(e.target.value));
+  };
+
   const toggleType   = (t) => onChange("types", form.types.includes(t) ? form.types.filter(x=>x!==t) : [...form.types, t]);
   const togglePeriod = (p) => onChange("day_periods", form.day_periods.includes(p) ? form.day_periods.filter(x=>x!==p) : [...form.day_periods, p]);
   const addTeamMember = (name) => {
@@ -507,22 +484,18 @@ const Actions = () => {
     }
   };
 
-  // CRUD
   const handleCreate = async (e) => {
     e.preventDefault();
     const sYMD = brToYMD(form.startBr);
     const eYMD = brToYMD(form.endBr);
-    const sHM  = form.startTime || "00:00";
-    const eHM  = form.endTime   || "00:00";
-    const sDT  = sYMD ? `${sYMD}T${sHM}:00` : null;
-    const eDT  = eYMD ? `${eYMD}T${eHM}:00` : null;
+    const sHM  = normalizeHM(form.startTime) || "00:00";
+    const eHM  = normalizeHM(form.endTime)   || "00:00";
+    const sDT  = composeLocalISO(form.startBr, sHM);
+    const eDT  = composeLocalISO(form.endBr,   eHM);
 
     if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
     if (sYMD && eYMD) {
-      // compara em horário local, sem Z
-      const startDate = new Date(sYMD + "T" + sHM + ":00");
-      const endDate = new Date(eYMD + "T" + eHM + ":00");
-      if (startDate > endDate) return alert("Data/hora de término não pode ser anterior ao início.");
+      if (new Date(sDT) > new Date(eDT)) return alert("Data/hora de término não pode ser anterior ao início.");
     }
 
     try {
@@ -543,7 +516,7 @@ const Actions = () => {
       await api.post("/actions", payload);
       await loadActions();
       setIsCreateOpen(false); resetForm();
-    } catch (err) {
+    } catch {
       alert("Erro ao criar ação.");
     }
   };
@@ -570,17 +543,13 @@ const Actions = () => {
     if (!editing) return;
     const sYMD = brToYMD(form.startBr);
     const eYMD = brToYMD(form.endBr);
-    const sHM  = form.startTime || "00:00";
-    const eHM  = form.endTime   || "00:00";
-    const sDT  = sYMD ? `${sYMD}T${sHM}:00` : null;
-    const eDT  = eYMD ? `${eYMD}T${eHM}:00` : null;
+    const sHM  = normalizeHM(form.startTime) || "00:00";
+    const eHM  = normalizeHM(form.endTime)   || "00:00";
+    const sDT  = composeLocalISO(form.startBr, sHM);
+    const eDT  = composeLocalISO(form.endBr,   eHM);
 
     if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
-    if (sYMD && eYMD) {
-      const startDate = new Date(sYMD + "T" + sHM + ":00");
-      const endDate = new Date(eYMD + "T" + eHM + ":00");
-      if (startDate > endDate) return alert("Data/hora de término não pode ser anterior ao início.");
-    }
+    if (sYMD && eYMD && new Date(sDT) > new Date(eDT)) return alert("Data/hora de término não pode ser anterior ao início.");
 
     try {
       const payload = {
@@ -614,7 +583,6 @@ const Actions = () => {
 
   const handleMoveAction = async (action, startYMD, endYMD) => {
     try {
-      // preserva horas existentes (ou default)
       const sHM = action.start_time || extractHMStrict(action.start_datetime) || "00:00";
       const eHM = action.end_time   || extractHMStrict(action.end_datetime)   || "23:59";
       await api.put(`/actions/${action.id}`, {
@@ -676,11 +644,7 @@ const Actions = () => {
         return aStart <= end && aEnd >= start;
       });
     }
-    list.sort((a,b)=> {
-      const aDate = pickYMD(a).sYMD || "0000-01-01";
-      const bDate = pickYMD(b).sYMD || "0000-01-01";
-      return bDate.localeCompare(aDate);
-    });
+    list.sort((a,b)=> (pickYMD(b).sYMD || "0000-01-01").localeCompare(pickYMD(a).sYMD || "0000-01-01"));
     return list;
   }, [actions, q, fClients, fCompanies, fTypes, fPeriods, fStatus, fStartBr, fEndBr]);
 
@@ -715,12 +679,13 @@ const Actions = () => {
     { key: "observacoes", header: "Observações" },
     { key: "foto_url", header: "Foto (URL)" },
   ];
-  const pdfOptions = { title: "Relatório de Ações", orientation: "l" };
 
   const newOnDate = (ymd) => {
     setIsCreateOpen(true);
     setForm((f)=>({ ...f, startBr: ymdToBR(ymd), endBr: ymdToBR(ymd), startTime: "08:00", endTime: "18:00" }));
   };
+
+  const pdfOptions = { title: "Relatório de Ações", orientation: "l" };
 
   return (
     <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
@@ -740,7 +705,7 @@ const Actions = () => {
       {view==="week"  && <CalendarWeek  actions={actions} cursor={cursor} setCursor={setCursor} onNewOnDate={newOnDate} onOpenEdit={openEdit} onMoveAction={handleMoveAction} />}
       {view==="agenda"&& <AgendaList    actions={actions} cursor={cursor} setCursor={setCursor} onOpenEdit={openEdit} />}
 
-      {/* Lista/Registros */}
+      {/* Registros */}
       <Card className="mt-6">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -853,7 +818,7 @@ const Actions = () => {
               </PopoverContent>
             </Popover>
 
-            {/* Criar */}
+            {/* Nova Ação */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" className="gap-2"><Plus className="size-4" /><span className="whitespace-nowrap">Nova Ação</span></Button>
@@ -898,14 +863,14 @@ const Actions = () => {
                         <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
                         <div className="flex gap-2 w-full">
                           <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.startBr} onChange={onDateChange("startBr")} className="flex-1" />
-                          <Input type="time" step="60" value={form.startTime} onChange={(e)=>onChange("startTime", e.target.value)} className="w-[120px]" />
+                          <Input type="time" step="60" value={form.startTime} onChange={onTimeChange("startTime")} className="w-[120px]" />
                         </div>
                       </div>
                       <div className="space-y-1.5">
                         <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
                         <div className="flex gap-2 w-full">
                           <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.endBr} onChange={onDateChange("endBr")} className="flex-1" />
-                          <Input type="time" step="60" value={form.endTime} onChange={(e)=>onChange("endTime", e.target.value)} className="w-[120px]" />
+                          <Input type="time" step="60" value={form.endTime} onChange={onTimeChange("endTime")} className="w-[120px]" />
                         </div>
                       </div>
 
@@ -921,7 +886,7 @@ const Actions = () => {
                         </div>
                       </div>
 
-                      {/* Supervisor & Equipe */}
+                      {/* Supervisor / Equipe */}
                       <div className="space-y-1.5">
                         <Label>Supervisor</Label>
                         <Input placeholder="Nome do supervisor" value={form.supervisor} onChange={(e)=>onChange("supervisor", e.target.value)} list="__people__" />
@@ -1114,14 +1079,14 @@ const Actions = () => {
                   <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
                   <div className="flex gap-2 w-full">
                     <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.startBr} onChange={onDateChange("startBr")} className="flex-1" />
-                    <Input type="time" step="60" value={form.startTime} onChange={(e)=>onChange("startTime", e.target.value)} className="w-[120px]" />
+                    <Input type="time" step="60" value={form.startTime} onChange={onTimeChange("startTime")} className="w-[120px]" />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
                   <div className="flex gap-2 w-full">
                     <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.endBr} onChange={onDateChange("endBr")} className="flex-1" />
-                    <Input type="time" step="60" value={form.endTime} onChange={(e)=>onChange("endTime", e.target.value)} className="w-[120px]" />
+                    <Input type="time" step="60" value={form.endTime} onChange={onTimeChange("endTime")} className="w-[120px]" />
                   </div>
                 </div>
 
