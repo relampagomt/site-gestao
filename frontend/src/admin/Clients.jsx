@@ -399,22 +399,11 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
     setOpen(true);
   };
 
-  const stopScrollProp = useCallback((e) => e.stopPropagation(), []);
-
   const shouldSuggestCreate = useMemo(() => {
     const t = query.trim();
     if (!t) return false;
     return !existsInBase(t) && !existsInValue(t);
   }, [query, baseOptions, value]);
-
-  const filterMatch = useCallback(
-    (txt) => {
-      const q = query.trim().toLowerCase();
-      if (!q) return true;
-      return txt.toLowerCase().includes(q);
-    },
-    [query]
-  );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -436,12 +425,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
         collisionPadding={32}
         className="p-0 z-[70] w-[min(92vw,320px)] sm:w-[360px] bg-background"
       >
-        <div
-          className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2"
-          style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
-          onWheel={stopScrollProp}
-          onTouchMove={stopScrollProp}
-        >
+        <div className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2">
           <Command className="text-[13px] leading-tight">
             <div className="sticky top-0 z-10 bg-background">
               <CommandInput
@@ -471,44 +455,38 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
                 </CommandGroup>
               )}
 
-              {SEGMENTOS_GRUPOS.map((grp) => {
-                const opts = grp.options.filter(
-                  (opt) => filterMatch(opt.value) || (opt.desc && filterMatch(opt.desc))
-                );
-                if (opts.length === 0) return null;
-                return (
-                  <CommandGroup
-                    key={grp.group}
-                    heading={<span className="text-[11px] font-semibold text-muted-foreground">{grp.group}</span>}
-                    className="px-1 py-1"
-                  >
-                    {opts.map((opt) => {
-                      const checked = value.includes(opt.value);
-                      return (
-                        <CommandItem
-                          key={`${grp.group}-${opt.value}`}
-                          value={`${opt.value} ${opt.desc}`}
-                          className="flex items-start gap-2 py-1 px-2"
-                          onSelect={() => toggle(opt.value)}
-                        >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={() => toggle(opt.value)}
-                            className="mt-0.5 h-3 w-3"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium">{opt.value}</div>
-                            <div className="text-[11px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
-                              {opt.desc}
-                            </div>
+              {SEGMENTOS_GRUPOS.map((grp) => (
+                <CommandGroup
+                  key={grp.group}
+                  heading={<span className="text-[11px] font-semibold text-muted-foreground">{grp.group}</span>}
+                  className="px-1 py-1"
+                >
+                  {grp.options.map((opt) => {
+                    const checked = value.includes(opt.value);
+                    return (
+                      <CommandItem
+                        key={`${grp.group}-${opt.value}`}
+                        value={`${opt.value} ${opt.desc}`}
+                        className="flex items-start gap-2 py-1 px-2"
+                        onSelect={() => toggle(opt.value)}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => toggle(opt.value)}
+                          className="mt-0.5 h-3 w-3"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium">{opt.value}</div>
+                          <div className="text-[11px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
+                            {opt.desc}
                           </div>
-                          {checked && <Check className="h-4 w-4 opacity-70" />}
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                );
-              })}
+                        </div>
+                        {checked && <Check className="h-4 w-4 opacity-70" />}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              ))}
               <div className="h-1" />
             </CommandList>
           </Command>
@@ -519,7 +497,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
 }
 
 /* ============================================================================
-   Página — filtros compactos e footer fixo
+   Página — filtros com altura fixa (header/footer sempre visíveis)
 ============================================================================ */
 const Clients = () => {
   const [clients, setClients] = useState([]);
@@ -834,27 +812,36 @@ const Clients = () => {
                 </Button>
               </PopoverTrigger>
 
-              {/* Container COMPACTO: alturas limitadas + body rolável + tipografia enxuta */}
+              {/* Altura fixa => header/footer SEMPRE visíveis */}
               <PopoverContent
                 align="end"
                 side="bottom"
                 sideOffset={8}
                 collisionPadding={12}
-                className="w-[min(92vw,720px)] p-0 overflow-hidden"
-                style={{ maxHeight: 'min(80vh, calc(100vh - 120px))' }}
+                className="w-[min(96vw,860px)] p-0 overflow-hidden"
+                style={{ height: 'min(72vh, 600px)' }}
               >
-                <div className="flex h-full flex-col text-[12px] leading-tight">
-                  {/* HEADER (fixo e compacto) */}
-                  <div className="px-3 py-2 border-b shrink-0">
-                    <p className="text-[13px] font-medium">Filtrar clientes</p>
-                    <p className="text-[11px] text-muted-foreground">Refine os resultados com seletores.</p>
+                <div className="grid h-full grid-rows-[auto,1fr,auto] text-[12px] leading-tight">
+                  {/* HEADER (fixo) */}
+                  <div className="px-3 py-2 border-b flex items-center justify-between">
+                    <div>
+                      <p className="text-[13px] font-medium">Filtrar clientes</p>
+                      <p className="text-[11px] text-muted-foreground">Refine os resultados com seletores.</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-[12px]"
+                      onClick={clearFilters}
+                      title="Limpar todos os filtros"
+                    >
+                      Limpar
+                    </Button>
                   </div>
 
-                  {/* BODY (rolável e compacto) */}
+                  {/* BODY (rolável) */}
                   <div
-                    className="p-3 grid md:grid-cols-2 gap-3 flex-1 min-h-0 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
-                    onWheel={(e) => e.stopPropagation()}
-                    onTouchMove={(e) => e.stopPropagation()}
+                    className="p-3 grid md:grid-cols-2 gap-3 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
                   >
                     {/* Empresas */}
                     <div className="space-y-1.5">
@@ -890,7 +877,7 @@ const Clients = () => {
                         <span>Segmentos</span>
                       </Label>
 
-                      {/* Busca + Selecionar exibidos (compacto) */}
+                      {/* Busca + Selecionar exibidos */}
                       <div className="flex items-center gap-2">
                         <div className="relative flex-1">
                           <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
@@ -907,13 +894,6 @@ const Clients = () => {
                           variant="secondary"
                           disabled={shownSegmentValues.length === 0 || allShownAlreadySelected}
                           onClick={selectShownSegments}
-                          title={
-                            shownSegmentValues.length === 0
-                              ? "Nenhum segmento sendo exibido"
-                              : allShownAlreadySelected
-                                ? "Todos os exibidos já estão selecionados"
-                                : "Selecionar todos os segmentos exibidos"
-                          }
                         >
                           Selecionar exibidos
                         </Button>
@@ -1006,13 +986,10 @@ const Clients = () => {
                     </div>
                   </div>
 
-                  {/* FOOTER (fixo e compacto) */}
-                  <div className="px-3 py-2 border-t flex justify-between items-center shrink-0 bg-background">
-                    <Button variant="ghost" size="sm" className="h-8 px-2 text-[12px]" onClick={clearFilters}>Limpar</Button>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="h-8 px-2 text-[12px]" onClick={() => setFiltersOpen(false)}>Fechar</Button>
-                      <Button size="sm" className="h-8 px-3 text-[12px]" onClick={() => setFiltersOpen(false)}>Aplicar</Button>
-                    </div>
+                  {/* FOOTER (fixo) */}
+                  <div className="px-3 py-2 border-t flex justify-end gap-2 items-center bg-background">
+                    <Button variant="outline" size="sm" className="h-8 px-2 text-[12px]" onClick={() => setFiltersOpen(false)}>Fechar</Button>
+                    <Button size="sm" className="h-8 px-3 text-[12px]" onClick={() => setFiltersOpen(false)}>Aplicar</Button>
                   </div>
                 </div>
               </PopoverContent>
