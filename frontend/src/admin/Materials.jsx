@@ -670,12 +670,10 @@ const Materials = () => {
                           {fmtInt.format(Number(row.quantity || 0))}
                         </TableCell>
 
-                        {/* Amostra: miniatura centralizada */}
+                        {/* Amostra: miniatura */}
                         <TableCell className="align-top text-center">
                           {sampleUrl ? (
-                            <div className="inline-flex justify-center">
-                              <ImagePreview src={sampleUrl} />
-                            </div>
+                            <ImagePreview src={sampleUrl} />
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
@@ -685,9 +683,7 @@ const Materials = () => {
                         <TableCell className="align-top text-center">
                           {protocolUrl ? (
                             isProbablyImage(protocolUrl) ? (
-                              <div className="inline-flex justify-center">
-                                <ImagePreview src={protocolUrl} />
-                              </div>
+                              <ImagePreview src={protocolUrl} />
                             ) : (
                               <a
                                 href={protocolUrl}
