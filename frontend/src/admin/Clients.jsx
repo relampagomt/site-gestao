@@ -39,7 +39,6 @@ import {
   Filter as FilterIcon,
 } from "lucide-react";
 
-// Botão único de exportação (igual ao que você está usando no print)
 import ExportMenu from "@/components/export/ExportMenu";
 
 /* ============================================================================
@@ -72,10 +71,8 @@ const formatPhoneDisplay = (phone) => {
 
 /* ============================================================================
    SEGMENTOS — grupos + valores (EXPANDIDO)
-   - Mantém os anteriores e inclui novos nichos (sem duplicatas)
 ============================================================================ */
 const SEGMENTOS_GRUPOS = [
-  // ===== Tecnologia e Informática =====
   {
     group: "Tecnologia e Informática",
     options: [
@@ -87,7 +84,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Suporte e Help Desk", desc: "Atendimento técnico, Field" },
       { value: "Consultoria em TI", desc: "Implantação, Governança, RPA" },
       { value: "E-commerce & Marketplaces", desc: "Lojas virtuais, Marketplaces" },
-      // Novos
       { value: "SaaS", desc: "Software como serviço, produto digital" },
       { value: "Startups", desc: "Empreendimentos inovadores, aceleração" },
       { value: "Fintech", desc: "Pagamentos, crédito, meios de pagamento" },
@@ -100,8 +96,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Cloud & DevOps", desc: "Nuvem, CI/CD, SRE, observabilidade" },
     ],
   },
-
-  // ===== Saúde e Bem-Estar =====
   {
     group: "Saúde e Bem-Estar",
     options: [
@@ -116,7 +110,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Clínicas Populares", desc: "Multiespecialidades" },
       { value: "Clínica Veterinária", desc: "Consultas, Cirurgias, Exames" },
       { value: "Farmácia e Drogaria", desc: "Medicamentos, Manipulação" },
-      // Novos
       { value: "Estética Avançada", desc: "Procedimentos estéticos, harmonização" },
       { value: "Fonoaudiologia", desc: "Voz, audição, linguagem" },
       { value: "Fisioterapia Desportiva", desc: "Reabilitação de atletas" },
@@ -124,8 +117,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Clínica de Vacinação", desc: "Imunização, campanhas" },
     ],
   },
-
-  // ===== Engenharia e Indústria =====
   {
     group: "Engenharia e Indústria",
     options: [
@@ -136,7 +127,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Indústria", desc: "Operador de Máquinas, Automação" },
       { value: "Manutenção Industrial", desc: "PCM, Caldeiraria, Solda" },
       { value: "Energias Renováveis", desc: "Solar, Eólica, Projetos" },
-      // Novos
       { value: "Têxtil e Confecção", desc: "Fiações, malharias, vestuário" },
       { value: "Plástico e Borracha", desc: "Transformadores, injeção" },
       { value: "Química e Petroquímica", desc: "Tintas, resinas, petroquímica" },
@@ -148,8 +138,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Moveleiro Industrial", desc: "Linha seriada, usinagem" },
     ],
   },
-
-  // ===== Comunicação e Marketing =====
   {
     group: "Comunicação e Marketing",
     options: [
@@ -161,14 +149,11 @@ const SEGMENTOS_GRUPOS = [
       { value: "Produtora de Vídeo/Áudio", desc: "Filmagem, Podcast, Estúdio" },
       { value: "Fotografia", desc: "Estúdio, Ensaios, Still" },
       { value: "Eventos e Locação", desc: "Som, Luz, Palco, Estruturas" },
-      // Novos
       { value: "Assessoria de Imprensa", desc: "Press kit, media training" },
       { value: "Influencer Marketing", desc: "Creators, parcerias" },
       { value: "Branding e Naming", desc: "Posicionamento, identidade" },
     ],
   },
-
-  // ===== Negócios e Finanças =====
   {
     group: "Negócios e Finanças",
     options: [
@@ -179,7 +164,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Corretora de Seguros", desc: "Auto, Vida, Saúde, Empresarial" },
       { value: "Correspondente Bancário", desc: "Crédito, Consignado, Empréstimos" },
       { value: "Franquias", desc: "Expansão, Gestão de Franqueados" },
-      // Novos
       { value: "Atacado e Distribuição", desc: "Cash & carry, distribuidoras" },
       { value: "Consultoria Empresarial", desc: "Estratégia, processos, finanças" },
       { value: "BPO e Terceirização", desc: "Backoffice, folha, fiscal" },
@@ -187,8 +171,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Cobrança e Recuperação", desc: "Cobrança extrajudicial, crédito" },
     ],
   },
-
-  // ===== Educação e Cultura =====
   {
     group: "Educação e Cultura",
     options: [
@@ -202,14 +184,11 @@ const SEGMENTOS_GRUPOS = [
       { value: "Cursos Profissionalizantes", desc: "TI, Saúde, Indústria" },
       { value: "Autoescola", desc: "CNH, Reciclagem" },
       { value: "Esporte e Lazer", desc: "Clubes, Academias, Estúdios" },
-      // Novos
       { value: "Pré-vestibular e Reforço", desc: "Cursinhos, ENEM" },
       { value: "Escolas de Música e Dança", desc: "Conservatórios, estúdios" },
       { value: "Produção Cultural", desc: "Editais, projetos, captação" },
     ],
   },
-
-  // ===== Direito e Segurança =====
   {
     group: "Direito e Segurança",
     options: [
@@ -219,13 +198,10 @@ const SEGMENTOS_GRUPOS = [
       { value: "Perícia", desc: "Perito Criminal/Judicial" },
       { value: "Compliance e LGPD", desc: "Proteção de Dados, Governança" },
       { value: "Defesa Civil", desc: "Proteção e resposta a desastres" },
-      // Novos
       { value: "Cartórios e Registros", desc: "Notas, registro de imóveis" },
       { value: "Detran e Trânsito", desc: "Órgãos, despachantes" },
     ],
   },
-
-  // ===== Serviços e Social =====
   {
     group: "Serviços e Social",
     options: [
@@ -244,7 +220,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Coworking e Escritórios", desc: "Salas privativas, Compartilhadas" },
       { value: "Igrejas e Comunidades", desc: "Templos, Entidades religiosas" },
       { value: "ONGs e Terceiro Setor", desc: "Associações, Fundações" },
-      // Novos
       { value: "Barbearia", desc: "Cortes, grooming masculino" },
       { value: "Perfumaria e Cosméticos", desc: "Varejo de beleza" },
       { value: "Coaching e Mentoria", desc: "Desenvolvimento pessoal e negócios" },
@@ -252,8 +227,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Agência de Empregos", desc: "RH, recrutamento, temporários" },
     ],
   },
-
-  // ===== Comércio Varejista =====
   {
     group: "Comércio Varejista",
     options: [
@@ -271,15 +244,12 @@ const SEGMENTOS_GRUPOS = [
       { value: "Floricultura", desc: "Flores, Presentes" },
       { value: "Loja de Utilidades", desc: "Variedades, 1,99" },
       { value: "Pet Shop", desc: "Rações, Acessórios, Banho e Tosa" },
-      // Novos
       { value: "Distribuidora de Bebidas", desc: "Atacado, B2B, eventos" },
       { value: "Shopping e Quiosques", desc: "Lojas de shopping, quiosques" },
       { value: "Perfumaria", desc: "Fragrâncias e cosméticos" },
       { value: "Papelaria Especializada", desc: "Materiais artísticos e técnicos" },
     ],
   },
-
-  // ===== Alimentação e Bebidas (Foodservice) =====
   {
     group: "Alimentação e Bebidas (Foodservice)",
     options: [
@@ -294,13 +264,10 @@ const SEGMENTOS_GRUPOS = [
       { value: "Cozinha Industrial e Marmitaria", desc: "Corporativo, PF" },
       { value: "Delivery/Cozinha Fantasma", desc: "Somente entrega" },
       { value: "Bares e Pubs", desc: "Drinks, Petiscos, Música" },
-      // Novos
       { value: "Padaria Artesanal", desc: "Fermentação natural, pâtisserie" },
       { value: "Doceria Especializada", desc: "Bolos artísticos, brigadeiria" },
     ],
   },
-
-  // ===== Automotivo =====
   {
     group: "Automotivo",
     options: [
@@ -313,14 +280,11 @@ const SEGMENTOS_GRUPOS = [
       { value: "Concessionária/Revenda", desc: "Novos, Seminovos" },
       { value: "Motocicletas - Oficina e Peças", desc: "Motos, Acessórios" },
       { value: "Guincho e Socorro", desc: "24h, Reboque" },
-      // Novos
       { value: "Vistoria e Laudos", desc: "Vistorias cautelar e transferência" },
       { value: "Carros por Assinatura", desc: "Locadoras, mobilidade" },
       { value: "Estética Automotiva Premium", desc: "Detailing, PPF, vitrificação" },
     ],
   },
-
-  // ===== Construção, Imobiliário e Manutenção =====
   {
     group: "Construção, Imobiliário e Manutenção",
     options: [
@@ -335,7 +299,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Imobiliária e Condomínios", desc: "Vendas, Locação, Gestão" },
       { value: "Paisagismo e Irrigação", desc: "Projetos, Manutenção" },
       { value: "Energia Solar", desc: "Projetos, Instalação" },
-      // Novos
       { value: "Arquitetura e Urbanismo", desc: "Projetos, interiores" },
       { value: "Condomínios e Síndicos", desc: "Gestão condominial" },
       { value: "Automação Residencial", desc: "Casa inteligente, CFTV" },
@@ -343,8 +306,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Topografia e Georreferenciamento", desc: "Levantamentos, GPS" },
     ],
   },
-
-  // ===== Transporte e Logística =====
   {
     group: "Transporte e Logística",
     options: [
@@ -355,7 +316,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Transporte Escolar", desc: "Escolar, Universitário" },
       { value: "Logística e Armazenagem", desc: "CDs, 3PL" },
       { value: "Locação de Veículos", desc: "Curto e longo prazo" },
-      // Novos
       { value: "Portos e Navegação", desc: "Cabotagem, terminais" },
       { value: "Aeroportos e Aviação", desc: "Aviação executiva, hangares" },
       { value: "Ferrovias", desc: "Transporte ferroviário" },
@@ -363,26 +323,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Fulfillment e Cross-docking", desc: "Operações e e-commerce" },
     ],
   },
-
-  // ===== Agro, Campo e Insumos =====
-  {
-    group: "Agro, Campo e Insumos",
-    options: [
-      { value: "Agropecuária", desc: "Fazendas, Cooperativas" },
-      { value: "Casa Agropecuária", desc: "Rações, Insumos" },
-      { value: "Sementes e Defensivos", desc: "Distribuidores, Revendas" },
-      { value: "Madeireira", desc: "Madeiras, Compensados" },
-      { value: "Veterinária Rural", desc: "Bovinos, Equinos" },
-      { value: "Frigorífico/Entreposto", desc: "Abate, Processamento" },
-      // Novos
-      { value: "Agroindústria", desc: "Laticínios, grãos, carnes" },
-      { value: "Irrigação e Equipamentos", desc: "Pivôs, bombas, tubulações" },
-      { value: "Armazenagem de Grãos", desc: "Silos, secadores" },
-      { value: "Cooperativas Agrícolas", desc: "Associativismo, insumos" },
-    ],
-  },
-
-  // ===== Telecomunicações e Mídia =====
   {
     group: "Telecomunicações e Mídia",
     options: [
@@ -393,8 +333,6 @@ const SEGMENTOS_GRUPOS = [
       { value: "Radiodifusão", desc: "TV, rádio" },
     ],
   },
-
-  // ===== Energia, Saneamento e Meio Ambiente =====
   {
     group: "Energia, Saneamento e Meio Ambiente",
     options: [
@@ -455,9 +393,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
   const addCustom = (label) => {
     const clean = label.trim();
     if (!clean) return;
-    if (!existsInValue(clean)) {
-      onChange([...value, clean]);
-    }
+    if (!existsInValue(clean)) onChange([...value, clean]);
     onCreate?.(clean);
     setQuery("");
     setOpen(true);
@@ -471,7 +407,6 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
     return !existsInBase(t) && !existsInValue(t);
   }, [query, baseOptions, value]);
 
-  // Filtro visual dentro do combobox (não altera lista, só exibição)
   const filterMatch = useCallback(
     (txt) => {
       const q = query.trim().toLowerCase();
@@ -523,7 +458,6 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
             </div>
 
             <CommandList className="max-h-none">
-              {/* Sugerir criação */}
               {shouldSuggestCreate && (
                 <CommandGroup heading={<span className="text-[11px] font-semibold text-muted-foreground">Ações</span>}>
                   <CommandItem
@@ -537,7 +471,6 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
                 </CommandGroup>
               )}
 
-              {/* Grupos base (filtrados visualmente) */}
               {SEGMENTOS_GRUPOS.map((grp) => {
                 const opts = grp.options.filter(
                   (opt) => filterMatch(opt.value) || (opt.desc && filterMatch(opt.desc))
@@ -561,7 +494,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
                           <Checkbox
                             checked={checked}
                             onCheckedChange={() => toggle(opt.value)}
-                            className="mt-0.5"
+                            className="mt-0.5 h-3 w-3"
                           />
                           <div className="flex-1 min-w-0">
                             <div className="font-medium">{opt.value}</div>
@@ -586,14 +519,13 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
 }
 
 /* ============================================================================
-   Página — com “Selecionar exibidos” e Popover de Filtros com footer fixo
+   Página — filtros compactos e footer fixo
 ============================================================================ */
 const Clients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
-  // Modal de cadastro/edição
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("create");
   const [form, setForm] = useState({
@@ -602,16 +534,13 @@ const Clients = () => {
   });
   const [saving, setSaving] = useState(false);
 
-  // Modal de exclusão
   const [openDelete, setOpenDelete] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Segmentos extras digitados na sessão
   const [extraSegments, setExtraSegments] = useState([]);
   const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
 
-  // Carregar clientes
   const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
@@ -629,7 +558,6 @@ const Clients = () => {
     fetchClients();
   }, [fetchClients]);
 
-  // Form handlers
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm(prev => ({
@@ -712,11 +640,11 @@ const Clients = () => {
 
   /* ===================== FILTROS ===================== */
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [fCompanies, setFCompanies] = useState([]); // múltipla
-  const [fSegments, setFSegments] = useState([]);  // múltipla
-  const [fHasEmail, setFHasEmail] = useState("");  // '', 'sim', 'nao'
-  const [fHasPhone, setFHasPhone] = useState("");  // '', 'sim', 'nao'
-  const [fSegmentsQuery, setFSegmentsQuery] = useState(""); // busca rápida de segmentos
+  const [fCompanies, setFCompanies] = useState([]);
+  const [fSegments, setFSegments] = useState([]);
+  const [fHasEmail, setFHasEmail] = useState("");
+  const [fHasPhone, setFHasPhone] = useState("");
+  const [fSegmentsQuery, setFSegmentsQuery] = useState("");
 
   const uniqueCompanies = useMemo(() => {
     const s = new Set();
@@ -727,7 +655,6 @@ const Clients = () => {
     return Array.from(s).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [clients]);
 
-  // Segs personalizados vindos dos dados + digitados nesta sessão
   const customSegmentsFromData = useMemo(() => {
     const s = new Set();
     clients.forEach((c) => {
@@ -760,7 +687,6 @@ const Clients = () => {
     (fHasEmail ? 1 : 0) +
     (fHasPhone ? 1 : 0);
 
-  // Lista de segmentos EXIBIDOS no painel (base + personalizados), já filtrados pela busca
   const shownSegmentValues = useMemo(() => {
     const q = fSegmentsQuery.trim().toLowerCase();
     const base = [];
@@ -785,7 +711,6 @@ const Clients = () => {
     setFSegments((prev) => Array.from(new Set([...prev, ...shownSegmentValues])));
   };
 
-  /* --------- Lista filtrada --------- */
   const filtered = useMemo(() => {
     let list = Array.isArray(clients) ? [...clients] : [];
 
@@ -822,7 +747,6 @@ const Clients = () => {
     return list;
   }, [clients, q, fCompanies, fSegments, fHasEmail, fHasPhone]);
 
-  // Exportações (via ExportMenu)
   const exportData = useMemo(() => {
     return filtered.map((c) => ({
       name: c.name || "",
@@ -853,11 +777,11 @@ const Clients = () => {
       ].filter(Boolean).join(' | ') : 'Nenhum filtro aplicado'
     }`,
     columnStyles: {
-      0: { cellWidth: 40 }, // Nome
-      1: { cellWidth: 35 }, // Empresa
-      2: { cellWidth: 45 }, // Segmentos
-      3: { cellWidth: 35 }, // E-mail
-      4: { cellWidth: 30 }, // Telefone
+      0: { cellWidth: 40 },
+      1: { cellWidth: 35 },
+      2: { cellWidth: 45 },
+      3: { cellWidth: 35 },
+      4: { cellWidth: 30 },
     }
   };
 
@@ -910,7 +834,7 @@ const Clients = () => {
                 </Button>
               </PopoverTrigger>
 
-              {/* >>> FIX DO SCROLL/FOOTER: container com altura limitada e body rolável <<< */}
+              {/* Container COMPACTO: alturas limitadas + body rolável + tipografia enxuta */}
               <PopoverContent
                 align="end"
                 side="bottom"
@@ -919,38 +843,37 @@ const Clients = () => {
                 className="w-[min(92vw,720px)] p-0 overflow-hidden"
                 style={{ maxHeight: 'min(80vh, calc(100vh - 120px))' }}
               >
-                <div className="flex h-full flex-col">
-                  {/* HEADER (fixo) */}
-                  <div className="px-4 py-3 border-b shrink-0">
-                    <p className="text-sm font-medium">Filtrar clientes</p>
-                    <p className="text-xs text-muted-foreground">Refine os resultados com seletores.</p>
+                <div className="flex h-full flex-col text-[12px] leading-tight">
+                  {/* HEADER (fixo e compacto) */}
+                  <div className="px-3 py-2 border-b shrink-0">
+                    <p className="text-[13px] font-medium">Filtrar clientes</p>
+                    <p className="text-[11px] text-muted-foreground">Refine os resultados com seletores.</p>
                   </div>
 
-                  {/* BODY (rolável) */}
+                  {/* BODY (rolável e compacto) */}
                   <div
-                    className="p-4 grid md:grid-cols-2 gap-4 flex-1 min-h-0 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+                    className="p-3 grid md:grid-cols-2 gap-3 flex-1 min-h-0 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
                     onWheel={(e) => e.stopPropagation()}
                     onTouchMove={(e) => e.stopPropagation()}
                   >
                     {/* Empresas */}
-                    <div className="space-y-2">
-                      <Label>Empresas</Label>
-                      <div className="max-h-[32vh] overflow-y-auto pr-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px]">Empresas</Label>
+                      <div className="max-h-[40vh] overflow-y-auto pr-1">
                         {uniqueCompanies.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">—</p>
+                          <p className="text-[11px] text-muted-foreground">—</p>
                         ) : uniqueCompanies.map((comp) => (
-                          <label key={comp} className="flex items-center gap-2 text-sm cursor-pointer">
-                            <Checkbox checked={fCompanies.includes(comp)} onCheckedChange={() => toggle(setFCompanies, comp)} />
+                          <label key={comp} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
+                            <Checkbox checked={fCompanies.includes(comp)} onCheckedChange={() => toggle(setFCompanies, comp)} className="h-3 w-3" />
                             <span className="truncate">{comp}</span>
                           </label>
                         ))}
                       </div>
 
-                      {/* Chips dos selecionados */}
                       {fCompanies.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-1.5">
                           {fCompanies.map((c) => (
-                            <Badge key={c} variant="secondary" className="gap-1">
+                            <Badge key={c} variant="secondary" className="gap-1 py-0.5 text-[11px]">
                               {c}
                               <button type="button" onClick={() => toggle(setFCompanies, c)} className="ml-1 opacity-70 hover:opacity-100">
                                 <X className="size-3" />
@@ -962,17 +885,17 @@ const Clients = () => {
                     </div>
 
                     {/* Segmentos (agrupados + personalizados) */}
-                    <div className="space-y-2">
-                      <Label className="flex items-center justify-between">
+                    <div className="space-y-1.5">
+                      <Label className="flex items-center justify-between text-[12px]">
                         <span>Segmentos</span>
                       </Label>
 
-                      {/* Busca rápida por segmento (filtra a lista abaixo) + Selecionar exibidos */}
+                      {/* Busca + Selecionar exibidos (compacto) */}
                       <div className="flex items-center gap-2">
                         <div className="relative flex-1">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
                           <Input
-                            className="pl-9"
+                            className="pl-7 h-8 text-[12px]"
                             placeholder="Buscar segmento nos filtros..."
                             value={fSegmentsQuery}
                             onChange={(e) => setFSegmentsQuery(e.target.value)}
@@ -980,6 +903,7 @@ const Clients = () => {
                         </div>
                         <Button
                           size="sm"
+                          className="h-8 px-2 text-[12px]"
                           variant="secondary"
                           disabled={shownSegmentValues.length === 0 || allShownAlreadySelected}
                           onClick={selectShownSegments}
@@ -995,7 +919,7 @@ const Clients = () => {
                         </Button>
                       </div>
 
-                      <div className="max-h-[48vh] overflow-y-auto pr-1">
+                      <div className="max-h-[40vh] overflow-y-auto pr-1">
                         {SEGMENTOS_GRUPOS.map((grp) => {
                           const q = fSegmentsQuery.trim().toLowerCase();
                           const shownOpts = grp.options.filter((opt) =>
@@ -1003,17 +927,17 @@ const Clients = () => {
                           );
                           if (shownOpts.length === 0) return null;
                           return (
-                            <div key={grp.group} className="mb-3">
-                              <p className="text-xs font-semibold text-muted-foreground mb-2">{grp.group}</p>
-                              <div className="space-y-1.5">
+                            <div key={grp.group} className="mb-2">
+                              <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">{grp.group}</p>
+                              <div className="space-y-1">
                                 {shownOpts.map((opt) => (
-                                  <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
-                                    <Checkbox checked={fSegments.includes(opt.value)} onCheckedChange={() => toggle(setFSegments, opt.value)} />
+                                  <label key={opt.value} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
+                                    <Checkbox checked={fSegments.includes(opt.value)} onCheckedChange={() => toggle(setFSegments, opt.value)} className="h-3 w-3" />
                                     <span className="truncate">{opt.value}</span>
                                   </label>
                                 ))}
                               </div>
-                              <Separator className="my-3" />
+                              <Separator className="my-2" />
                             </div>
                           );
                         })}
@@ -1024,27 +948,27 @@ const Clients = () => {
                           const list = customSegmentsFromData.filter((s) => !q || s.toLowerCase().includes(q));
                           if (list.length === 0) return null;
                           return (
-                            <div className="mb-3">
-                              <p className="text-xs font-semibold text-muted-foreground mb-2">Personalizados</p>
-                              <div className="space-y-1.5">
+                            <div className="mb-2">
+                              <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">Personalizados</p>
+                              <div className="space-y-1">
                                 {list.map((opt) => (
-                                  <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
-                                    <Checkbox checked={fSegments.includes(opt)} onCheckedChange={() => toggle(setFSegments, opt)} />
+                                  <label key={opt} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
+                                    <Checkbox checked={fSegments.includes(opt)} onCheckedChange={() => toggle(setFSegments, opt)} className="h-3 w-3" />
                                     <span className="truncate">{opt}</span>
                                   </label>
                                 ))}
                               </div>
-                              <Separator className="my-3" />
+                              <Separator className="my-2" />
                             </div>
                           );
                         })()}
                       </div>
 
-                      {/* Chips dos segmentos selecionados */}
+                      {/* Chips dos segmentos selecionados (compactos) */}
                       {fSegments.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-1.5">
                           {fSegments.map((s) => (
-                            <Badge key={s} variant="secondary" className="gap-1">
+                            <Badge key={s} variant="secondary" className="gap-1 py-0.5 text-[11px]">
                               {s}
                               <button type="button" onClick={() => toggle(setFSegments, s)} className="ml-1 opacity-70 hover:opacity-100">
                                 <X className="size-3" />
@@ -1055,11 +979,11 @@ const Clients = () => {
                       )}
                     </div>
 
-                    {/* E-mail / Telefone */}
-                    <div className="space-y-2">
-                      <Label>E-mail</Label>
+                    {/* E-mail / Telefone (compactos) */}
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px]">E-mail</Label>
                       <select
-                        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                        className="w-full border rounded-md px-2 py-1.5 h-8 text-[12px] bg-background"
                         value={fHasEmail}
                         onChange={(e) => setFHasEmail(e.target.value)}
                       >
@@ -1068,10 +992,10 @@ const Clients = () => {
                         <option value="nao">Sem e-mail</option>
                       </select>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Telefone</Label>
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px]">Telefone</Label>
                       <select
-                        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                        className="w-full border rounded-md px-2 py-1.5 h-8 text-[12px] bg-background"
                         value={fHasPhone}
                         onChange={(e) => setFHasPhone(e.target.value)}
                       >
@@ -1082,12 +1006,12 @@ const Clients = () => {
                     </div>
                   </div>
 
-                  {/* FOOTER (fixo) */}
-                  <div className="px-4 py-3 border-t flex justify-between shrink-0 bg-background">
-                    <Button variant="ghost" size="sm" onClick={clearFilters}>Limpar filtros</Button>
+                  {/* FOOTER (fixo e compacto) */}
+                  <div className="px-3 py-2 border-t flex justify-between items-center shrink-0 bg-background">
+                    <Button variant="ghost" size="sm" className="h-8 px-2 text-[12px]" onClick={clearFilters}>Limpar</Button>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setFiltersOpen(false)}>Fechar</Button>
-                      <Button size="sm" onClick={() => setFiltersOpen(false)}>Aplicar</Button>
+                      <Button variant="outline" size="sm" className="h-8 px-2 text-[12px]" onClick={() => setFiltersOpen(false)}>Fechar</Button>
+                      <Button size="sm" className="h-8 px-3 text-[12px]" onClick={() => setFiltersOpen(false)}>Aplicar</Button>
                     </div>
                   </div>
                 </div>
