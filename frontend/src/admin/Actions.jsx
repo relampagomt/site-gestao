@@ -26,21 +26,58 @@ import { formatDateBR } from "@/utils/dates.js";
 
 /* ========= Tipos de ação ========= */
 const ACTION_OPTIONS = [
-  {
-    group: "Serviços de Panfletagem e Distribuição",
-    items: ["PAP (Porta a Porta)", "Arrastão", "Semáforos", "Ponto fixo", "Distribuição em eventos", "Carro de Som", "Entrega personalizada"],
-  },
-  {
-    group: "Serviços de Ações Promocionais e Interação",
-    items: ["Distribuição de Amostras (Sampling)", "Degustação", "Demonstração", "Blitz promocional", "Captação de cadastros", "Distribuição de Brindes"],
-  },
-  {
-    group: "Serviços Complementares",
-    items: ["Criação e design", "Confecção e produção", "Impressão", "Logística (Coleta e Entrega)", "Planejamento estratégico", "Relatório e monitoramento"],
-  },
+  { group: "Serviços de Panfletagem e Distribuição", items: ["PAP (Porta a Porta)", "Arrastão", "Semáforos", "Ponto fixo", "Distribuição em eventos", "Carro de Som", "Entrega personalizada"] },
+  { group: "Serviços de Ações Promocionais e Interação", items: ["Distribuição de Amostras (Sampling)", "Degustação", "Demonstração", "Blitz promocional", "Captação de cadastros", "Distribuição de Brindes"] },
+  { group: "Serviços Complementares", items: ["Criação e design", "Confecção e produção", "Impressão", "Logística (Coleta e Entrega)", "Planejamento estratégico", "Relatório e monitoramento"] },
 ];
 
-/* ========= Helpers ========= */
+/* ========= Helpers (datas sem timezone) ========= */
+const ymdToBR = (ymd) => /^\d{4}-\d{2}-\d{2}$/.test(ymd || "") ? ymd.split("-").reverse().join("/") : "";
+const brToYMD = (br) => /^\d{2}\/\d{2}\/\d{4}$/.test(br || "") ? br.split("/").reverse().join("-") : "";
+
+// NÃO usa new Date() para evitar UTC: extrai YMD por string
+const extractYMDStrict = (v) => {
+  if (!v) return "";
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})T/); // YYYY-MM-DDTHH:mm...
+  if (m) return m[1];
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return brToYMD(s);
+  return "";
+};
+
+// extrai HH:MM de "HH:MM" ou "...T(HH):(MM)"
+const extractHMStrict = (v) => {
+  if (!v) return "";
+  const s = String(v);
+  if (/^\d{2}:\d{2}/.test(s)) return s.slice(0, 5);
+  const m = s.match(/T(\d{2}):(\d{2})/);
+  return m ? `${m[1]}:${m[2]}` : "";
+};
+
+const toYMD = (dt) =>
+  `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+const toLocalDateFromYMD = (ymd) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd || "")) return null;
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+const addDays = (dt, n) => { const d = new Date(dt); d.setDate(d.getDate() + n); return d; };
+const startOfMonth = (dt) => new Date(dt.getFullYear(), dt.getMonth(), 1);
+const endOfMonth   = (dt) => new Date(dt.getFullYear(), dt.getMonth() + 1, 0);
+const startOfWeekMon = (dt) => { const d = new Date(dt); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); d.setHours(0,0,0,0); return d; };
+const endOfWeekMon   = (dt) => addDays(startOfWeekMon(dt), 6);
+const monthTitlePtBR = (dt) => dt.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+const WEEKDAYS_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+const composeISO = (dateBr, hhmm) => {
+  const ymd = brToYMD(dateBr);
+  if (!ymd) return null;
+  const hm = /^\d{2}:\d{2}$/.test(hhmm || "") ? hhmm : "00:00";
+  // SEM 'Z' -> horário local, sem UTC
+  return `${ymd}T${hm}:00`;
+};
+
 const ensureArrayTypes = (item) => {
   if (Array.isArray(item?.types)) return item.types;
   if (typeof item?.type === "string" && item.type.trim()) {
@@ -48,99 +85,19 @@ const ensureArrayTypes = (item) => {
   }
   return [];
 };
-
 const periodOptions = ["Manhã", "Tarde", "Noite"];
+const deriveStatusFromItem = (item) => item?.status ? item.status : (item?.active === false ? "concluido" : "aguardando");
+const activeFromStatus = (status) => status !== "concluido";
 
-/* ------ Datas ------ */
-const ymdToBR = (ymd) => {
-  if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return "";
-  const [y, m, d] = ymd.split("-");
-  return `${d}/${m}/${y}`;
-};
-const brToYMD = (br) => {
-  if (!br || !/^\d{2}\/\d{2}\/\d{4}$/.test(br)) return "";
-  const [d, m, y] = br.split("/");
-  return `${y}-${m}-${d}`;
-};
-const toYMD = (dt) =>
-  `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(
-    dt.getDate()
-  ).padStart(2, "0")}`;
-const toLocalDateFromYMD = (ymd) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd || ""))) return null;
-  const [y, m, d] = ymd.split("-").map(Number);
-  return new Date(y, m - 1, d);
-};
-const addDays = (dt, n) => {
-  const d = new Date(dt);
-  d.setDate(d.getDate() + n);
-  return d;
-};
-const startOfMonth = (dt) => new Date(dt.getFullYear(), dt.getMonth(), 1);
-const endOfMonth   = (dt) => new Date(dt.getFullYear(), dt.getMonth() + 1, 0);
-const startOfWeekMon = (dt) => {
-  const d = new Date(dt);
-  const day = (d.getDay() + 6) % 7; // segunda=0
-  d.setDate(d.getDate() - day);
-  d.setHours(0,0,0,0);
-  return d;
-};
-const endOfWeekMon = (dt) => addDays(startOfWeekMon(dt), 6);
-const monthTitlePtBR = (dt) => dt.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
-const WEEKDAYS_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-
-/* ------ Hora (corrigindo máscara HH:MM) ------ */
-// "0730" -> "07:30"
-const normalizeHHMM = (s) => {
-  const digits = String(s || "").replace(/\D/g, "").slice(0, 4);
-  if (!digits) return "";
-  let hh = digits.slice(0, 2);
-  let mm = digits.slice(2, 4);
-  if (hh.length === 1) hh = `0${hh}`;
-  if (mm.length === 1) mm = `0${mm}`;
-  if (!mm) mm = "00";
-  const hNum = Math.min(23, Math.max(0, parseInt(hh, 10)));
-  const mNum = Math.min(59, Math.max(0, parseInt(mm, 10)));
-  return `${String(hNum).padStart(2,"0")}:${String(mNum).padStart(2,"0")}`;
-};
-// monta datetime SEM timezone (não coloca Z)
-const composeISO = (dateBr, hhmm) => {
-  const ymd = brToYMD(dateBr);
-  if (!ymd) return null;
-  const t = /^\d{2}:\d{2}$/.test(hhmm||"") ? `${hhmm}:00` : "00:00:00";
-  return `${ymd}T${t}`;
-};
-
-/* ------ Ponto-chave: extrair dia em LOCAL TIME de qualquer formato ------ */
-const parseToYMDLocal = (val) => {
-  if (!val) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;            // YYYY-MM-DD
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) return brToYMD(val);  // DD/MM/YYYY
-  // datetime (com ou sem Z/offset) -> pega COMPONENTES LOCAIS
-  const d = new Date(val);
-  if (isNaN(d)) return "";
-  return toYMD(d); // usa getFullYear/getMonth/getDate -> local
-};
-
-// Usa SEMPRE datas puras em horário local:
 const pickYMD = (obj) => {
-  const s = parseToYMDLocal(obj?.start_date) || parseToYMDLocal(obj?.start_datetime);
-  const e = parseToYMDLocal(obj?.end_date)   || parseToYMDLocal(obj?.end_datetime) || s;
+  const s = extractYMDStrict(obj?.start_date) || extractYMDStrict(obj?.start_datetime);
+  const e = extractYMDStrict(obj?.end_date)   || extractYMDStrict(obj?.end_datetime) || s;
   return { sYMD: s, eYMD: e };
 };
-
 const statusChipClass = (s) =>
-  s === "andamento"
-    ? "bg-blue-100 text-blue-800 border-blue-300"
-    : s === "concluido"
-    ? "bg-green-100 text-green-800 border-green-300"
-    : "bg-amber-100 text-amber-800 border-amber-300";
-
-const deriveStatusFromItem = (item) => {
-  if (item?.status) return item.status;
-  return item?.active === false ? "concluido" : "aguardando";
-};
-const activeFromStatus = (status) => status !== "concluido";
+  s === "andamento" ? "bg-blue-100 text-blue-800 border-blue-300"
+  : s === "concluido" ? "bg-green-100 text-green-800 border-green-300"
+  : "bg-amber-100 text-amber-800 border-amber-300";
 
 /* ========= TypeSelector ========= */
 const TypeSelector = ({ value = [], onChange }) => {
@@ -171,7 +128,6 @@ const TypeSelector = ({ value = [], onChange }) => {
             <span className="text-sm font-medium">Tipos de ação</span>
             {selected.length > 0 && <Button size="sm" variant="ghost" onClick={()=>onChange([])}>Limpar</Button>}
           </div>
-
           <div className="space-y-3">
             {ACTION_OPTIONS.map((group) => (
               <div key={group.group}>
@@ -204,7 +160,7 @@ function DayCell({ dateObj, inMonth, isToday, events, onNewOnDate, onOpenEdit, o
     try {
       const { action, sYMD, eYMD } = JSON.parse(e.dataTransfer.getData("text/plain"));
       if (!action?.id || !sYMD || !eYMD) return;
-      // duração (inclusivo)
+      // duração inclusiva
       const start = toLocalDateFromYMD(sYMD);
       const end   = toLocalDateFromYMD(eYMD);
       if (!start || !end) return;
@@ -231,7 +187,7 @@ function DayCell({ dateObj, inMonth, isToday, events, onNewOnDate, onOpenEdit, o
         {events.slice(0, maxVisible).map((a) => {
           const st = deriveStatusFromItem(a);
           const sup = a.supervisor ? ` • Sup: ${a.supervisor}` : "";
-          const { sYMD, eYMD } = pickYMD(a); // para DnD
+          const { sYMD, eYMD } = pickYMD(a);
           const onDragStart = (e) => {
             e.dataTransfer.setData("text/plain", JSON.stringify({ action: a, sYMD, eYMD }));
             e.dataTransfer.effectAllowed = "move";
@@ -256,7 +212,6 @@ const CalendarMonth = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, on
   const gridStart = startOfWeekMon(startOfMonth(cursor));
   const gridEnd   = endOfWeekMon(endOfMonth(cursor));
 
-  // agrupa por DIA local (YMD)
   const daysMap = useMemo(() => {
     const map = new Map();
     for (let d = new Date(gridStart); d <= gridEnd; d = addDays(d, 1)) {
@@ -265,7 +220,7 @@ const CalendarMonth = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, on
     for (const a of actions) {
       const { sYMD, eYMD } = pickYMD(a);
       if (!sYMD || !eYMD) continue;
-      let cur  = toLocalDateFromYMD(sYMD);
+      let cur = toLocalDateFromYMD(sYMD);
       const end = toLocalDateFromYMD(eYMD);
       if (!cur || !end) continue;
       while (cur <= end) {
@@ -275,16 +230,12 @@ const CalendarMonth = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, on
       }
     }
     const order = { andamento: 0, aguardando: 1, concluido: 2 };
-    for (const [k, list] of map.entries()) {
-      list.sort((a,b) => (order[deriveStatusFromItem(a)]??3) - (order[deriveStatusFromItem(b)]??3));
-    }
+    for (const [k, list] of map.entries()) list.sort((a,b)=>(order[deriveStatusFromItem(a)]??3)-(order[deriveStatusFromItem(b)]??3));
     return map;
   }, [actions, cursor]);
 
   const weeks = [];
-  for (let d = new Date(gridStart); d <= gridEnd; d = addDays(d, 7)) {
-    weeks.push([0,1,2,3,4,5,6].map((i)=>addDays(d,i)));
-  }
+  for (let d = new Date(gridStart); d <= gridEnd; d = addDays(d, 7)) weeks.push([0,1,2,3,4,5,6].map((i)=>addDays(d,i)));
 
   return (
     <Card>
@@ -348,9 +299,7 @@ const CalendarWeek = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, onM
       for (const d of days) if (s <= d && d <= e) map.get(toYMD(d)).push(a);
     }
     const order = { andamento: 0, aguardando: 1, concluido: 2 };
-    for (const [k, list] of map.entries()) {
-      list.sort((a,b)=>(order[deriveStatusFromItem(a)]??3)-(order[deriveStatusFromItem(b)]??3));
-    }
+    for (const [k, list] of map.entries()) list.sort((a,b)=>(order[deriveStatusFromItem(a)]??3)-(order[deriveStatusFromItem(b)]??3));
     return map;
   }, [actions, cursor]);
 
@@ -516,7 +465,6 @@ const Actions = () => {
 
   // Handlers
   const onChange = (field, value) => setForm((f)=>({ ...f, [field]: value }));
-  const onTimeChange = (field) => (e) => onChange(field, normalizeHHMM(e.target.value));
   const onDateChange = (field) => (e) => {
     let v = e.target.value.replace(/\D/g, "");
     if (v.length >= 3) v = v.slice(0, 2) + "/" + v.slice(2);
@@ -562,21 +510,27 @@ const Actions = () => {
   // CRUD
   const handleCreate = async (e) => {
     e.preventDefault();
-    const startISO = brToYMD(form.startBr);
-    const endISO   = brToYMD(form.endBr);
-    const startDT  = composeISO(form.startBr, form.startTime);
-    const endDT    = composeISO(form.endBr, form.endTime);
+    const sYMD = brToYMD(form.startBr);
+    const eYMD = brToYMD(form.endBr);
+    const sHM  = form.startTime || "00:00";
+    const eHM  = form.endTime   || "00:00";
+    const sDT  = sYMD ? `${sYMD}T${sHM}:00` : null;
+    const eDT  = eYMD ? `${eYMD}T${eHM}:00` : null;
 
     if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
-    if (startDT && endDT && new Date(startDT) > new Date(endDT)) return alert("Término anterior ao início.");
+    if (sYMD && eYMD) {
+      // compara em horário local, sem Z
+      if (new Date(sDT) > new Date(eDT)) return alert("Data/hora de término não pode ser anterior ao início.");
+    }
 
     try {
       const payload = {
         client_name: form.client_name,
         company_name: form.company_name,
         types: form.types, type: form.types.join(", "),
-        start_date: startISO || null, end_date: endISO || null,          // datas puras
-        start_datetime: startDT || null, end_datetime: endDT || null,    // opcionais
+        start_date: sYMD || null, end_date: eYMD || null,
+        start_time: sHM, end_time: eHM,
+        start_datetime: sDT, end_datetime: eDT,
         day_periods: form.day_periods,
         material_qty: Number(form.material_qty || 0),
         material_photo_url: form.material_photo_url || "",
@@ -595,15 +549,12 @@ const Actions = () => {
   const openEdit = (item) => {
     setEditing(item);
     const { sYMD, eYMD } = pickYMD(item);
-    const hhmm = (dt) => {
-      const m = String(dt||"").match(/T(\d{2}):(\d{2})/);
-      return m ? `${m[1]}:${m[2]}` : "";
-    };
     setForm({
       client_name: item.client_name || "", company_name: item.company_name || "",
       types: ensureArrayTypes(item),
       startBr: ymdToBR(sYMD) || "", endBr: ymdToBR(eYMD) || "",
-      startTime: hhmm(item.start_datetime), endTime: hhmm(item.end_datetime),
+      startTime: item.start_time || extractHMStrict(item.start_datetime) || "",
+      endTime:   item.end_time   || extractHMStrict(item.end_datetime)   || "",
       day_periods: Array.isArray(item.day_periods) ? item.day_periods : [],
       material_qty: item.material_qty ?? "", material_photo_url: item.material_photo_url || "",
       notes: item.notes || "", status: deriveStatusFromItem(item),
@@ -615,19 +566,23 @@ const Actions = () => {
   const handleEdit = async (e) => {
     e.preventDefault();
     if (!editing) return;
-    const startISO = brToYMD(form.startBr);
-    const endISO   = brToYMD(form.endBr);
-    const startDT  = composeISO(form.startBr, form.startTime);
-    const endDT    = composeISO(form.endBr, form.endTime);
+    const sYMD = brToYMD(form.startBr);
+    const eYMD = brToYMD(form.endBr);
+    const sHM  = form.startTime || "00:00";
+    const eHM  = form.endTime   || "00:00";
+    const sDT  = sYMD ? `${sYMD}T${sHM}:00` : null;
+    const eDT  = eYMD ? `${eYMD}T${eHM}:00` : null;
+
     if (form.types.length === 0) return alert("Selecione ao menos um tipo de ação.");
-    if (startDT && endDT && new Date(startDT) > new Date(endDT)) return alert("Término anterior ao início.");
+    if (sYMD && eYMD && new Date(sDT) > new Date(eDT)) return alert("Data/hora de término não pode ser anterior ao início.");
 
     try {
       const payload = {
         client_name: form.client_name, company_name: form.company_name,
         types: form.types, type: form.types.join(", "),
-        start_date: startISO || null, end_date: endISO || null,
-        start_datetime: startDT || null, end_datetime: endDT || null,
+        start_date: sYMD || null, end_date: eYMD || null,
+        start_time: sHM, end_time: eHM,
+        start_datetime: sDT, end_datetime: eDT,
         day_periods: form.day_periods, material_qty: Number(form.material_qty || 0),
         material_photo_url: form.material_photo_url || "", notes: form.notes || "",
         status: form.status, active: activeFromStatus(form.status),
@@ -653,12 +608,15 @@ const Actions = () => {
 
   const handleMoveAction = async (action, startYMD, endYMD) => {
     try {
+      // preserva horas existentes (ou default)
+      const sHM = action.start_time || extractHMStrict(action.start_datetime) || "00:00";
+      const eHM = action.end_time   || extractHMStrict(action.end_datetime)   || "23:59";
       await api.put(`/actions/${action.id}`, {
         ...action,
-        start_date: startYMD,
-        end_date: endYMD,
-        start_datetime: action.start_datetime || `${startYMD}T00:00:00`,
-        end_datetime:   action.end_datetime   || `${endYMD}T23:59:59`,
+        start_date: startYMD, end_date: endYMD,
+        start_time: sHM, end_time: eHM,
+        start_datetime: `${startYMD}T${sHM}:00`,
+        end_datetime:   `${endYMD}T${eHM}:00`,
       });
       await loadActions();
     } catch { alert("Não foi possível mover a ação."); }
@@ -724,12 +682,12 @@ const Actions = () => {
     return filtered.map((a) => {
       const types   = ensureArrayTypes(a).join(" | ");
       const periods = Array.isArray(a?.day_periods) ? a.day_periods.join(" | ") : "";
-      const start   = pickYMD(a).sYMD ? formatDateBR(pickYMD(a).sYMD) : "";
-      const end     = pickYMD(a).eYMD ? formatDateBR(pickYMD(a).eYMD) : "";
+      const { sYMD, eYMD } = pickYMD(a);
       const status  = deriveStatusFromItem(a);
       return {
         cliente: a.client_name || "", empresa: a.company_name || "",
-        tipos: types, periodos: periods, inicio: start, termino: end,
+        tipos: types, periodos: periods,
+        inicio: sYMD ? formatDateBR(sYMD) : "", termino: eYMD ? formatDateBR(eYMD) : "",
         quantidade_material: a.material_qty ?? "", status,
         supervisor: a.supervisor || "", equipe: Array.isArray(a.team_members) ? a.team_members.join(" | ") : "",
         observacoes: a.notes || "", foto_url: a.material_photo_url || ""
@@ -932,16 +890,16 @@ const Actions = () => {
 
                       <div className="space-y-1.5">
                         <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
-                        <div className="flex gap-2">
-                          <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.startBr} onChange={onDateChange("startBr")} />
-                          <Input placeholder="HH:MM" inputMode="numeric" value={form.startTime} onChange={onTimeChange("startTime")} />
+                        <div className="flex gap-2 w-full">
+                          <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.startBr} onChange={onDateChange("startBr")} className="flex-1" />
+                          <Input type="time" step="60" value={form.startTime} onChange={(e)=>onChange("startTime", e.target.value)} className="w-[120px]" />
                         </div>
                       </div>
                       <div className="space-y-1.5">
                         <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
-                        <div className="flex gap-2">
-                          <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.endBr} onChange={onDateChange("endBr")} />
-                          <Input placeholder="HH:MM" inputMode="numeric" value={form.endTime} onChange={onTimeChange("endTime")} />
+                        <div className="flex gap-2 w-full">
+                          <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.endBr} onChange={onDateChange("endBr")} className="flex-1" />
+                          <Input type="time" step="60" value={form.endTime} onChange={(e)=>onChange("endTime", e.target.value)} className="w-[120px]" />
                         </div>
                       </div>
 
@@ -1060,6 +1018,7 @@ const Actions = () => {
                     const periods = Array.isArray(a.day_periods) ? a.day_periods : [];
                     const status  = deriveStatusFromItem(a);
                     const statusColor = status==="concluido" ? "default" : status==="andamento" ? "secondary" : "outline";
+                    const { sYMD, eYMD } = pickYMD(a);
                     return (
                       <TableRow key={a.id}>
                         <TableCell className="text-center font-medium">{a.client_name || "—"}</TableCell>
@@ -1077,8 +1036,8 @@ const Actions = () => {
                             {periods.length===0 && <span className="text-muted-foreground">—</span>}
                           </div>
                         </TableCell>
-                        <TableCell className="text-center">{pickYMD(a).sYMD ? formatDateBR(pickYMD(a).sYMD) : "—"}</TableCell>
-                        <TableCell className="text-center">{pickYMD(a).eYMD ? formatDateBR(pickYMD(a).eYMD) : "—"}</TableCell>
+                        <TableCell className="text-center">{sYMD ? formatDateBR(sYMD) : "—"}</TableCell>
+                        <TableCell className="text-center">{eYMD ? formatDateBR(eYMD) : "—"}</TableCell>
                         <TableCell className="text-center">{a.material_qty ?? "—"}</TableCell>
                         <TableCell className="text-center">{a.supervisor || "—"}</TableCell>
                         <TableCell className="text-center">
@@ -1147,16 +1106,16 @@ const Actions = () => {
 
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Início</Label>
-                  <div className="flex gap-2">
-                    <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.startBr} onChange={onDateChange("startBr")} />
-                    <Input placeholder="HH:MM" inputMode="numeric" value={form.startTime} onChange={onTimeChange("startTime")} />
+                  <div className="flex gap-2 w-full">
+                    <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.startBr} onChange={onDateChange("startBr")} className="flex-1" />
+                    <Input type="time" step="60" value={form.startTime} onChange={(e)=>onChange("startTime", e.target.value)} className="w-[120px]" />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-2"><CalendarIcon className="size-4" /> Término</Label>
-                  <div className="flex gap-2">
-                    <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.endBr} onChange={onDateChange("endBr")} />
-                    <Input placeholder="HH:MM" inputMode="numeric" value={form.endTime} onChange={onTimeChange("endTime")} />
+                  <div className="flex gap-2 w-full">
+                    <Input placeholder="DD/MM/AAAA" inputMode="numeric" value={form.endBr} onChange={onDateChange("endBr")} className="flex-1" />
+                    <Input type="time" step="60" value={form.endTime} onChange={(e)=>onChange("endTime", e.target.value)} className="w-[120px]" />
                   </div>
                 </div>
 
@@ -1165,7 +1124,7 @@ const Actions = () => {
                   <div className="flex flex-wrap gap-4">
                     {periodOptions.map((p)=>(
                       <label key={p} className="flex items-center gap-2 cursor-pointer">
-                        <Checkbox checked={form.day_periods.includes(p)} onCheckedChange={()=>togglePeriod(p)} />
+                        <Checkbox checked={form.day_periods.includes(p)} onCheckedChange={()=>onChange("day_periods", form.day_periods.includes(p) ? form.day_periods.filter(x=>x!==p) : [...form.day_periods, p])} />
                         <span className="text-sm">{p}</span>
                       </label>
                     ))}
