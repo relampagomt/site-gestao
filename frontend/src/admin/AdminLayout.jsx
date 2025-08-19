@@ -31,7 +31,7 @@ function SideItem({ to, icon: Icon, label, end = false, collapsed = false }) {
       className={({ isActive }) =>
         cn(
           "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm font-medium",
-          collapsed && "justify-center px-2 gap-0", // centraliza quando recolhido
+          collapsed && "justify-center px-2 gap-0",
           isActive
             ? "bg-red-100 text-red-700"
             : "text-foreground/80 hover:text-foreground hover:bg-muted"
@@ -54,7 +54,6 @@ export default function AdminLayout() {
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Mantém o estado do menu no <html data-sidebar="..."> para o CSS do shell
   useEffect(() => {
     document.documentElement.setAttribute(
       "data-sidebar",
@@ -63,7 +62,6 @@ export default function AdminLayout() {
     localStorage.setItem("admin.sidebarCollapsed", collapsed ? "1" : "0");
   }, [collapsed]);
 
-  // Monta o menu conforme o papel do usuário
   const menu = useMemo(() => {
     const baseMenu = [
       { to: "/admin", label: "Dashboard", icon: Home, end: true },
@@ -102,24 +100,24 @@ export default function AdminLayout() {
         className={cn(
           "hidden md:flex fixed inset-y-0 left-0 z-40 border-r bg-card/50 flex-col",
           "transition-[width] duration-200 ease-in-out",
-          collapsed ? "w-16" : "w-64" // combina com --sidebar-w (64px / 256px)
+          collapsed ? "w-16" : "w-64"
         )}
         aria-label="Menu lateral"
       >
         {/* Cabeçalho da Sidebar */}
         <div className="h-16 flex items-center justify-between px-3">
           {collapsed ? (
-            /* ===== Logo recolhido: QUADRADO (cantos retos) ===== */
+            /* ===== Logo recolhido: QUADRADO 32x32, cantos retos, conteúdo central ===== */
             <div
-              className="inline-flex h-8 w-8 items-center justify-center bg-white border-2 border-red-600 text-red-600 rounded-none font-bold leading-none select-none"
+              className="grid place-items-center box-border h-8 w-8 bg-white border-2 border-red-600 text-red-600 rounded-none select-none shrink-0"
               title="Relâmpago"
               aria-label="Relâmpago"
             >
-              R
+              <span className="font-bold leading-none text-base">R</span>
             </div>
           ) : (
-            /* ===== Logo expandido: RETANGULAR (cantos retos) ===== */
-            <div className="inline-flex h-8 items-center justify-center bg-white border-2 border-red-600 rounded-none px-3">
+            /* ===== Logo expandido: RETANGULAR, cantos retos, conteúdo central ===== */
+            <div className="grid place-items-center box-border h-8 bg-white border-2 border-red-600 rounded-none px-3 shrink-0">
               <span className="font-bold text-red-600 text-xl tracking-wide leading-none">
                 Relâmpago
               </span>
@@ -165,8 +163,8 @@ export default function AdminLayout() {
         aria-label="Menu lateral (mobile)"
       >
         <div className="h-16 px-6 flex items-center">
-          {/* ===== Logo mobile: RETANGULAR (cantos retos) ===== */}
-          <div className="inline-flex h-8 items-center justify-center bg-white border-2 border-red-600 rounded-none px-3">
+          {/* ===== Logo mobile: RETANGULAR, cantos retos, conteúdo central ===== */}
+          <div className="grid place-items-center box-border h-8 bg-white border-2 border-red-600 rounded-none px-3">
             <span className="font-bold text-red-600 text-lg tracking-wide leading-none">
               Relâmpago
             </span>
@@ -206,7 +204,6 @@ export default function AdminLayout() {
       </aside>
 
       {/* ============================ Conteúdo ============================ */}
-      {/* .app-main aplica padding-left: var(--sidebar-w) (definido em app-shell.css) */}
       <main className="app-main">
         <header className="h-16 border-b flex items-center justify-between px-4 sm:px-6 bg-background/60 backdrop-blur sticky top-0 z-30">
           <div className="flex items-center gap-2">
@@ -244,7 +241,6 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        {/* Container centralizado e protegido contra overflow */}
         <div className="w-full min-w-0 max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
           <HealthBanner />
           <Outlet />
