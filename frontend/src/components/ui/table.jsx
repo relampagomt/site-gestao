@@ -1,3 +1,4 @@
+// frontend/src/components/ui/table.jsx
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
@@ -75,7 +76,8 @@ function TableHead({
     <th
       data-slot="table-head"
       className={cn(
-        "text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        // Removido "text-left" para não forçar alinhamento à esquerda
+        "text-foreground h-10 px-2 align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props} />
