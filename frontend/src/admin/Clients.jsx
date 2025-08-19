@@ -40,18 +40,12 @@ import {
   Filter as FilterIcon,
 } from "lucide-react";
 
-// Import the new ExportMenu component (mantido do arquivo novo)
+// Mantido: ExportMenu do arquivo novo
 import ExportMenu from "@/components/export/ExportMenu";
 
 /* ============================================================================
-   TELEFONE BR (+55) — normalização e máscara com celular/fixo (versão do arquivo novo mantida)
-   Regras:
-   - Prefixo +55 sempre
-   - Celular: 9 dígitos iniciando com 9
-   - Fixo: 8 dígitos
-   - Máscara visual: +55 (DD) 9XXXX-XXXX ou +55 (DD) XXXX-XXXX
+   TELEFONE BR (+55) — normalização/máscara (mantido)
 ============================================================================ */
-
 const normalizePhoneBR = (input) => {
   if (!input) return "";
   const digits = input.replace(/\D/g, "");
@@ -83,12 +77,12 @@ const formatPhoneDisplay = (phone) => {
 };
 
 /* ============================================================================
-   SEGMENTOS — mesmos grupos/itens e comportamento da sua versão anterior
-   - SEGMENTOS_GRUPOS: lista completa em grupos
-   - SEGMENTOS: lista plana derivada
+   SEGMENTOS — grupos + valores (EXPANDIDO)
+   - Mantive todos os anteriores
+   - Acrescentei novos nichos sem duplicar 'value'
 ============================================================================ */
-
 const SEGMENTOS_GRUPOS = [
+  // ===== Tecnologia e Informática =====
   {
     group: "Tecnologia e Informática",
     options: [
@@ -100,9 +94,21 @@ const SEGMENTOS_GRUPOS = [
       { value: "Suporte e Help Desk", desc: "Atendimento técnico, Field" },
       { value: "Consultoria em TI", desc: "Implantação, Governança, RPA" },
       { value: "E-commerce & Marketplaces", desc: "Lojas virtuais, Marketplaces" },
+      // Novos
+      { value: "SaaS", desc: "Software como serviço, produto digital" },
+      { value: "Startups", desc: "Empreendimentos inovadores, aceleração" },
+      { value: "Fintech", desc: "Pagamentos, crédito, meios de pagamento" },
+      { value: "Healthtech", desc: "Tecnologia para saúde" },
+      { value: "Edtech", desc: "Tecnologia para educação" },
+      { value: "Agtech", desc: "Tecnologia para agronegócio" },
+      { value: "Govtech", desc: "Tecnologia para setor público" },
+      { value: "IoT e Automação", desc: "Internet das Coisas, sensores, automação" },
+      { value: "Robótica", desc: "Robôs, automação avançada" },
+      { value: "Cloud & DevOps", desc: "Nuvem, CI/CD, SRE, observabilidade" },
     ],
   },
 
+  // ===== Saúde e Bem-Estar =====
   {
     group: "Saúde e Bem-Estar",
     options: [
@@ -117,9 +123,16 @@ const SEGMENTOS_GRUPOS = [
       { value: "Clínicas Populares", desc: "Multiespecialidades" },
       { value: "Clínica Veterinária", desc: "Consultas, Cirurgias, Exames" },
       { value: "Farmácia e Drogaria", desc: "Medicamentos, Manipulação" },
+      // Novos
+      { value: "Estética Avançada", desc: "Procedimentos estéticos, harmonização" },
+      { value: "Fonoaudiologia", desc: "Voz, audição, linguagem" },
+      { value: "Fisioterapia Desportiva", desc: "Reabilitação de atletas" },
+      { value: "Home Care", desc: "Atendimento domiciliar" },
+      { value: "Clínica de Vacinação", desc: "Imunização, campanhas" },
     ],
   },
 
+  // ===== Engenharia e Indústria =====
   {
     group: "Engenharia e Indústria",
     options: [
@@ -130,9 +143,20 @@ const SEGMENTOS_GRUPOS = [
       { value: "Indústria", desc: "Operador de Máquinas, Automação" },
       { value: "Manutenção Industrial", desc: "PCM, Caldeiraria, Solda" },
       { value: "Energias Renováveis", desc: "Solar, Eólica, Projetos" },
+      // Novos
+      { value: "Têxtil e Confecção", desc: "Fiações, malharias, vestuário" },
+      { value: "Plástico e Borracha", desc: "Transformadores, injeção" },
+      { value: "Química e Petroquímica", desc: "Tintas, resinas, petroquímica" },
+      { value: "Papel e Celulose", desc: "Fábricas, conversão" },
+      { value: "Mineração", desc: "Extração, beneficiamento" },
+      { value: "Petróleo e Gás", desc: "Upstream, downstream, distribuição" },
+      { value: "Cerâmica e Pisos", desc: "Revestimentos, louças" },
+      { value: "Metalurgia e Siderurgia", desc: "Fundição, aços, ligas" },
+      { value: "Moveleiro Industrial", desc: "Linha seriada, usinagem" },
     ],
   },
 
+  // ===== Comunicação e Marketing =====
   {
     group: "Comunicação e Marketing",
     options: [
@@ -144,9 +168,14 @@ const SEGMENTOS_GRUPOS = [
       { value: "Produtora de Vídeo/Áudio", desc: "Filmagem, Podcast, Estúdio" },
       { value: "Fotografia", desc: "Estúdio, Ensaios, Still" },
       { value: "Eventos e Locação", desc: "Som, Luz, Palco, Estruturas" },
+      // Novos
+      { value: "Assessoria de Imprensa", desc: "Press kit, media training" },
+      { value: "Influencer Marketing", desc: "Creators, parcerias" },
+      { value: "Branding e Naming", desc: "Posicionamento, identidade" },
     ],
   },
 
+  // ===== Negócios e Finanças =====
   {
     group: "Negócios e Finanças",
     options: [
@@ -157,9 +186,16 @@ const SEGMENTOS_GRUPOS = [
       { value: "Corretora de Seguros", desc: "Auto, Vida, Saúde, Empresarial" },
       { value: "Correspondente Bancário", desc: "Crédito, Consignado, Empréstimos" },
       { value: "Franquias", desc: "Expansão, Gestão de Franqueados" },
+      // Novos
+      { value: "Atacado e Distribuição", desc: "Cash & carry, distribuidoras" },
+      { value: "Consultoria Empresarial", desc: "Estratégia, processos, finanças" },
+      { value: "BPO e Terceirização", desc: "Backoffice, folha, fiscal" },
+      { value: "Cartórios e Notariais", desc: "Registro civil, títulos" },
+      { value: "Cobrança e Recuperação", desc: "Cobrança extrajudicial, crédito" },
     ],
   },
 
+  // ===== Educação e Cultura =====
   {
     group: "Educação e Cultura",
     options: [
@@ -173,9 +209,14 @@ const SEGMENTOS_GRUPOS = [
       { value: "Cursos Profissionalizantes", desc: "TI, Saúde, Indústria" },
       { value: "Autoescola", desc: "CNH, Reciclagem" },
       { value: "Esporte e Lazer", desc: "Clubes, Academias, Estúdios" },
+      // Novos
+      { value: "Pré-vestibular e Reforço", desc: "Cursinhos, ENEM" },
+      { value: "Escolas de Música e Dança", desc: "Conservatórios, estúdios" },
+      { value: "Produção Cultural", desc: "Editais, projetos, captação" },
     ],
   },
 
+  // ===== Direito e Segurança =====
   {
     group: "Direito e Segurança",
     options: [
@@ -185,9 +226,13 @@ const SEGMENTOS_GRUPOS = [
       { value: "Perícia", desc: "Perito Criminal/Judicial" },
       { value: "Compliance e LGPD", desc: "Proteção de Dados, Governança" },
       { value: "Defesa Civil", desc: "Proteção e resposta a desastres" },
+      // Novos
+      { value: "Cartórios e Registros", desc: "Notas, registro de imóveis" },
+      { value: "Detran e Trânsito", desc: "Órgãos, despachantes" },
     ],
   },
 
+  // ===== Serviços e Social =====
   {
     group: "Serviços e Social",
     options: [
@@ -206,9 +251,16 @@ const SEGMENTOS_GRUPOS = [
       { value: "Coworking e Escritórios", desc: "Salas privativas, Compartilhadas" },
       { value: "Igrejas e Comunidades", desc: "Templos, Entidades religiosas" },
       { value: "ONGs e Terceiro Setor", desc: "Associações, Fundações" },
+      // Novos
+      { value: "Barbearia", desc: "Cortes, grooming masculino" },
+      { value: "Perfumaria e Cosméticos", desc: "Varejo de beleza" },
+      { value: "Coaching e Mentoria", desc: "Desenvolvimento pessoal e negócios" },
+      { value: "Tradução e Interpretação", desc: "Traduções técnicas, simultânea" },
+      { value: "Agência de Empregos", desc: "RH, recrutamento, temporários" },
     ],
   },
 
+  // ===== Comércio Varejista =====
   {
     group: "Comércio Varejista",
     options: [
@@ -226,9 +278,15 @@ const SEGMENTOS_GRUPOS = [
       { value: "Floricultura", desc: "Flores, Presentes" },
       { value: "Loja de Utilidades", desc: "Variedades, 1,99" },
       { value: "Pet Shop", desc: "Rações, Acessórios, Banho e Tosa" },
+      // Novos
+      { value: "Distribuidora de Bebidas", desc: "Atacado, B2B, eventos" },
+      { value: "Shopping e Quiosques", desc: "Lojas de shopping, quiosques" },
+      { value: "Perfumaria", desc: "Fragrâncias e cosméticos" },
+      { value: "Papelaria Especializada", desc: "Materiais artísticos e técnicos" },
     ],
   },
 
+  // ===== Alimentação e Bebidas (Foodservice) =====
   {
     group: "Alimentação e Bebidas (Foodservice)",
     options: [
@@ -243,9 +301,13 @@ const SEGMENTOS_GRUPOS = [
       { value: "Cozinha Industrial e Marmitaria", desc: "Corporativo, PF" },
       { value: "Delivery/Cozinha Fantasma", desc: "Somente entrega" },
       { value: "Bares e Pubs", desc: "Drinks, Petiscos, Música" },
+      // Novos
+      { value: "Padaria Artesanal", desc: "Fermentação natural, pâtisserie" },
+      { value: "Doceria Especializada", desc: "Bolos artísticos, brigadeiria" },
     ],
   },
 
+  // ===== Automotivo =====
   {
     group: "Automotivo",
     options: [
@@ -258,9 +320,14 @@ const SEGMENTOS_GRUPOS = [
       { value: "Concessionária/Revenda", desc: "Novos, Seminovos" },
       { value: "Motocicletas - Oficina e Peças", desc: "Motos, Acessórios" },
       { value: "Guincho e Socorro", desc: "24h, Reboque" },
+      // Novos
+      { value: "Vistoria e Laudos", desc: "Vistorias cautelar e transferência" },
+      { value: "Carros por Assinatura", desc: "Locadoras, mobilidade" },
+      { value: "Estética Automotiva Premium", desc: "Detailing, PPF, vitrificação" },
     ],
   },
 
+  // ===== Construção, Imobiliário e Manutenção =====
   {
     group: "Construção, Imobiliário e Manutenção",
     options: [
@@ -275,9 +342,16 @@ const SEGMENTOS_GRUPOS = [
       { value: "Imobiliária e Condomínios", desc: "Vendas, Locação, Gestão" },
       { value: "Paisagismo e Irrigação", desc: "Projetos, Manutenção" },
       { value: "Energia Solar", desc: "Projetos, Instalação" },
+      // Novos
+      { value: "Arquitetura e Urbanismo", desc: "Projetos, interiores" },
+      { value: "Condomínios e Síndicos", desc: "Gestão condominial" },
+      { value: "Automação Residencial", desc: "Casa inteligente, CFTV" },
+      { value: "Gesso e Drywall", desc: "Forros, divisórias" },
+      { value: "Topografia e Georreferenciamento", desc: "Levantamentos, GPS" },
     ],
   },
 
+  // ===== Transporte e Logística =====
   {
     group: "Transporte e Logística",
     options: [
@@ -288,9 +362,16 @@ const SEGMENTOS_GRUPOS = [
       { value: "Transporte Escolar", desc: "Escolar, Universitário" },
       { value: "Logística e Armazenagem", desc: "CDs, 3PL" },
       { value: "Locação de Veículos", desc: "Curto e longo prazo" },
+      // Novos
+      { value: "Portos e Navegação", desc: "Cabotagem, terminais" },
+      { value: "Aeroportos e Aviação", desc: "Aviação executiva, hangares" },
+      { value: "Ferrovias", desc: "Transporte ferroviário" },
+      { value: "Frio e Refrigeração Logística", desc: "Cadeia fria" },
+      { value: "Fulfillment e Cross-docking", desc: "Operações e e-commerce" },
     ],
   },
 
+  // ===== Agro, Campo e Insumos =====
   {
     group: "Agro, Campo e Insumos",
     options: [
@@ -300,6 +381,35 @@ const SEGMENTOS_GRUPOS = [
       { value: "Madeireira", desc: "Madeiras, Compensados" },
       { value: "Veterinária Rural", desc: "Bovinos, Equinos" },
       { value: "Frigorífico/Entreposto", desc: "Abate, Processamento" },
+      // Novos
+      { value: "Agroindústria", desc: "Laticínios, grãos, carnes" },
+      { value: "Irrigação e Equipamentos", desc: "Pivôs, bombas, tubulações" },
+      { value: "Armazenagem de Grãos", desc: "Silos, secadores" },
+      { value: "Cooperativas Agrícolas", desc: "Associativismo, insumos" },
+    ],
+  },
+
+  // ===== Telecomunicações e Mídia =====
+  {
+    group: "Telecomunicações e Mídia",
+    options: [
+      { value: "Telecomunicações", desc: "Operadoras, telefonia, fibra" },
+      { value: "Provedor de Internet (ISP)", desc: "Banda larga, WISP" },
+      { value: "Call Center e Contact Center", desc: "Atendimento, SAC, suporte" },
+      { value: "Streaming e Conteúdo", desc: "Plataformas OTT, produção" },
+      { value: "Radiodifusão", desc: "TV, rádio" },
+    ],
+  },
+
+  // ===== Energia, Saneamento e Meio Ambiente =====
+  {
+    group: "Energia, Saneamento e Meio Ambiente",
+    options: [
+      { value: "Saneamento Básico", desc: "Água e esgoto" },
+      { value: "Gestão de Resíduos", desc: "Coleta, reciclagem" },
+      { value: "Tratamento de Água", desc: "ETA/ETEs, filtros" },
+      { value: "Eficiência Energética", desc: "Projetos, ESCO" },
+      { value: "ESG e Sustentabilidade", desc: "Ambiental, social e governança" },
     ],
   },
 ];
@@ -325,7 +435,7 @@ const ensureArraySegments = (client) => {
 
 /* ============================================================================
    Combobox multi de segmentos — com busca, grupos e criação de novos (modo livre)
-   (Mesmo comportamento e layout da sua versão anterior)
+   (mantido, sem mudanças além da lista expandida)
 ============================================================================ */
 function SegmentosSelect({ value = [], onChange, onCreate }) {
   const [open, setOpen] = useState(false);
@@ -369,6 +479,16 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
     return !existsInBase(t) && !existsInValue(t);
   }, [query, baseOptions, value]);
 
+  // Filtro visual dentro do combobox (não altera lista, só exibição)
+  const filterMatch = useCallback(
+    (txt) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return txt.toLowerCase().includes(q);
+    },
+    [query]
+  );
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -390,7 +510,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
         className="p-0 z-[70] w-[min(92vw,320px)] sm:w-[360px] bg-background"
       >
         <div
-          className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2"
+          className="max-h=[45vh] max-h-[45vh] overflow-y-auto overscroll-contain pb-2"
           style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
           onWheel={stopScrollProp}
           onTouchMove={stopScrollProp}
@@ -424,38 +544,44 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
                 </CommandGroup>
               )}
 
-              {SEGMENTOS_GRUPOS.map((grp) => (
-                <CommandGroup
-                  key={grp.group}
-                  heading={<span className="text-[11px] font-semibold text-muted-foreground">{grp.group}</span>}
-                  className="px-1 py-1"
-                >
-                  {grp.options.map((opt) => {
-                    const checked = value.includes(opt.value);
-                    return (
-                      <CommandItem
-                        key={`${grp.group}-${opt.value}`}
-                        value={`${opt.value} ${opt.desc}`}
-                        className="flex items-start gap-2 py-1 px-2"
-                        onSelect={() => toggle(opt.value)}
-                      >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={() => toggle(opt.value)}
-                          className="mt-0.5"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium">{opt.value}</div>
-                          <div className="text-[11px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
-                            {opt.desc}
+              {SEGMENTOS_GRUPOS.map((grp) => {
+                const opts = grp.options.filter(
+                  (opt) => filterMatch(opt.value) || (opt.desc && filterMatch(opt.desc))
+                );
+                if (opts.length === 0) return null;
+                return (
+                  <CommandGroup
+                    key={grp.group}
+                    heading={<span className="text-[11px] font-semibold text-muted-foreground">{grp.group}</span>}
+                    className="px-1 py-1"
+                  >
+                    {opts.map((opt) => {
+                      const checked = value.includes(opt.value);
+                      return (
+                        <CommandItem
+                          key={`${grp.group}-${opt.value}`}
+                          value={`${opt.value} ${opt.desc}`}
+                          className="flex items-start gap-2 py-1 px-2"
+                          onSelect={() => toggle(opt.value)}
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={() => toggle(opt.value)}
+                            className="mt-0.5"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium">{opt.value}</div>
+                            <div className="text-[11px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
+                              {opt.desc}
+                            </div>
                           </div>
-                        </div>
-                        {checked && <Check className="h-4 w-4 opacity-70" />}
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              ))}
+                          {checked && <Check className="h-4 w-4 opacity-70" />}
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                );
+              })}
               <div className="h-1" />
             </CommandList>
           </Command>
@@ -466,7 +592,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
 }
 
 /* ============================================================================
-   Página
+   Página (mantida) — adicionei apenas: busca rápida por segmento dentro do Popover de Filtros
 ============================================================================ */
 const Clients = () => {
   const [clients, setClients] = useState([]);
@@ -486,11 +612,11 @@ const Clients = () => {
   const [rowToDelete, setRowToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Segmentos extras (digitados pelo usuário nesta sessão)
+  // Segmentos extras digitados na sessão
   const [extraSegments, setExtraSegments] = useState([]);
   const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
 
-  // Buscar clientes (mantido)
+  // Carregar clientes (mantido)
   const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
@@ -508,7 +634,7 @@ const Clients = () => {
     fetchClients();
   }, [fetchClients]);
 
-  // Handlers do formulário (mantido, com normalização de telefone)
+  // Form handlers (mantido)
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm(prev => ({
@@ -541,7 +667,6 @@ const Clients = () => {
     setOpenDelete(true);
   };
 
-  // Submissão do formulário (mantida conforme arquivo novo)
   async function onSubmit(e) {
     e.preventDefault();
     setSaving(true);
@@ -581,12 +706,15 @@ const Clients = () => {
     }
   }
 
-  /* ===================== FILTROS (mantidos, agora com grupos + personalizados) ===================== */
+  /* ===================== FILTROS (mantidos) ===================== */
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [fCompanies, setFCompanies] = useState([]);     // múltipla
-  const [fSegments, setFSegments] = useState([]);      // múltipla
-  const [fHasEmail, setFHasEmail] = useState("");      // '', 'sim', 'nao'
-  const [fHasPhone, setFHasPhone] = useState("");      // '', 'sim', 'nao'
+  const [fCompanies, setFCompanies] = useState([]); // múltipla
+  const [fSegments, setFSegments] = useState([]);  // múltipla
+  const [fHasEmail, setFHasEmail] = useState("");  // '', 'sim', 'nao'
+  const [fHasPhone, setFHasPhone] = useState("");  // '', 'sim', 'nao'
+
+  // NOVO: busca rápida por segmento dentro dos Filtros
+  const [fSegmentsQuery, setFSegmentsQuery] = useState("");
 
   const uniqueCompanies = useMemo(() => {
     const s = new Set();
@@ -621,6 +749,7 @@ const Clients = () => {
     setFSegments([]);
     setFHasEmail("");
     setFHasPhone("");
+    setFSegmentsQuery("");
   };
 
   const filtersCount =
@@ -666,7 +795,7 @@ const Clients = () => {
     return list;
   }, [clients, q, fCompanies, fSegments, fHasEmail, fHasPhone]);
 
-  // Dados para exportação (mantidos)
+  // Exportações (mantido)
   const exportData = useMemo(() => {
     return filtered.map((c) => ({
       name: c.name || "",
@@ -732,7 +861,7 @@ const Clients = () => {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* Filtros + botões */}
+          {/* Busca geral + Filtros + Novo */}
           <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
             <div className="relative flex-1 w-full md:w-[320px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -759,7 +888,7 @@ const Clients = () => {
                 side="bottom"
                 sideOffset={8}
                 collisionPadding={12}
-                className="w-[min(92vw,620px)] p-0"
+                className="w-[min(92vw,720px)] p-0"
               >
                 {/* flex column: header fixo, body rolável, footer fixo */}
                 <div className="flex flex-col max-h-[calc(100vh-120px)]">
@@ -805,38 +934,70 @@ const Clients = () => {
 
                     {/* Segmentos (agrupados + personalizados) */}
                     <div className="space-y-2">
-                      <Label>Segmentos</Label>
+                      <Label className="flex items-center justify-between">
+                        <span>Segmentos</span>
+                      </Label>
+
+                      {/* NOVO: busca rápida por segmento (filtra a lista abaixo) */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                        <Input
+                          className="pl-9"
+                          placeholder="Buscar segmento nos filtros..."
+                          value={fSegmentsQuery}
+                          onChange={(e) => setFSegmentsQuery(e.target.value)}
+                        />
+                      </div>
+
                       <div className="max-h-[48vh] overflow-y-auto pr-1">
-                        {SEGMENTOS_GRUPOS.map((grp) => (
-                          <div key={grp.group} className="mb-3">
-                            <p className="text-xs font-semibold text-muted-foreground mb-2">{grp.group}</p>
-                            <div className="space-y-1.5">
-                              {grp.options.map((opt) => (
-                                <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
-                                  <Checkbox checked={fSegments.includes(opt.value)} onCheckedChange={() => toggle(setFSegments, opt.value)} />
-                                  <span className="truncate">{opt.value}</span>
-                                </label>
-                              ))}
+                        {SEGMENTOS_GRUPOS.map((grp) => {
+                          const shownOpts = grp.options.filter((opt) => {
+                            const q = fSegmentsQuery.trim().toLowerCase();
+                            if (!q) return true;
+                            return (
+                              opt.value.toLowerCase().includes(q) ||
+                              (opt.desc && opt.desc.toLowerCase().includes(q))
+                            );
+                          });
+                          if (shownOpts.length === 0) return null;
+                          return (
+                            <div key={grp.group} className="mb-3">
+                              <p className="text-xs font-semibold text-muted-foreground mb-2">{grp.group}</p>
+                              <div className="space-y-1.5">
+                                {shownOpts.map((opt) => (
+                                  <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                                    <Checkbox checked={fSegments.includes(opt.value)} onCheckedChange={() => toggle(setFSegments, opt.value)} />
+                                    <span className="truncate">{opt.value}</span>
+                                  </label>
+                                ))}
+                              </div>
+                              <Separator className="my-3" />
                             </div>
-                            <Separator className="my-3" />
-                          </div>
-                        ))}
+                          );
+                        })}
 
                         {/* Grupo: Personalizados (dinâmico) */}
-                        {customSegmentsFromData.length > 0 && (
-                          <div className="mb-3">
-                            <p className="text-xs font-semibold text-muted-foreground mb-2">Personalizados</p>
-                            <div className="space-y-1.5">
-                              {customSegmentsFromData.map((opt) => (
-                                <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
-                                  <Checkbox checked={fSegments.includes(opt)} onCheckedChange={() => toggle(setFSegments, opt)} />
-                                  <span className="truncate">{opt}</span>
-                                </label>
-                              ))}
+                        {(() => {
+                          const q = fSegmentsQuery.trim().toLowerCase();
+                          const list = customSegmentsFromData.filter((s) =>
+                            !q ? true : s.toLowerCase().includes(q)
+                          );
+                          if (list.length === 0) return null;
+                          return (
+                            <div className="mb-3">
+                              <p className="text-xs font-semibold text-muted-foreground mb-2">Personalizados</p>
+                              <div className="space-y-1.5">
+                                {list.map((opt) => (
+                                  <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
+                                    <Checkbox checked={fSegments.includes(opt)} onCheckedChange={() => toggle(setFSegments, opt)} />
+                                    <span className="truncate">{opt}</span>
+                                  </label>
+                                ))}
+                              </div>
+                              <Separator className="my-3" />
                             </div>
-                            <Separator className="my-3" />
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
 
                       {/* Chips dos selecionados */}
@@ -892,7 +1053,7 @@ const Clients = () => {
               </PopoverContent>
             </Popover>
 
-            {/* Novo Cliente (modal com a mesma disposição da sua versão anterior) */}
+            {/* Novo Cliente (mantido) */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" className="gap-2" onClick={openCreate}>
@@ -988,7 +1149,7 @@ const Clients = () => {
             </Dialog>
           </div>
 
-          {/* Tabela centralizada (títulos + dados) */}
+          {/* Tabela */}
           <div className="overflow-x-auto rounded-xl border bg-card">
             <Table>
               <TableHeader>
@@ -1048,7 +1209,7 @@ const Clients = () => {
         </CardContent>
       </Card>
 
-      {/* Dialog de exclusão (mantido) */}
+      {/* Dialog de exclusão */}
       <Dialog open={openDelete} onOpenChange={setOpenDelete}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
