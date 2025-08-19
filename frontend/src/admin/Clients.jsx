@@ -1,21 +1,8 @@
 // frontend/src/admin/Clients.jsx
-import React, {
-  useEffect,
-  useMemo,
-  useState,
-  useCallback,
-  useRef,
-  useLayoutEffect,
-} from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import api from "@/services/api";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card.jsx";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Label } from "@/components/ui/label.jsx";
@@ -28,20 +15,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog.jsx";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table.jsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
 
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover.jsx";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 import {
   Command,
   CommandGroup,
@@ -63,33 +39,23 @@ import {
   Filter as FilterIcon,
 } from "lucide-react";
 
+import ExportMenu from "@/components/export/ExportMenu";
+
+// === Recharts (pizza) ===
 import {
+  ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
   Tooltip,
   Legend,
-  ResponsiveContainer,
 } from "recharts";
 
-import ExportMenu from "@/components/export/ExportMenu";
-
-/* ---------------- Utils ---------------- */
 const fmtInt = new Intl.NumberFormat("pt-BR");
-const PIE_COLORS = [
-  "#ef4444",
-  "#f59e0b",
-  "#10b981",
-  "#3b82f6",
-  "#a855f7",
-  "#ec4899",
-  "#06b6d4",
-  "#84cc16",
-  "#f97316",
-  "#64748b",
-];
 
-/* ---------------- Telefone ---------------- */
+/* ============================================================================
+   TELEFONE BR (+55) — normalização/máscara (simplificada)
+============================================================================ */
 const normalizePhoneBR = (input) => {
   if (!input) return "";
   const digits = String(input).replace(/\D/g, "");
@@ -98,6 +64,7 @@ const normalizePhoneBR = (input) => {
   if (clean.length === 10) return `+55${clean}`;
   return input;
 };
+
 const formatPhoneDisplay = (phone) => {
   if (!phone) return "";
   const digits = String(phone).replace(/\D/g, "");
@@ -114,7 +81,9 @@ const formatPhoneDisplay = (phone) => {
   return phone;
 };
 
-/* ---------------- Segmentos ---------------- */
+/* ============================================================================
+   SEGMENTOS — grupos + valores (EXPANDIDO)
+============================================================================ */
 const SEGMENTOS_GRUPOS = [
   {
     group: "Tecnologia e Informática",
@@ -390,6 +359,9 @@ const SEGMENTOS_GRUPOS = [
 
 const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap((g) => g.options.map((o) => o.value));
 
+/* ============================================================================
+   Util: garantir array de segmentos (compatível com campos antigos)
+============================================================================ */
 const ensureArraySegments = (client) => {
   if (Array.isArray(client?.segments)) return client.segments;
   if (typeof client?.segment === "string" && client.segment.trim()) {
@@ -404,27 +376,24 @@ const ensureArraySegments = (client) => {
   return [];
 };
 
-/* ---------------- Combobox Segmentos (com fix de scroll em Dialog) ---------------- */
+/* ============================================================================
+   Combobox multi de segmentos — com busca, grupos e criação de novos (modo livre)
+============================================================================ */
 function SegmentosSelect({ value = [], onChange, onCreate }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const triggerWrapRef = useRef(null);
-  const [portalContainer, setPortalContainer] = useState(null);
-  useLayoutEffect(() => {
-    const el = triggerWrapRef.current?.closest?.("[data-radix-dialog-content]");
-    if (el) setPortalContainer(el);
-  }, []);
 
   const baseOptions = useMemo(
     () => SEGMENTOS_GRUPOS.flatMap((g) => g.options.map((o) => o.value)),
     []
   );
+
   const allSelectedLower = useMemo(
     () => new Set(value.map((v) => v.toLowerCase())),
     [value]
   );
-  const existsInBase = (label) =>
-    baseOptions.some((v) => v.toLowerCase() === label.toLowerCase());
+
+  const existsInBase = (label) => baseOptions.some((v) => v.toLowerCase() === label.toLowerCase());
   const existsInValue = (label) => allSelectedLower.has(label.toLowerCase());
 
   const toggle = (label) => {
@@ -432,6 +401,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
     const next = exists ? value.filter((s) => s !== label) : [...value, label];
     onChange(next);
   };
+
   const addCustom = (label) => {
     const clean = label.trim();
     if (!clean) return;
@@ -440,6 +410,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
     setQuery("");
     setOpen(true);
   };
+
   const shouldSuggestCreate = useMemo(() => {
     const t = query.trim();
     if (!t) return false;
@@ -449,19 +420,14 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <div ref={triggerWrapRef}>
-          <Button variant="outline" role="combobox" className="w-full justify-between">
-            {value.length === 0 ? (
-              "Selecionar segmentos"
-            ) : (
-              <span className="truncate">
-                {value.slice(0, 2).join(", ")}
-                {value.length > 2 ? ` +${value.length - 2}` : ""}
-              </span>
-            )}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </div>
+        <Button variant="outline" role="combobox" className="w-full justify-between">
+          {value.length === 0 ? "Selecionar segmentos" : (
+            <span className="truncate">
+              {value.slice(0, 2).join(", ")}{value.length > 2 ? ` +${value.length - 2}` : ""}
+            </span>
+          )}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
       </PopoverTrigger>
 
       <PopoverContent
@@ -470,12 +436,8 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
         sideOffset={6}
         collisionPadding={32}
         className="p-0 z-[70] w-[min(92vw,320px)] sm:w-[360px] bg-background"
-        container={portalContainer || undefined}
-        onWheelCapture={(e) => e.stopPropagation()}
-        onWheel={(e) => e.stopPropagation()}
-        onTouchMove={(e) => e.stopPropagation()}
       >
-        <div className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2 touch-pan-y [-webkit-overflow-scrolling:touch]">
+        <div className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2 [-webkit-overflow-scrolling:touch]">
           <Command className="text-[13px] leading-tight">
             <div className="sticky top-0 z-10 bg-background">
               <CommandInput
@@ -546,22 +508,28 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
   );
 }
 
-/* ---------------- Página ---------------- */
+/* ============================================================================
+   Página — filtros, KDIs compactos, pizza e paginação (15 por página)
+============================================================================ */
+const PIE_COLORS = [
+  "#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6",
+  "#ec4899", "#14b8a6", "#f97316", "#22c55e", "#6366f1"
+];
+
 const Clients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
+  // paginação
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
+
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("create");
   const [form, setForm] = useState({
     id: null,
-    name: "",
-    company: "",
-    email: "",
-    phone: "",
-    segments: [],
-    notes: "",
+    name: "", company: "", email: "", phone: "", segments: [], notes: ""
   });
   const [saving, setSaving] = useState(false);
 
@@ -571,10 +539,6 @@ const Clients = () => {
 
   const [extraSegments, setExtraSegments] = useState([]);
   const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
-
-  // Paginação (15 por página)
-  const [page, setPage] = useState(1);
-  const pageSize = 15;
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
@@ -588,42 +552,35 @@ const Clients = () => {
       setLoading(false);
     }
   }, []);
+
   useEffect(() => {
     fetchClients();
   }, [fetchClients]);
 
   const onChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({
+    setForm(prev => ({
       ...prev,
-      [name]: name === "phone" ? normalizePhoneBR(value) : value,
+      [name]: name === "phone" ? normalizePhoneBR(value) : value
     }));
   };
 
   const openCreate = () => {
     setMode("create");
-    setForm({
-      id: null,
-      name: "",
-      company: "",
-      email: "",
-      phone: "",
-      segments: [],
-      notes: "",
-    });
+    setForm({ id: null, name: "", company: "", email: "", phone: "", segments: [], notes: "" });
     setOpen(true);
   };
+
   const openEdit = (client) => {
     setMode("edit");
     setForm({
       id: client.id ?? client._id ?? client.uuid ?? null,
       name: client.name || "",
-      company:
-        client.company || client.company_name || client.companyName || "",
+      company: client.company || client.company_name || client.companyName || "",
       email: client.email || "",
       phone: client.phone || "",
       segments: ensureArraySegments(client),
-      notes: client.notes || "",
+      notes: client.notes || ""
     });
     setOpen(true);
   };
@@ -680,7 +637,7 @@ const Clients = () => {
     }
   }
 
-  /* ---------------- Filtros ---------------- */
+  /* ===================== FILTROS ===================== */
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [fCompanies, setFCompanies] = useState([]);
   const [fSegments, setFSegments] = useState([]);
@@ -713,9 +670,7 @@ const Clients = () => {
   }, [clients, extraSegments, baseSegmentSet]);
 
   const toggle = (setter, value) =>
-    setter((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
-    );
+    setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
 
   const clearFilters = () => {
     setFCompanies([]);
@@ -736,35 +691,26 @@ const Clients = () => {
     const base = [];
     SEGMENTOS_GRUPOS.forEach((grp) => {
       grp.options.forEach((opt) => {
-        if (
-          !q ||
-          opt.value.toLowerCase().includes(q) ||
-          (opt.desc && opt.desc.toLowerCase().includes(q))
-        ) {
+        if (!q || opt.value.toLowerCase().includes(q) || (opt.desc && opt.desc.toLowerCase().includes(q))) {
           base.push(opt.value);
         }
       });
     });
-    const custom = customSegmentsFromData.filter(
-      (s) => !q || s.toLowerCase().includes(q)
-    );
+    const custom = customSegmentsFromData.filter((s) => !q || s.toLowerCase().includes(q));
     return Array.from(new Set([...base, ...custom]));
   }, [fSegmentsQuery, customSegmentsFromData]);
 
   const allShownAlreadySelected = useMemo(
-    () =>
-      shownSegmentValues.length > 0 &&
-      shownSegmentValues.every((v) => fSegments.includes(v)),
+    () => shownSegmentValues.length > 0 && shownSegmentValues.every((v) => fSegments.includes(v)),
     [shownSegmentValues, fSegments]
   );
 
   const selectShownSegments = () => {
     if (shownSegmentValues.length === 0) return;
-    setFSegments((prev) =>
-      Array.from(new Set([...prev, ...shownSegmentValues]))
-    );
+    setFSegments((prev) => Array.from(new Set([...prev, ...shownSegmentValues])));
   };
 
+  // ===== Lista filtrada =====
   const filtered = useMemo(() => {
     let list = Array.isArray(clients) ? [...clients] : [];
 
@@ -780,9 +726,7 @@ const Clients = () => {
 
     if (fCompanies.length > 0) {
       const set = new Set(fCompanies);
-      list = list.filter((c) =>
-        set.has((c.company ?? c.company_name ?? c.companyName ?? "").trim())
-      );
+      list = list.filter((c) => set.has((c.company ?? c.company_name ?? c.companyName ?? "").trim()));
     }
 
     if (fSegments.length > 0) {
@@ -803,44 +747,58 @@ const Clients = () => {
     return list;
   }, [clients, q, fCompanies, fSegments, fHasEmail, fHasPhone]);
 
-  /* ---------------- Indicadores ---------------- */
+  // ===== KPIs e Pizza =====
   const totalClientesGeral = clients.length;
   const totalExibidos = filtered.length;
 
-  const topSegments = useMemo(() => {
-    const counts = new Map();
+  const pieData = useMemo(() => {
+    const map = new Map();
     filtered.forEach((c) => {
-      new Set(ensureArraySegments(c)).forEach((seg) => {
-        if (!seg) return;
-        counts.set(seg, (counts.get(seg) || 0) + 1);
+      ensureArraySegments(c).forEach((s) => {
+        if (!s) return;
+        map.set(s, (map.get(s) || 0) + 1);
       });
     });
-    const arr = Array.from(counts.entries()).map(([segment, count]) => ({
-      segment,
-      count,
-      pct: totalExibidos > 0 ? (count / totalExibidos) * 100 : 0,
-    }));
-    arr.sort((a, b) => b.count - a.count || a.segment.localeCompare(b.segment, "pt-BR"));
-    return arr.slice(0, 10);
-  }, [filtered, totalExibidos]);
+    const arr = Array.from(map.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+    return arr;
+  }, [filtered]);
 
-  // Dados para o gráfico (usa "count"; % é calculado no tooltip/label)
-  const pieData = useMemo(
-    () => topSegments.map(({ segment, count }) => ({ name: segment, value: count })),
-    [topSegments]
-  );
-
-  /* ---------------- Paginação ---------------- */
-  const totalPages = Math.max(1, Math.ceil(totalExibidos / pageSize));
+  // ===== Paginação =====
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   useEffect(() => {
     if (page > totalPages) setPage(1);
   }, [page, totalPages]);
+
   const pageItems = useMemo(() => {
     const start = (page - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
   }, [filtered, page]);
 
-  /* ---------------- Export ---------------- */
+  // Legend custom (com % e contagem)
+  const legendContent = (props) => {
+    const payload = props?.payload || [];
+    return (
+      <div className="text-[10px] sm:text-xs space-y-1">
+        {payload.map((item) => {
+          const name = item?.value;
+          const val = pieData.find((p) => p.name === name)?.value ?? 0;
+          const pct = totalExibidos > 0 ? ((val / totalExibidos) * 100).toFixed(1) : "0.0";
+          return (
+            <div key={name} className="flex items-center gap-2">
+              <span className="inline-block h-2 w-2 rounded-sm" style={{ background: item.color }} />
+              <span className="truncate">
+                {name} — {pct}% ({fmtInt.format(val)})
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const exportData = useMemo(() => {
     return filtered.map((c) => ({
       name: c.name || "",
@@ -852,31 +810,23 @@ const Clients = () => {
   }, [filtered]);
 
   const exportColumns = [
-    { key: "name", header: "Nome" },
-    { key: "company", header: "Empresa" },
-    { key: "segments", header: "Segmentos" },
-    { key: "email", header: "E-mail" },
-    { key: "phone", header: "Telefone" },
+    { key: 'name', header: 'Nome' },
+    { key: 'company', header: 'Empresa' },
+    { key: 'segments', header: 'Segmentos' },
+    { key: 'email', header: 'E-mail' },
+    { key: 'phone', header: 'Telefone' },
   ];
 
   const pdfOptions = {
-    title: "Relatório de Clientes",
-    orientation: "p",
-    filtersSummary: `Filtros aplicados: ${
-      filtersCount > 0
-        ? [
-            fCompanies.length > 0 ? `Empresas: ${fCompanies.join(", ")}` : "",
-            fSegments.length > 0 ? `Segmentos: ${fSegments.join(", ")}` : "",
-            fHasEmail
-              ? `E-mail: ${fHasEmail === "sim" ? "Com e-mail" : "Sem e-mail"}`
-              : "",
-            fHasPhone
-              ? `Telefone: ${fHasPhone === "sim" ? "Com telefone" : "Sem telefone"}`
-              : "",
-          ]
-            .filter(Boolean)
-            .join(" | ")
-        : "Nenhum filtro aplicado"
+    title: 'Relatório de Clientes',
+    orientation: 'p',
+    filtersSummary: `Filtros aplicados: ${filtersCount > 0 ?
+      [
+        fCompanies.length > 0 ? `Empresas: ${fCompanies.join(', ')}` : '',
+        fSegments.length > 0 ? `Segmentos: ${fSegments.join(', ')}` : '',
+        fHasEmail ? `E-mail: ${fHasEmail === 'sim' ? 'Com e-mail' : 'Sem e-mail'}` : '',
+        fHasPhone ? `Telefone: ${fHasPhone === 'sim' ? 'Com telefone' : 'Sem telefone'}` : '',
+      ].filter(Boolean).join(' | ') : 'Nenhum filtro aplicado'
     }`,
     columnStyles: {
       0: { cellWidth: 40 },
@@ -884,13 +834,14 @@ const Clients = () => {
       2: { cellWidth: 45 },
       3: { cellWidth: 35 },
       4: { cellWidth: 30 },
-    },
+    }
   };
 
-  /* ---------------- UI ---------------- */
+  /* ===================== UI ===================== */
+
   return (
     <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-semibold">Clientes</h1>
       </div>
 
@@ -898,10 +849,8 @@ const Clients = () => {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base md:text-lg font-semibold">Registros</CardTitle>
-              <CardDescription className="text-xs md:text-sm">
-                Lista de clientes cadastrados
-              </CardDescription>
+              <CardTitle className="text-lg md:text-xl font-semibold">Registros</CardTitle>
+              <CardDescription>Lista de clientes cadastrados</CardDescription>
             </div>
             <div className="ml-auto">
               <ExportMenu
@@ -915,46 +864,43 @@ const Clients = () => {
         </CardHeader>
 
         <CardContent className="space-y-3">
-          {/* Busca + Filtros + Novo */}
+          {/* Busca geral + Filtros + Novo */}
           <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
             <div className="relative flex-1 w-full md:w-[320px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                className="pl-9 h-9"
+                className="pl-9"
                 placeholder="Buscar clientes..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
             </div>
 
+            {/* ====== FILTROS AVANÇADOS ====== */}
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2 h-9">
+                <Button variant="outline" size="sm" className="gap-2">
                   <FilterIcon className="size-4" />
                   Filtros
-                  {filtersCount > 0 && (
-                    <Badge variant="secondary" className="text-[11px]">
-                      {filtersCount}
-                    </Badge>
-                  )}
+                  {filtersCount > 0 && <Badge variant="secondary">{filtersCount}</Badge>}
                 </Button>
               </PopoverTrigger>
 
+              {/* Altura fixa => header/footer SEMPRE visíveis */}
               <PopoverContent
                 align="end"
                 side="bottom"
                 sideOffset={8}
                 collisionPadding={12}
                 className="w-[min(96vw,860px)] p-0 overflow-hidden"
-                style={{ height: "min(72vh, 600px)" }}
+                style={{ height: 'min(72vh, 600px)' }}
               >
                 <div className="grid h-full grid-rows-[auto,1fr,auto] text-[12px] leading-tight">
+                  {/* HEADER (fixo) */}
                   <div className="px-3 py-2 border-b flex items-center justify-between">
                     <div>
                       <p className="text-[13px] font-medium">Filtrar clientes</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Refine os resultados com seletores.
-                      </p>
+                      <p className="text-[11px] text-muted-foreground">Refine os resultados com seletores.</p>
                     </div>
                     <Button
                       variant="ghost"
@@ -967,44 +913,30 @@ const Clients = () => {
                     </Button>
                   </div>
 
-                  <div className="p-3 grid md:grid-cols-2 gap-3 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
+                  {/* BODY (rolável) */}
+                  <div
+                    className="p-3 grid md:grid-cols-2 gap-3 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+                  >
                     {/* Empresas */}
                     <div className="space-y-1.5">
                       <Label className="text-[12px]">Empresas</Label>
                       <div className="max-h-[40vh] overflow-y-auto pr-1">
                         {uniqueCompanies.length === 0 ? (
                           <p className="text-[11px] text-muted-foreground">—</p>
-                        ) : (
-                          uniqueCompanies.map((comp) => (
-                            <label
-                              key={comp}
-                              className="flex items-center gap-1.5 text-[12px] cursor-pointer"
-                            >
-                              <Checkbox
-                                checked={fCompanies.includes(comp)}
-                                onCheckedChange={() => toggle(setFCompanies, comp)}
-                                className="h-3 w-3"
-                              />
-                              <span className="truncate">{comp}</span>
-                            </label>
-                          ))
-                        )}
+                        ) : uniqueCompanies.map((comp) => (
+                          <label key={comp} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
+                            <Checkbox checked={fCompanies.includes(comp)} onCheckedChange={() => toggle(setFCompanies, comp)} className="h-3 w-3" />
+                            <span className="truncate">{comp}</span>
+                          </label>
+                        ))}
                       </div>
 
                       {fCompanies.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {fCompanies.map((c) => (
-                            <Badge
-                              key={c}
-                              variant="secondary"
-                              className="gap-1 py-0.5 text-[11px]"
-                            >
+                            <Badge key={c} variant="secondary" className="gap-1 py-0.5 text-[11px]">
                               {c}
-                              <button
-                                type="button"
-                                onClick={() => toggle(setFCompanies, c)}
-                                className="ml-1 opacity-70 hover:opacity-100"
-                              >
+                              <button type="button" onClick={() => toggle(setFCompanies, c)} className="ml-1 opacity-70 hover:opacity-100">
                                 <X className="size-3" />
                               </button>
                             </Badge>
@@ -1013,12 +945,13 @@ const Clients = () => {
                       )}
                     </div>
 
-                    {/* Segmentos (filtros) */}
+                    {/* Segmentos (agrupados + personalizados) */}
                     <div className="space-y-1.5">
                       <Label className="flex items-center justify-between text-[12px]">
                         <span>Segmentos</span>
                       </Label>
 
+                      {/* Busca + Selecionar exibidos */}
                       <div className="flex items-center gap-2">
                         <div className="relative flex-1">
                           <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
@@ -1033,9 +966,7 @@ const Clients = () => {
                           size="sm"
                           className="h-8 px-2 text-[12px]"
                           variant="secondary"
-                          disabled={
-                            shownSegmentValues.length === 0 || allShownAlreadySelected
-                          }
+                          disabled={shownSegmentValues.length === 0 || allShownAlreadySelected}
                           onClick={selectShownSegments}
                         >
                           Selecionar exibidos
@@ -1045,31 +976,17 @@ const Clients = () => {
                       <div className="max-h-[40vh] overflow-y-auto pr-1">
                         {SEGMENTOS_GRUPOS.map((grp) => {
                           const q = fSegmentsQuery.trim().toLowerCase();
-                          const shownOpts = grp.options.filter(
-                            (opt) =>
-                              !q ||
-                              opt.value.toLowerCase().includes(q) ||
-                              (opt.desc && opt.desc.toLowerCase().includes(q))
+                          const shownOpts = grp.options.filter((opt) =>
+                            !q || opt.value.toLowerCase().includes(q) || (opt.desc && opt.desc.toLowerCase().includes(q))
                           );
                           if (shownOpts.length === 0) return null;
                           return (
                             <div key={grp.group} className="mb-2">
-                              <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">
-                                {grp.group}
-                              </p>
+                              <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">{grp.group}</p>
                               <div className="space-y-1">
                                 {shownOpts.map((opt) => (
-                                  <label
-                                    key={opt.value}
-                                    className="flex items-center gap-1.5 text-[12px] cursor-pointer"
-                                  >
-                                    <Checkbox
-                                      checked={fSegments.includes(opt.value)}
-                                      onCheckedChange={() =>
-                                        toggle(setFSegments, opt.value)
-                                      }
-                                      className="h-3 w-3"
-                                    />
+                                  <label key={opt.value} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
+                                    <Checkbox checked={fSegments.includes(opt.value)} onCheckedChange={() => toggle(setFSegments, opt.value)} className="h-3 w-3" />
                                     <span className="truncate">{opt.value}</span>
                                   </label>
                                 ))}
@@ -1079,29 +996,18 @@ const Clients = () => {
                           );
                         })}
 
-                        {/* Personalizados */}
+                        {/* Grupo: Personalizados (dinâmico) */}
                         {(() => {
                           const q = fSegmentsQuery.trim().toLowerCase();
-                          const list = customSegmentsFromData.filter(
-                            (s) => !q || s.toLowerCase().includes(q)
-                          );
+                          const list = customSegmentsFromData.filter((s) => !q || s.toLowerCase().includes(q));
                           if (list.length === 0) return null;
                           return (
                             <div className="mb-2">
-                              <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">
-                                Personalizados
-                              </p>
+                              <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">Personalizados</p>
                               <div className="space-y-1">
                                 {list.map((opt) => (
-                                  <label
-                                    key={opt}
-                                    className="flex items-center gap-1.5 text-[12px] cursor-pointer"
-                                  >
-                                    <Checkbox
-                                      checked={fSegments.includes(opt)}
-                                      onCheckedChange={() => toggle(setFSegments, opt)}
-                                      className="h-3 w-3"
-                                    />
+                                  <label key={opt} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
+                                    <Checkbox checked={fSegments.includes(opt)} onCheckedChange={() => toggle(setFSegments, opt)} className="h-3 w-3" />
                                     <span className="truncate">{opt}</span>
                                   </label>
                                 ))}
@@ -1112,20 +1018,13 @@ const Clients = () => {
                         })()}
                       </div>
 
+                      {/* Chips dos segmentos selecionados (compactos) */}
                       {fSegments.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {fSegments.map((s) => (
-                            <Badge
-                              key={s}
-                              variant="secondary"
-                              className="gap-1 py-0.5 text-[11px]"
-                            >
+                            <Badge key={s} variant="secondary" className="gap-1 py-0.5 text-[11px]">
                               {s}
-                              <button
-                                type="button"
-                                onClick={() => toggle(setFSegments, s)}
-                                className="ml-1 opacity-70 hover:opacity-100"
-                              >
+                              <button type="button" onClick={() => toggle(setFSegments, s)} className="ml-1 opacity-70 hover:opacity-100">
                                 <X className="size-3" />
                               </button>
                             </Badge>
@@ -1134,7 +1033,7 @@ const Clients = () => {
                       )}
                     </div>
 
-                    {/* E-mail / Telefone */}
+                    {/* E-mail / Telefone (compactos) */}
                     <div className="space-y-1.5">
                       <Label className="text-[12px]">E-mail</Label>
                       <select
@@ -1161,30 +1060,19 @@ const Clients = () => {
                     </div>
                   </div>
 
+                  {/* FOOTER (fixo) */}
                   <div className="px-3 py-2 border-t flex justify-end gap-2 items-center bg-background">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 px-2 text-[12px]"
-                      onClick={() => setFiltersOpen(false)}
-                    >
-                      Fechar
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="h-8 px-3 text-[12px]"
-                      onClick={() => setFiltersOpen(false)}
-                    >
-                      Aplicar
-                    </Button>
+                    <Button variant="outline" size="sm" className="h-8 px-2 text-[12px]" onClick={() => setFiltersOpen(false)}>Fechar</Button>
+                    <Button size="sm" className="h-8 px-3 text-[12px]" onClick={() => setFiltersOpen(false)}>Aplicar</Button>
                   </div>
                 </div>
               </PopoverContent>
             </Popover>
 
+            {/* Novo Cliente */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="gap-2 h-9" onClick={openCreate}>
+                <Button size="sm" className="gap-2" onClick={openCreate}>
                   <Plus className="size-4" />
                   <span className="whitespace-nowrap">Novo Cliente</span>
                 </Button>
@@ -1193,13 +1081,9 @@ const Clients = () => {
               <DialogContent className="p-0 sm:max-w-[560px] md:max-w-[600px]">
                 <div className="max-h-[80vh] overflow-y-auto p-6">
                   <DialogHeader className="pb-2">
-                    <DialogTitle>
-                      {mode === "create" ? "Novo Cliente" : "Editar Cliente"}
-                    </DialogTitle>
+                    <DialogTitle>{mode === "create" ? "Novo Cliente" : "Editar Cliente"}</DialogTitle>
                     <DialogDescription>
-                      {mode === "create"
-                        ? "Cadastre um novo cliente."
-                        : "Atualize os dados do cliente."}
+                      {mode === "create" ? "Cadastre um novo cliente." : "Atualize os dados do cliente."}
                     </DialogDescription>
                   </DialogHeader>
 
@@ -1215,15 +1099,14 @@ const Clients = () => {
                         <Input name="company" value={form.company} onChange={onChange} />
                       </div>
 
+                      {/* Segmentos — combobox multi com modo livre */}
                       <div className="md:col-span-2 space-y-2">
                         <Label>Segmentos</Label>
                         <SegmentosSelect
                           value={form.segments}
                           onChange={(next) => setForm((f) => ({ ...f, segments: next }))}
                           onCreate={(label) => {
-                            setExtraSegments((prev) =>
-                              prev.includes(label) ? prev : [...prev, label]
-                            );
+                            setExtraSegments((prev) => (prev.includes(label) ? prev : [...prev, label]));
                           }}
                         />
                         {form.segments.length > 0 && (
@@ -1235,10 +1118,7 @@ const Clients = () => {
                                   type="button"
                                   className="ml-1 opacity-70 hover:opacity-100"
                                   onClick={() =>
-                                    setForm((f) => ({
-                                      ...f,
-                                      segments: f.segments.filter((x) => x !== s),
-                                    }))
+                                    setForm((f) => ({ ...f, segments: f.segments.filter((x) => x !== s) }))
                                   }
                                   title="Remover"
                                 >
@@ -1285,59 +1165,64 @@ const Clients = () => {
             </Dialog>
           </div>
 
-          {/* -------- KDIs (compactos) -------- */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Total de clientes */}
-            <div className="rounded-xl border bg-card p-3">
-              <p className="text-[11px] text-muted-foreground">Total de clientes (geral)</p>
-              <p className="text-xl font-bold leading-tight">{fmtInt.format(totalClientesGeral)}</p>
-              <p className="text-[11px] text-muted-foreground mt-1">
+          {/* -------- KDIs (compactos + número maior) -------- */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {/* KPI: Total de clientes */}
+            <div className="rounded-lg border bg-card p-2 sm:p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] sm:text-xs text-muted-foreground">
+                  Total de clientes (geral)
+                </p>
+              </div>
+
+              <p className="mt-0.5 text-3xl sm:text-4xl font-extrabold leading-none tracking-tight">
+                {fmtInt.format(totalClientesGeral)}
+              </p>
+
+              <p className="mt-1 text-[10px] sm:text-xs text-muted-foreground">
                 Exibidos após filtros: <b>{fmtInt.format(totalExibidos)}</b>
               </p>
             </div>
 
-            {/* Pizza Top 10 — ocupa 2 colunas em md+ */}
-            <div className="rounded-xl border bg-card p-3 md:col-span-2">
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] text-muted-foreground">
-                  Top 10 segmentos (% dos clientes exibidos)
-                </p>
-              </div>
+            {/* KPI: Top 10 segmentos (pizza) */}
+            <div className="rounded-lg border bg-card p-2 sm:p-3 md:col-span-2">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
+                Top 10 segmentos (% dos clientes exibidos)
+              </p>
 
               {pieData.length === 0 ? (
                 <div className="text-sm text-muted-foreground mt-2">—</div>
               ) : (
-                <div className="w-full h-[260px] mt-1">
+                <div className="w-full h-[200px] sm:h-[220px] mt-0.5">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={pieData}
                         dataKey="value"
                         nameKey="name"
-                        cx="40%"
+                        cx="45%"
                         cy="50%"
-                        innerRadius={50}
-                        outerRadius={90}
+                        innerRadius={44}
+                        outerRadius={82}
                         paddingAngle={1}
                       >
                         {pieData.map((entry, i) => (
                           <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
                       </Pie>
+
                       <Tooltip
                         formatter={(value, _name, { payload }) => {
-                          const pct =
-                            totalExibidos > 0
-                              ? ((value / totalExibidos) * 100).toFixed(1) + "%"
-                              : "0%";
+                          const pct = totalExibidos > 0 ? ((value / totalExibidos) * 100).toFixed(1) + "%" : "0%";
                           return [`${fmtInt.format(value)} (${pct})`, payload.name];
                         }}
                       />
+
                       <Legend
-                        layout="vertical"
-                        align="right"
                         verticalAlign="middle"
-                        wrapperStyle={{ fontSize: 11, paddingLeft: 8 }}
+                        align="right"
+                        layout="vertical"
+                        content={legendContent}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -1346,7 +1231,7 @@ const Clients = () => {
             </div>
           </div>
 
-          {/* -------- Tabela -------- */}
+          {/* Tabela */}
           <div className="overflow-x-auto rounded-xl border bg-card">
             <Table>
               <TableHeader>
@@ -1361,66 +1246,37 @@ const Clients = () => {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-6">
-                      Carregando…
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-6">Carregando…</TableCell></TableRow>
                 ) : pageItems.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-6">
-                      Nenhum registro
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-6">Nenhum registro</TableCell></TableRow>
                 ) : (
                   pageItems.map((c) => {
                     const id = c.id ?? c._id ?? c.uuid;
-                    const company =
-                      c.company ?? c.company_name ?? c.companyName ?? "—";
+                    const company = c.company ?? c.company_name ?? c.companyName ?? "—";
                     const segs = ensureArraySegments(c);
                     return (
                       <TableRow key={id || `${c.name}-${c.email}-${c.phone}`}>
-                        <TableCell className="text-center font-medium">
-                          {c.name || "—"}
-                        </TableCell>
+                        <TableCell className="text-center font-medium">{c.name || "—"}</TableCell>
                         <TableCell className="text-center">{company}</TableCell>
                         <TableCell className="text-center">
                           <div className="flex flex-wrap gap-1 justify-center">
                             {segs.slice(0, 2).map((s) => (
-                              <Badge key={s} variant="secondary">
-                                {s}
-                              </Badge>
+                              <Badge key={s} variant="secondary">{s}</Badge>
                             ))}
-                            {segs.length > 2 && (
-                              <Badge variant="outline">+{segs.length - 2}</Badge>
-                            )}
-                            {segs.length === 0 && (
-                              <span className="text-muted-foreground">—</span>
-                            )}
+                            {segs.length > 2 && <Badge variant="outline">+{segs.length - 2}</Badge>}
+                            {segs.length === 0 && <span className="text-muted-foreground">—</span>}
                           </div>
                         </TableCell>
-                        <TableCell className="text-center">
-                          {c.email || "—"}
-                        </TableCell>
+                        <TableCell className="text-center">{c.email || "—"}</TableCell>
                         <TableCell className="text-center">
                           {c.phone ? formatPhoneDisplay(c.phone) : "—"}
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex justify-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-2"
-                              onClick={() => openEdit(c)}
-                            >
+                            <Button size="sm" variant="outline" className="gap-2" onClick={() => openEdit(c)}>
                               <Edit className="size-4" /> Editar
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="gap-2"
-                              onClick={() => confirmDelete(c)}
-                            >
+                            <Button size="sm" variant="destructive" className="gap-2" onClick={() => confirmDelete(c)}>
                               <Trash2 className="size-4" /> Excluir
                             </Button>
                           </div>
@@ -1433,30 +1289,26 @@ const Clients = () => {
             </Table>
           </div>
 
-          {/* -------- Paginação -------- */}
+          {/* Paginação */}
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
-              Exibindo <b>{pageItems.length}</b> de <b>{totalExibidos}</b> cliente(s)
+              Exibindo <b>{pageItems.length}</b> de <b>{filtered.length}</b> registros
             </p>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(1)}>
+                «
+              </Button>
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
                 Anterior
               </Button>
               <div className="text-xs text-muted-foreground">
                 Página <b>{page}</b> / <b>{totalPages}</b>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
                 Próxima
+              </Button>
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>
+                »
               </Button>
             </div>
           </div>
@@ -1471,9 +1323,7 @@ const Clients = () => {
             <DialogDescription>Esta ação não pode ser desfeita.</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => setOpenDelete(false)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" size="sm" onClick={() => setOpenDelete(false)}>Cancelar</Button>
             <Button variant="destructive" size="sm" onClick={onDelete} disabled={deleting}>
               {deleting ? "Excluindo..." : "Excluir"}
             </Button>
