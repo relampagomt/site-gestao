@@ -348,143 +348,152 @@ const SEGMENTOS_GRUPOS = [
 const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap((grp) => grp.options.map((opt) => opt.value));
 
 /* ========================================================================== */
-/* SegmentosSelect — Dialog centralizado com rolagem liberada (touch/touchpad)*/
+/* SegmentosSelect — COMBOBOX EM POPOVER (scroll suave c/ capture)            */
 /* ========================================================================== */
 function SegmentosSelect({ value = [], onChange, onCreate }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
 
-  const toggle = (segValue) => {
-    const next = value.includes(segValue)
-      ? value.filter((v) => v !== segValue)
-      : [...value, segValue];
+  const baseOptions = useMemo(
+    () => SEGMENTOS_GRUPOS.flatMap((g) => g.options.map((o) => o.value)),
+    []
+  );
+
+  const allSelectedLower = useMemo(
+    () => new Set(value.map((v) => v.toLowerCase())),
+    [value]
+  );
+
+  const existsInBase = (label) => baseOptions.some((v) => v.toLowerCase() === label.toLowerCase());
+  const existsInValue = (label) => allSelectedLower.has(label.toLowerCase());
+
+  const toggle = (label) => {
+    const exists = value.includes(label);
+    const next = exists ? value.filter((s) => s !== label) : [...value, label];
     onChange(next);
   };
 
-  const handleCreate = () => {
-    const label = query.trim();
-    if (!label) return;
-    if (value.includes(label)) return;
-    if (baseSegmentSet.has(label)) {
-      toggle(label);
-    } else {
-      onChange([...value, label]);
-      onCreate?.(label);
-    }
+  const addCustom = (label) => {
+    const clean = label.trim();
+    if (!clean) return;
+    if (!existsInValue(clean)) onChange([...value, clean]);
+    onCreate?.(clean);
     setQuery("");
+    setOpen(true);
   };
 
-  const canCreate = query.trim() && !value.includes(query.trim());
-
-  // 🔧 Libera rolagem dentro do modal (impede o Dialog de engolir os eventos)
-  const stopScrollCapture = useCallback((e) => e.stopPropagation(), []);
+  const shouldSuggestCreate = useMemo(() => {
+    const t = query.trim();
+    if (!t) return false;
+    return !existsInBase(t) && !existsInValue(t);
+  }, [query, baseOptions, value]);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
         <Button variant="outline" role="combobox" className="w-full justify-between">
-          {value.length ? (
+          {value.length === 0 ? (
+            "Selecionar segmentos"
+          ) : (
             <span className="truncate">
-              {value.slice(0, 2).join(", ")}{value.length > 2 ? ` +${value.length - 2}` : ""}
+              {value.slice(0, 2).join(", ")}
+              {value.length > 2 ? ` +${value.length - 2}` : ""}
             </span>
-          ) : "Selecionar segmentos"}
+          )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
-      </DialogTrigger>
+      </PopoverTrigger>
 
-      <DialogContent
-        className="p-0 w-[min(96vw,640px)]"
-        style={{ maxHeight: "80vh" }}
+      <PopoverContent
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        collisionPadding={32}
+        className="p-0 z-[70] w-[min(92vw,320px)] sm:w-[360px] bg-background"
       >
-        <div className="grid grid-rows-[auto,1fr,auto] h-full">
-          {/* Header */}
-          <div className="p-4 border-b">
-            <DialogHeader className="gap-2">
-              <DialogTitle>Selecionar segmentos</DialogTitle>
-              <Command>
-                <CommandInput
-                  placeholder="Buscar ou criar segmento..."
-                  value={query}
-                  onValueChange={setQuery}
-                  className="h-9"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && canCreate) {
-                      e.preventDefault();
-                      handleCreate();
-                    }
-                  }}
-                />
-              </Command>
-            </DialogHeader>
-          </div>
+        <div
+          className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2"
+          style={{
+            WebkitOverflowScrolling: "touch",
+            touchAction: "pan-y",
+            overscrollBehavior: "contain",
+          }}
+          onWheelCapture={(e) => e.stopPropagation()}
+          onTouchMoveCapture={(e) => e.stopPropagation()}
+          onScrollCapture={(e) => e.stopPropagation()}
+        >
+          <Command className="text-[13px] leading-tight">
+            <div className="sticky top-0 z-10 bg-background">
+              <CommandInput
+                placeholder="Buscar ou digitar novo segmento…"
+                value={query}
+                onValueChange={setQuery}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && shouldSuggestCreate) {
+                    e.preventDefault();
+                    addCustom(query);
+                  }
+                }}
+              />
+            </div>
 
-          {/* Body rolável (touch + touchpad OK) */}
-          <div
-            className="overflow-y-auto overscroll-contain touch-pan-y"
-            style={{ WebkitOverflowScrolling: "touch" }}
-            onWheelCapture={stopScrollCapture}
-            onTouchMoveCapture={stopScrollCapture}
-            onScrollCapture={stopScrollCapture}
-          >
-            <Command className="text-[13px] leading-tight">
-              <CommandList className="max-h-none">
-                {canCreate && (
-                  <CommandGroup>
-                    <CommandItem onSelect={handleCreate} className="cursor-pointer">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Criar “{query.trim()}”
-                    </CommandItem>
-                  </CommandGroup>
-                )}
+            <CommandList className="max-h-none">
+              {shouldSuggestCreate && (
+                <CommandGroup
+                  heading={<span className="text-[11px] font-semibold text-muted-foreground">Ações</span>}
+                >
+                  <CommandItem
+                    value={`__create:${query}`}
+                    className="flex items-center gap-2 py-2 px-2"
+                    onSelect={() => addCustom(query)}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Adicionar “{query.trim()}” como novo segmento
+                  </CommandItem>
+                </CommandGroup>
+              )}
 
-                {SEGMENTOS_GRUPOS.map((grp) => {
-                  const q = query.trim().toLowerCase();
-                  const shown = grp.options.filter(
-                    (opt) =>
-                      !q ||
-                      opt.value.toLowerCase().includes(q) ||
-                      (opt.desc && opt.desc.toLowerCase().includes(q))
-                  );
-                  if (!shown.length) return null;
-
-                  return (
-                    <CommandGroup key={grp.group} heading={grp.group}>
-                      {shown.map((opt) => (
-                        <CommandItem
-                          key={opt.value}
-                          onSelect={() => toggle(opt.value)}
-                          className="cursor-pointer"
-                        >
-                          <Check
-                            className={`mr-2 h-4 w-4 ${
-                              value.includes(opt.value) ? "opacity-100" : "opacity-0"
-                            }`}
-                          />
-                          <div>
-                            <div className="font-medium">{opt.value}</div>
-                            {opt.desc && (
-                              <div className="text-xs text-muted-foreground">{opt.desc}</div>
-                            )}
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  );
-                })}
-              </CommandList>
-            </Command>
-          </div>
-
-          {/* Footer */}
-          <div className="p-3 border-t">
-            <Button variant="outline" size="sm" className="w-full" onClick={() => setOpen(false)}>
-              Fechar
-            </Button>
-          </div>
+              {SEGMENTOS_GRUPOS.map((grp) => (
+                <CommandGroup
+                  key={grp.group}
+                  heading={<span className="text-[11px] font-semibold text-muted-foreground">{grp.group}</span>}
+                  className="px-1 py-1"
+                >
+                  {grp.options.map((opt) => {
+                    const checked = value.includes(opt.value);
+                    const searchable = `${opt.value} ${opt.desc || ""}`;
+                    return (
+                      <CommandItem
+                        key={`${grp.group}-${opt.value}`}
+                        value={searchable}
+                        className="flex items-start gap-2 py-1 px-2"
+                        onSelect={() => toggle(opt.value)}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => toggle(opt.value)}
+                          className="mt-0.5"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium">{opt.value}</div>
+                          {opt.desc && (
+                            <div className="text-[11px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
+                              {opt.desc}
+                            </div>
+                          )}
+                        </div>
+                        {checked && <Check className="h-4 w-4 opacity-70" />}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              ))}
+              <div className="h-1" />
+            </CommandList>
+          </Command>
         </div>
-      </DialogContent>
-    </Dialog>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -856,7 +865,7 @@ const Clients = () => {
                   >
                     {/* Empresas */}
                     <div className="space-y-1.5">
-                      <Label className="text-[12px]">Empresas</Label>
+                      <Label className="text:[12px]">Empresas</Label>
                       <div className="max-h-[40vh] overflow-y-auto overscroll-contain touch-pan-y pr-1" style={{ WebkitOverflowScrolling: 'touch' }}>
                         {uniqueCompanies.length === 0 ? (
                           <p className="text-[11px] text-muted-foreground">—</p>
