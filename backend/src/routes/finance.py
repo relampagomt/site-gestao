@@ -25,7 +25,6 @@ _JSON_PATH = os.getenv("FINANCE_JSON_PATH") or "/tmp/finance_transactions.json"
 _USE_FIRESTORE = (os.getenv("USE_FIRESTORE", "true").lower() in ("1", "true", "yes"))
 
 # CORS: FRONTEND_URL pode ter várias origens separadas por vírgula
-# Ex.: "https://site-gestao-mu.vercel.app, http://localhost:5173"
 _ALLOWED_ORIGINS = set(
     [o.strip() for o in (os.getenv("FRONTEND_URL") or "").split(",") if o.strip()]
 )
@@ -42,11 +41,13 @@ def _iso_date_only(val) -> str:
     except Exception:
         return ""
 
+
 def _to_number(v):
     try:
         return float(v)
     except Exception:
         return 0.0
+
 
 def _doc_to_json(doc: Dict[str, Any]) -> Dict[str, Any]:
     d = dict(doc or {})
@@ -55,6 +56,7 @@ def _doc_to_json(doc: Dict[str, Any]) -> Dict[str, Any]:
     d["amount"] = _to_number(d.get("amount", 0))
     d["date"] = _iso_date_only(d.get("date"))
     return d
+
 
 def _month_bounds(ym: str) -> Optional[tuple]:
     """Recebe 'YYYY-MM' e devolve ('YYYY-MM-01', 'YYYY-MM-último_dia')."""
@@ -80,6 +82,7 @@ def _ensure_dir(path: str):
     except Exception as e:
         log.warning("[finance] não foi possível criar diretório: %s", e)
 
+
 def _json_load() -> List[Dict[str, Any]]:
     try:
         if not os.path.exists(_JSON_PATH):
@@ -91,6 +94,7 @@ def _json_load() -> List[Dict[str, Any]]:
         log.exception("[finance] erro lendo JSON: %s", e)
         return []
 
+
 def _json_save(items: List[Dict[str, Any]]):
     _ensure_dir(_JSON_PATH)
     with open(_JSON_PATH, "w", encoding="utf-8") as f:
@@ -101,12 +105,14 @@ def _json_save(items: List[Dict[str, Any]]):
 _fs_client = None
 _fs_ready = None  # cache do estado (True = ok, False = indisponível)
 
+
 def _decode_b64_json(b64: str) -> Optional[dict]:
     try:
         raw = base64.b64decode(b64).decode("utf-8")
         return json.loads(raw)
     except Exception:
         return None
+
 
 def _get_firestore():
     """Inicializa Firestore com FIREBASE_CREDENTIALS_B64 ou GOOGLE_APPLICATION_CREDENTIALS_JSON."""
@@ -127,7 +133,6 @@ def _get_firestore():
         return None
 
     try:
-        # 1) Preferir FIREBASE_CREDENTIALS_B64 (env que você já tem)
         b64 = os.getenv("FIREBASE_CREDENTIALS_B64")
         if b64:
             from google.oauth2 import service_account  # type: ignore
@@ -137,26 +142,21 @@ def _get_firestore():
             creds = service_account.Credentials.from_service_account_info(info)
             project = info.get("project_id") or os.getenv("FIREBASE_PROJECT_ID")
             _client = firestore.Client(credentials=creds, project=project)
-            log.info("[finance] Firestore inicializado via FIREBASE_CREDENTIALS_B64")
             _fs_ready = True
             _fs_client = _client
             return _fs_client
 
-        # 2) Alternativa: GOOGLE_APPLICATION_CREDENTIALS_JSON
         gac_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
         if gac_json:
             from google.oauth2 import service_account  # type: ignore
             info = json.loads(gac_json)
             creds = service_account.Credentials.from_service_account_info(info)
             _client = firestore.Client(credentials=creds, project=info.get("project_id"))
-            log.info("[finance] Firestore inicializado via GOOGLE_APPLICATION_CREDENTIALS_JSON")
             _fs_ready = True
             _fs_client = _client
             return _fs_client
 
-        # 3) Por fim, tentar ADC padrão (se houver caminho no container)
         _client = firestore.Client()
-        log.info("[finance] Firestore inicializado via ADC/GOOGLE_APPLICATION_CREDENTIALS")
         _fs_ready = True
         _fs_client = _client
         return _fs_client
@@ -169,14 +169,12 @@ def _get_firestore():
 
 
 def _fs_list(ttype: str, action_id: str, month: str) -> List[Dict[str, Any]]:
-    """Lê documentos do Firestore e aplica filtros em Python (evita índices)."""
     client = _get_firestore()
     if not client:
         return _json_load()
 
     try:
         coll = client.collection(_COLL)
-        # Busca ampla e filtra localmente (bom o suficiente para volumes pequenos/médios)
         docs = [d.to_dict() for d in coll.stream()]
         items = []
         for d in docs:
@@ -193,7 +191,6 @@ def _fs_list(ttype: str, action_id: str, month: str) -> List[Dict[str, Any]]:
             }
             items.append(_doc_to_json(it))
 
-        # filtros
         if ttype in _VALID_TYPES:
             items = [x for x in items if (x.get("type") or "") == ttype]
         if action_id:
@@ -283,14 +280,12 @@ def _fs_delete(txid: str) -> bool:
 # ============================== CORS ===================================
 @finance_bp.after_request
 def _add_cors_headers(resp: Response):
-    # reflete a origem quando FRONTEND_URL está configurado
     origin = request.headers.get("Origin")
     allow = _DEFAULT_ALLOW_ORIGIN
     if origin and _ALLOWED_ORIGINS:
         if origin in _ALLOWED_ORIGINS:
             allow = origin
         else:
-            # se quiser, pode logar as origens negadas para depuração
             log.debug("[finance][CORS] origem não permitida: %s", origin)
 
     resp.headers["Access-Control-Allow-Origin"] = allow or "*"
@@ -300,7 +295,7 @@ def _add_cors_headers(resp: Response):
     resp.headers["Access-Control-Expose-Headers"] = "Authorization, Content-Type"
     return resp
 
-# Preflight (evita 404/405 no OPTIONS)
+
 @finance_bp.route("/finance/transactions", methods=["OPTIONS"])
 @finance_bp.route("/transactions", methods=["OPTIONS"])
 def _preflight_transactions():
@@ -308,7 +303,6 @@ def _preflight_transactions():
 
 
 # =============================== Rotas ================================
-# LISTAR (?type, ?action_id, ?month=YYYY-MM)
 @finance_bp.route("/finance/transactions", methods=["GET"])
 @finance_bp.route("/transactions", methods=["GET"])
 @roles_allowed('admin')
@@ -316,7 +310,7 @@ def list_transactions():
     try:
         ttype = (request.args.get("type") or "").strip().lower()
         action_id = (request.args.get("action_id") or "").strip()
-        month = (request.args.get("month") or "").strip()  # YYYY-MM
+        month = (request.args.get("month") or "").strip()
 
         items = _fs_list(ttype, action_id, month)
         return jsonify(items), 200
@@ -325,7 +319,6 @@ def list_transactions():
         return jsonify({"message": "internal_error"}), 500
 
 
-# CRIAR
 @finance_bp.route("/finance/transactions", methods=["POST"])
 @finance_bp.route("/transactions", methods=["POST"])
 @roles_allowed('admin')
@@ -360,7 +353,6 @@ def create_transaction():
         return jsonify({"message": "internal_error"}), 500
 
 
-# ATUALIZAR
 @finance_bp.route("/finance/transactions/<txid>", methods=["PUT", "PATCH"])
 @finance_bp.route("/transactions/<txid>", methods=["PUT", "PATCH"])
 @roles_allowed('admin')
@@ -394,7 +386,6 @@ def update_transaction(txid):
         return jsonify({"message": "internal_error"}), 500
 
 
-# DELETAR
 @finance_bp.route("/finance/transactions/<txid>", methods=["DELETE"])
 @finance_bp.route("/transactions/<txid>", methods=["DELETE"])
 @roles_allowed('admin')
@@ -407,3 +398,28 @@ def delete_transaction(txid):
     except Exception as e:
         log.exception("[finance][DELETE] falha: %s", e)
         return jsonify({"message": "internal_error"}), 500
+
+
+# =============================== Aliases ================================
+@finance_bp.route("/api/contas-pagar", methods=["POST"])
+@roles_allowed('admin')
+def criar_conta_pagar():
+    """
+    Alias para criação de Conta a Pagar -> força type="saida"
+    """
+    data = request.get_json(silent=True) or {}
+    data["type"] = "saida"
+    request._cached_json = data
+    return create_transaction()
+
+
+@finance_bp.route("/api/contas-receber", methods=["POST"])
+@roles_allowed('admin')
+def criar_conta_receber():
+    """
+    Alias para criação de Conta a Receber -> força type="entrada"
+    """
+    data = request.get_json(silent=True) or {}
+    data["type"] = "entrada"
+    request._cached_json = data
+    return create_transaction()
