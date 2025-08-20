@@ -362,7 +362,7 @@ const CalendarWeek = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, onM
   );
 };
 
-/* ========= AGENDA (agora com filtro: Dia / Semana / Mês / Ano) ========= */
+/* ========= AGENDA (agora com filtro: Dia / Semana / Mês / Ano) + KPI ========= */
 const AgendaList = ({ actions, cursor, setCursor, onOpenEdit }) => {
   const [scope, setScope] = useState("month"); // "day" | "week" | "month" | "year"
 
@@ -423,6 +423,8 @@ const AgendaList = ({ actions, cursor, setCursor, onOpenEdit }) => {
     else setCursor(addDays(endOfMonth(cursor), 1)); // próximo mês
   };
 
+  const scopeLabel = { day: "Dia", week: "Semana", month: "Mês", year: "Ano" }[scope];
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -474,6 +476,16 @@ const AgendaList = ({ actions, cursor, setCursor, onOpenEdit }) => {
       </CardHeader>
 
       <CardContent>
+        {/* ===== KPI de total no período selecionado ===== */}
+        <div className="mb-3">
+          <div className="inline-flex items-baseline gap-3 rounded-xl border bg-muted/40 px-4 py-3">
+            <div className="text-xs text-muted-foreground">
+              Total de ações — <b>{scopeLabel}</b>
+            </div>
+            <div className="text-2xl leading-none font-semibold tabular-nums">{rows.length}</div>
+          </div>
+        </div>
+
         {rows.length === 0 ? (
           <div className="text-sm text-muted-foreground">Nenhuma ação no período.</div>
         ) : (
