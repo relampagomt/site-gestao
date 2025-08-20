@@ -457,8 +457,9 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Atividades Recentes (substituído pelo componente com modal + histórico paginado) */}
-      <RecentActivities />
+      {/* Atividades Recentes (substituído pelo componente com modal + histórico paginado)
+          Footer sem botão "Ver todo o histórico" */}
+      <RecentActivities showFooterHistory={false} />
     </div>
   );
 };
