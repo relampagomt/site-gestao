@@ -24,7 +24,8 @@ import {
 } from 'lucide-react';
 
 // Export (CSV/XLSX/PDF) menu
-import ExportMenu from '@/components/export/ExportMenu';
+import ExportMenu from "@/components/export/ExportMenu";
+import ImportButton from "@/components/ImportButton";
 
 /* =============== Helpers =============== */
 const BRL = (n) =>
@@ -249,13 +250,40 @@ const ContasReceberTab = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta conta a receber?')) return;
+    if (!window.confirm("Tem certeza que deseja excluir esta conta a receber?")) return;
     try {
       await api.delete(`${RECEIVABLES_PATH}/${id}`);
       loadAll();
     } catch (err) {
-      console.error('Erro ao excluir conta a receber:', err);
-      alert('Não foi possível excluir. Verifique o backend.');
+      console.error("Erro ao excluir conta a receber:", err);
+      alert("Não foi possível excluir. Verifique o backend.");
+    }
+  };
+
+  const handleImportData = async (data) => {
+    setLoading(true);
+    try {
+      for (const item of data) {
+        const payload = {
+          vencimento: brToISO(item.VENCTO || ""),
+          cliente: item.CLIENTE || "",
+          notaFiscal: item["NOTA FISCAL"] || "",
+          dataEmissao: item["DATA EMISSÃO"] ? brToISO(item["DATA EMISSÃO"]) : null,
+          valor: Number(item.VALOR || 0),
+          taxasJuros: Number(item["TAXAS/JUROS"] || 0),
+          documentoRecebimento: item["DOCUMENTO RECEBIMENTO"] || "",
+          dataBaixa: item["DATA DA BAIXA"] ? brToISO(item["DATA DA BAIXA"]) : null,
+          valorLiqRecebido: Number(item["VALOR LIQ RECEBIDO"] || 0),
+        };
+        await api.post(RECEIVABLES_PATH, payload);
+      }
+      alert("Dados importados com sucesso!");
+      loadAll();
+    } catch (err) {
+      console.error("Erro ao importar dados:", err);
+      alert("Não foi possível importar os dados. Verifique o formato do arquivo e o backend.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -370,7 +398,8 @@ const ContasReceberTab = () => {
               <CardTitle className="text-lg md:text-xl font-semibold">Contas a Receber</CardTitle>
               <CardDescription>Gerencie suas contas a receber</CardDescription>
             </div>
-            <div className="ml-auto">
+            <div className="ml-auto flex gap-2">
+              <ImportButton onImport={handleImportData} />
               <ExportMenu data={exportData} columns={exportColumns} filename="contas-receber" pdfOptions={pdfOptions} />
             </div>
           </div>

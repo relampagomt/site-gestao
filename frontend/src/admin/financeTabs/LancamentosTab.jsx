@@ -536,13 +536,13 @@ const LancamentosTab = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
-            <div className="relative flex-1 w-full md:w-[320px]">
+            <div className="relative w-full sm:w-[320px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input className="pl-9" placeholder="Buscar transações..." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
 
-            <div className="w-full sm:w-auto">
-              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-56 md:w-64 max-w-full border rounded-md px-3 py-2 text-sm bg-background">
+            <div className="w-full sm:w-[180px]">
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                 <option value="todos">Todos os tipos</option>
                 <option value="entrada">Entrada</option>
                 <option value="saida">Saída</option>
@@ -550,14 +550,14 @@ const LancamentosTab = () => {
               </select>
             </div>
 
-            <div className="w-full sm:w-auto">
-              <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="w-56 md:w-64 max-w-full border rounded-md px-3 py-2 text-sm bg-background">
+            <div className="w-full sm:w-[180px]">
+              <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                 <option value="todos">Todos os meses</option>
                 {monthOptions.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
             </div>
 
-            <div className="w-full sm:w-auto">
+            <div className="w-full sm:w-[180px]">
               <ActionsSelector />
             </div>
 
