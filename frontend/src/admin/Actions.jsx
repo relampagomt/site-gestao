@@ -273,7 +273,8 @@ const CalendarMonth = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, on
             <CardDescription>Visualização mensal das ações</CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={()=>setCursor(startOfMonth(new Date()))}>Hoje</Button>
+            {/* Ajuste: ancorar em HOJE (não no 1º dia do mês) para não deslocar a semana ao alternar */}
+            <Button variant="outline" size="sm" onClick={()=>setCursor(new Date())}>Hoje</Button>
             <div className="flex items-center gap-1">
               <Button variant="outline" size="icon" onClick={()=>setCursor(addDays(startOfMonth(cursor), -1))}><ChevronLeft className="size-4" /></Button>
               <Button variant="outline" size="icon" onClick={()=>setCursor(addDays(endOfMonth(cursor), 1))}><ChevronRight className="size-4" /></Button>
@@ -566,7 +567,13 @@ const Actions = () => {
   const [fEndBr, setFEndBr] = useState("");
 
   const [view, setView] = useState("month");
-  const [cursor, setCursor] = useState(()=>startOfMonth(new Date()));
+  const [cursor, setCursor] = useState(() => new Date());
+
+  // garante que, ao alternar de visão, a âncora volte para HOJE
+  const switchView = (v) => {
+    setView(v);
+    setCursor(new Date());
+  };
 
   const loadActions = async () => {
     setLoading(true);
@@ -869,9 +876,24 @@ const Actions = () => {
 
       <div className="mb-4 flex items-center gap-2">
         <div className="inline-flex border rounded-lg overflow-hidden">
-          <button className={`px-3 py-1.5 text-sm ${view==="month" ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} onClick={()=>setView("month")}>Mês</button>
-          <button className={`px-3 py-1.5 text-sm ${view==="week"  ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} onClick={()=>setView("week")}>Semana</button>
-          <button className={`px-3 py-1.5 text-sm ${view==="agenda"? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} onClick={()=>setView("agenda")}>Agenda</button>
+          <button
+            className={`px-3 py-1.5 text-sm ${view==="month" ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}
+            onClick={()=>switchView("month")}
+          >
+            Mês
+          </button>
+          <button
+            className={`px-3 py-1.5 text-sm ${view==="week"  ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}
+            onClick={()=>switchView("week")}
+          >
+            Semana
+          </button>
+          <button
+            className={`px-3 py-1.5 text-sm ${view==="agenda"? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}
+            onClick={()=>switchView("agenda")}
+          >
+            Agenda
+          </button>
         </div>
       </div>
 
