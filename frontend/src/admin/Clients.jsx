@@ -1116,18 +1116,14 @@ const Clients = () => {
 
           {/* KPI Cards */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {/* Total (ajustado: labels lado a lado e equidistantes) */}
+            {/* Total (reduzido) */}
             <div className="rounded-xl border bg-card p-3 sm:p-4 min-h-[120px] sm:min-h-[140px] flex items-center justify-center text-center">
-              <div className="w-full">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Total de clientes (geral)
-                  </p>
-                  <p className="text-xs font-medium text-foreground/70">
-                    Exibidos após filtros: <b>{totalAfterFilters}</b>
-                  </p>
-                </div>
-                <div className="mt-2 text-3xl sm:text-4xl font-bold leading-none">{totalClients}</div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total de clientes (geral)</p>
+                <div className="mt-1 text-3xl sm:text-4xl font-bold leading-none">{totalClients}</div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Exibidos após filtros: <b>{totalAfterFilters}</b>
+                </p>
               </div>
             </div>
 
