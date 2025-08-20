@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
-import { nodePolyfills } from 'rollup-plugin-node-polyfills'; // Importe o plugin
+import nodePolyfills from 'rollup-plugin-node-polyfills'; // Importação corrigida
 
 export default defineConfig({
   plugins: [
@@ -17,17 +17,14 @@ export default defineConfig({
       buffer: 'rollup-plugin-node-polyfills/polyfills/buffer',
       util: 'rollup-plugin-node-polyfills/polyfills/util',
       process: 'rollup-plugin-node-polyfills/polyfills/process-es6',
-      // O fs já estava sendo tratado, mas o polyfill é mais robusto
       fs: 'rollup-plugin-node-polyfills/polyfills/fs',
     },
   },
   build: {
     rollupOptions: {
       plugins: [
-        nodePolyfills(), // Adicione o plugin aqui
+        nodePolyfills(), // Uso do plugin
       ],
-      // Remova `external: ['fs']` se você o adicionou anteriormente, pois o polyfill vai lidar com isso
-      // external: ['fs'], // Remova esta linha se estiver presente
     },
   },
   server: {
