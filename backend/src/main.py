@@ -20,6 +20,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from werkzeug.exceptions import RequestEntityTooLarge
 
+
 def create_app():
     app = Flask(__name__)
 
@@ -84,7 +85,7 @@ def create_app():
     app.register_blueprint(metrics_bp, url_prefix="/api/metrics")
     app.register_blueprint(upload_bp, url_prefix="/api")
     app.register_blueprint(user_bp, url_prefix="/api")
-    app.register_blueprint(finance_bp, url_prefix="/api")  # /api/finance/* e /api/transactions
+    app.register_blueprint(finance_bp, url_prefix="/api")  # 🔥 garante /api/finance e /api/contas-*
 
     # -----------------------
     # Healthcheck
@@ -93,13 +94,14 @@ def create_app():
     def healthcheck_root():
         return jsonify({"status": "ok"}), 200
 
-    # >>> adição: healthcheck dentro de /api <<<
+    # healthcheck também em /api
     @app.route("/api/healthcheck", methods=["GET", "HEAD", "OPTIONS"])
     def healthcheck_api():
         return jsonify({"status": "ok"}), 200
 
-    # >>> aliases para compatibilizar chamadas do front <<<
-    # mantém método com 307 (POST continua POST, GET continua GET)
+    # -----------------------
+    # Aliases de métricas
+    # -----------------------
     @app.route("/api/monthly-campaigns", methods=["GET", "POST", "OPTIONS", "HEAD"])
     def alias_monthly_campaigns():
         return redirect("/api/metrics/monthly-campaigns", code=307)
@@ -109,14 +111,14 @@ def create_app():
         return redirect("/api/metrics/service-distribution", code=307)
 
     # -----------------------
-    # Preflight genérico para /api/*
+    # Preflight genérico
     # -----------------------
     @app.route("/api/<path:any_path>", methods=["OPTIONS"])
     def api_preflight(any_path):
         return ("", 204)
 
     # -----------------------
-    # Error Handlers (JSON)
+    # Error Handlers
     # -----------------------
     @app.errorhandler(404)
     def handle_404(e):
@@ -131,7 +133,7 @@ def create_app():
         return jsonify(error="internal_server_error"), 500
 
     # -----------------------
-    # Seed do admin (se não existir)
+    # Seed admin
     # -----------------------
     with app.app_context():
         try:
@@ -140,6 +142,7 @@ def create_app():
             logging.getLogger(__name__).exception("ensure_admin_seed failed: %s", se)
 
     return app
+
 
 app = create_app()
 
