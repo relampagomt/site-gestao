@@ -457,32 +457,8 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Atividades Recentes */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Atividades Recentes</CardTitle>
-          <CardDescription>Últimas ações realizadas no sistema</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {recentActivities.length > 0 ? (
-              recentActivities.map((activity) => (
-                <div key={activity.id} className="flex items-center space-x-4">
-                  <Activity className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{activity.text}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {activity.date ? new Date(activity.date).toLocaleDateString('pt-BR') : ''}
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">Sem atividades recentes.</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Atividades Recentes (substituído pelo componente com modal + histórico paginado) */}
+      <RecentActivities />
     </div>
   );
 };
