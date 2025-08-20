@@ -92,7 +92,7 @@ export default function RecentActivities() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-base sm:text-lg">Atividades Recentes</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Ações Recentes</CardTitle>
             <CardDescription>Últimas ações realizadas no sistema</CardDescription>
           </div>
           <Button
