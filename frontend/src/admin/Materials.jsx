@@ -30,8 +30,6 @@ import ImagePreview from "@/components/ImagePreview.jsx";
 
 // Export
 import ExportMenu from "@/components/export/ExportMenu";
-// >>> ADICIONADO: utilizar barra de paginação responsiva
-import PaginationBar from "@/components/PaginationBar.jsx";
 
 /* ===== Helpers de Data e Normalização ===== */
 
@@ -742,19 +740,48 @@ const Materials = () => {
             </Table>
           </div>
 
-          {/* Paginação — SUBSTITUÍDO pelo componente responsivo */}
-          <PaginationBar
-            page={page}
-            totalPages={totalPages}
-            onPrev={goPrev}
-            onNext={goNext}
-            left={
-              <p className="text-xs text-muted-foreground">
-                Exibindo <b>{pageItems.length}</b> de <b>{total}</b> — Qtd total exibida:{" "}
-                <b>{fmtInt.format(totalQtdFiltrada)}</b>
-              </p>
-            }
-          />
+          {/* Paginação */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="order-2 sm:order-1 text-xs text-muted-foreground">
+              Exibindo <b>{pageItems.length}</b> de <b>{total}</b> — Qtd total exibida:{" "}
+              <b>{fmtInt.format(totalQtdFiltrada)}</b>
+            </div>
+
+            <div className="order-1 sm:order-2 flex items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-w-[92px] h-9"
+                disabled={page <= 1}
+                onClick={goPrev}
+                aria-label="Página anterior"
+                title="Anterior"
+              >
+                Anterior
+              </Button>
+
+              <div className="shrink-0 text-xs tabular-nums">
+                <span className="inline-block rounded-md border bg-muted/60 px-2.5 py-1">
+                  Página <b>{page}</b>
+                  <span className="opacity-60">/{totalPages}</span>
+                </span>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-w-[92px] h-9"
+                disabled={page >= totalPages}
+                onClick={goNext}
+                aria-label="Próxima página"
+                title="Próxima"
+              >
+                Próxima
+              </Button>
+            </div>
+          </div>
 
           {/* Filtros Avançados */}
           {openFilters && (
