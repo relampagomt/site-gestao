@@ -498,6 +498,32 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
 }
 
 /* ========================================================================== */
+/* Legenda lateral compacta (fixa e rolável) para a pizza                     */
+/* ========================================================================== */
+const SideLegend = ({ data = [], maxHeight = 160, colors = [] }) => {
+  return (
+    <div className="overflow-y-auto pr-1" style={{ maxHeight }}>
+      <ul className="space-y-1">
+        {data.map((d, idx) => {
+          const color = d.color || colors[idx % colors.length] || "#999";
+          return (
+            <li key={idx} className="flex items-center gap-2">
+              <span
+                className="inline-block rounded-sm border border-black/10"
+                style={{ width: 9, height: 9, background: color }}
+              />
+              <span className="truncate text-[11px] sm:text-xs leading-tight">
+                {d.name} {typeof d.value === "number" ? `${d.value}%` : ""}{typeof d.count === "number" ? ` (${d.count})` : ""}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
+
+/* ========================================================================== */
 /* Página Clientes — KPIs responsivos + pizza + paginação                     */
 /* ========================================================================== */
 const Clients = () => {
@@ -1125,46 +1151,56 @@ const Clients = () => {
                 </div>
                 <div className="flex flex-col items-center">
                   <p className="text-xs text-zinc-600 dark:text-zinc-300">
-                    Exibidos após filtros: <b>{totalAfterFilters}</b>
+                    Exibidos após filtros
                   </p>
                   <div className="mt-1 text-3xl sm:text-4xl font-bold leading-none">{totalAfterFilters}</div>
                 </div>
               </div>
             </div>
 
-            {/* Pizza (reduzido, sem legendas) */}
+            {/* Pizza com legenda fixa e rolável */}
             <div className="rounded-xl border bg-card p-3 sm:p-4">
               <p className="text-xs text-muted-foreground px-1 mb-2">Top 10 segmentos (% dos clientes exibidos)</p>
-              <div className="w-full h-[160px] sm:h-[180px] lg:h-[180px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius="45%"
-                      outerRadius="70%"
-                      paddingAngle={1}
-                      strokeWidth={1}
-                    >
-                      {pieData.map((_, i) => (
-                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(val, name, props) => [`${val}% (${props?.payload?.count})`, name]}
-                      contentStyle={{
-                        fontSize: '12px',
-                        padding: '8px',
-                        borderRadius: '6px',
-                        border: '1px solid #e2e8f0',
-                        backgroundColor: 'white'
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="w-full">
+                <div className="flex items-start gap-3">
+                  {/* Gráfico */}
+                  <div className="flex-1 h-[160px] sm:h-[180px] lg:h-[180px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius="45%"
+                          outerRadius="70%"
+                          paddingAngle={1}
+                          strokeWidth={1}
+                        >
+                          {pieData.map((_, i) => (
+                            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(val, name, props) => [`${val}% (${props?.payload?.count})`, name]}
+                          contentStyle={{
+                            fontSize: '12px',
+                            padding: '8px',
+                            borderRadius: '6px',
+                            border: '1px solid #e2e8f0',
+                            backgroundColor: 'white'
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Legenda lateral fixa/rolável */}
+                  <div className="w-40 sm:w-52">
+                    <SideLegend data={pieData} colors={PIE_COLORS} maxHeight={160} />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
