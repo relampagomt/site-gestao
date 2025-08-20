@@ -61,6 +61,8 @@ const startOfMonth = (dt) => new Date(dt.getFullYear(), dt.getMonth(), 1);
 const endOfMonth   = (dt) => new Date(dt.getFullYear(), dt.getMonth() + 1, 0);
 const startOfWeekMon = (dt) => { const d = new Date(dt); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); d.setHours(0,0,0,0); return d; };
 const endOfWeekMon   = (dt) => addDays(startOfWeekMon(dt), 6);
+const startOfYear = (dt) => new Date(dt.getFullYear(), 0, 1);
+const endOfYear   = (dt) => new Date(dt.getFullYear(), 11, 31);
 const monthTitlePtBR = (dt) => dt.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 const WEEKDAYS_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
@@ -191,7 +193,7 @@ function DayCell({ dateObj, inMonth, isToday, events, onNewOnDate, onOpenEdit, o
     <div className={`bg-card min-h-[112px] sm:min-h-[130px] p-1.5 sm:p-2 flex flex-col ${inMonth ? "" : "opacity-50"}`}
          onDragOver={onDragOver} onDrop={onDrop}>
       <div className="flex items-center justify-between mb-1">
-        {/* Agora: clicar no número do dia abre o modal com TODAS as ações do dia */}
+        {/* número do dia abre modal */}
         <button
           onClick={()=>onOpenDay(key, events)}
           className={`text-xs rounded px-1 ${isToday ? "bg-primary text-primary-foreground" : "text-foreground/80 hover:bg-accent"}`}
@@ -360,9 +362,39 @@ const CalendarWeek = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, onM
   );
 };
 
+/* ========= AGENDA (agora com filtro: Dia / Semana / Mês / Ano) ========= */
 const AgendaList = ({ actions, cursor, setCursor, onOpenEdit }) => {
-  const monthStart = startOfMonth(cursor);
-  const monthEnd   = endOfMonth(cursor);
+  const [scope, setScope] = useState("month"); // "day" | "week" | "month" | "year"
+
+  const range = useMemo(() => {
+    if (scope === "day") {
+      const d = toLocalDateFromYMD(toYMD(cursor));
+      return { start: d, end: d };
+    }
+    if (scope === "week") {
+      const s = startOfWeekMon(cursor);
+      return { start: s, end: addDays(s, 6) };
+    }
+    if (scope === "year") {
+      return { start: startOfYear(cursor), end: endOfYear(cursor) };
+    }
+    // month (default)
+    return { start: startOfMonth(cursor), end: endOfMonth(cursor) };
+  }, [cursor, scope]);
+
+  const titleText = useMemo(() => {
+    if (scope === "day") {
+      return ymdToBR(toYMD(cursor));
+    }
+    if (scope === "week") {
+      const s = startOfWeekMon(cursor);
+      return `${ymdToBR(toYMD(s))} – ${ymdToBR(toYMD(addDays(s, 6)))}`;
+    }
+    if (scope === "year") {
+      return String(cursor.getFullYear());
+    }
+    return monthTitlePtBR(cursor);
+  }, [cursor, scope]);
 
   const rows = useMemo(() => {
     const out = [];
@@ -371,12 +403,25 @@ const AgendaList = ({ actions, cursor, setCursor, onOpenEdit }) => {
       if (!sYMD || !eYMD) continue;
       const s = toLocalDateFromYMD(sYMD);
       const e = toLocalDateFromYMD(eYMD);
-      if (e < monthStart || s > monthEnd) continue;
+      if (e < range.start || s > range.end) continue;
       out.push(a);
     }
     out.sort((a,b)=> (pickYMD(a).sYMD || "0000-01-01").localeCompare(pickYMD(b).sYMD || "0000-01-01"));
     return out;
-  }, [actions, cursor]);
+  }, [actions, range]);
+
+  const goPrev = () => {
+    if (scope === "day") setCursor(addDays(cursor, -1));
+    else if (scope === "week") setCursor(addDays(cursor, -7));
+    else if (scope === "year") setCursor(new Date(cursor.getFullYear() - 1, cursor.getMonth(), cursor.getDate()));
+    else setCursor(addDays(startOfMonth(cursor), -1)); // mês anterior
+  };
+  const goNext = () => {
+    if (scope === "day") setCursor(addDays(cursor, 1));
+    else if (scope === "week") setCursor(addDays(cursor, 7));
+    else if (scope === "year") setCursor(new Date(cursor.getFullYear() + 1, cursor.getMonth(), cursor.getDate()));
+    else setCursor(addDays(endOfMonth(cursor), 1)); // próximo mês
+  };
 
   return (
     <Card>
@@ -384,14 +429,50 @@ const AgendaList = ({ actions, cursor, setCursor, onOpenEdit }) => {
         <div className="flex items-center justify-between gap-2">
           <div>
             <CardTitle className="text-lg md:text-xl font-semibold">Agenda</CardTitle>
-            <CardDescription>{monthTitlePtBR(cursor)}</CardDescription>
+            <CardDescription>{titleText}</CardDescription>
           </div>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" onClick={()=>setCursor(addDays(startOfMonth(cursor), -1))}><ChevronLeft className="size-4"/></Button>
-            <Button variant="outline" size="icon" onClick={()=>setCursor(addDays(endOfMonth(cursor), 1))}><ChevronRight className="size-4"/></Button>
+
+          <div className="flex items-center gap-2">
+            {/* Controle de escopo: Dia | Semana | Mês | Ano */}
+            <div className="hidden sm:flex items-center border rounded-lg overflow-hidden">
+              {["day","week","month","year"].map((k)=>(
+                <button
+                  key={k}
+                  className={`px-2.5 py-1.5 text-xs capitalize ${scope===k ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}
+                  onClick={()=>setScope(k)}
+                  title={{day:"Dia",week:"Semana",month:"Mês",year:"Ano"}[k]}
+                >
+                  {{day:"Dia",week:"Semana",month:"Mês",year:"Ano"}[k]}
+                </button>
+              ))}
+            </div>
+
+            <Button variant="outline" size="sm" onClick={()=>setCursor(new Date())}>Hoje</Button>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" onClick={goPrev}><ChevronLeft className="size-4"/></Button>
+              <Button variant="outline" size="icon" onClick={goNext}><ChevronRight className="size-4"/></Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Controle compacto no mobile */}
+        <div className="mt-2 sm:hidden">
+          <div className="flex items-center justify-between gap-2">
+            <div className="inline-flex border rounded-lg overflow-hidden">
+              {["day","week","month","year"].map((k)=>(
+                <button
+                  key={k}
+                  className={`px-3 py-1.5 text-xs capitalize ${scope===k ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}
+                  onClick={()=>setScope(k)}
+                >
+                  {{day:"Dia",week:"Semana",month:"Mês",year:"Ano"}[k]}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </CardHeader>
+
       <CardContent>
         {rows.length === 0 ? (
           <div className="text-sm text-muted-foreground">Nenhuma ação no período.</div>
@@ -695,7 +776,6 @@ const Actions = () => {
         return aStart <= end && aEnd >= start;
       });
     }
-    // Mais recentes primeiro (já era assim; mantido)
     list.sort((a,b)=> (pickYMD(b).sYMD || "0000-01-01").localeCompare(pickYMD(a).sYMD || "0000-01-01"));
     return list;
   }, [actions, q, fClients, fCompanies, fTypes, fPeriods, fStatus, fStartBr, fEndBr]);
@@ -984,7 +1064,7 @@ const Actions = () => {
                         </div>
                         <datalist id="__people__">{people.map((p)=><option key={p} value={p} />)}</datalist>
                         {form.team.length>0 && (
-                          <div className="flex flex-wrap gap-2 mt-1">
+                          <div className="flex flex-wrap gap-2">
                             {form.team.map((n)=>(
                               <Badge key={n} variant="secondary" className="gap-1">
                                 {n}
