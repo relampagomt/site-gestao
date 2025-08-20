@@ -41,6 +41,7 @@ import {
 
 // Export (CSV/XLSX/PDF) menu
 import ExportMenu from '@/components/export/ExportMenu';
+import readXlsxFile from 'read-excel-file';
 
 /* =============== Helpers =============== */
 const BRL = (n) =>
@@ -83,7 +84,7 @@ const emptyForm = {
 
 const TX_PATH = '/transactions';
 
-const Finance = () => {
+const TransacoesSection = () => {
   const [transactions, setTransactions] = useState([]);
   const [actions, setActions] = useState([]);
   const [clients, setClients] = useState([]);
@@ -777,6 +778,371 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
         </div>
       </PopoverContent>
     </Popover>
+  );
+};
+
+/* =====================================================================================
+   SEÇÕES ADICIONAIS: Contas a Pagar (Despesas Fixas) & Contas a Receber
+   Importam planilhas no padrão: VENCTO | DOC | DESCRIÇÃO | VALOR | DT PAGTO | VALOR PAGO
+   Filtros independentes, KPIs, Gráfico e Exportação integrados ao ExportMenu.
+===================================================================================== */
+
+// Utilitários locais
+const extractMonthYear = (dateStr) => {
+  if (!dateStr) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr.slice(0, 7);
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+    const [d, m, y] = dateStr.split('/');
+    return `${y}-${m}`;
+  }
+  if (dateStr instanceof Date && !isNaN(dateStr)) {
+    const y = dateStr.getFullYear();
+    const m = String(dateStr.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }
+  return '';
+};
+
+const normalizeCell = (cell) => {
+  if (cell instanceof Date && !isNaN(cell)) {
+    const d = String(cell.getDate()).padStart(2, '0');
+    const m = String(cell.getMonth() + 1).padStart(2, '0');
+    const y = String(cell.getFullYear());
+    return `${d}/${m}/${y}`;
+  }
+  if (cell === null || cell === undefined) return '';
+  return String(cell).trim();
+};
+
+const useFinancialSection = () => {
+  const [rows, setRows] = React.useState([]);
+  const [search, setSearch] = React.useState('');
+  const [monthFilter, setMonthFilter] = React.useState('todos');
+  const [statusFilter, setStatusFilter] = React.useState('todos');
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const raw = await readXlsxFile(file);
+    const body = raw.slice(1).map((r) => ({
+      vencto: normalizeCell(r[0]),
+      doc: normalizeCell(r[1]),
+      descricao: normalizeCell(r[2]),
+      valor: Number(r[3] || 0),
+      dtPagto: normalizeCell(r[4]),
+      valorPago: Number(r[5] || 0),
+    }));
+    setRows(body);
+    e.target.value = '';
+  };
+
+  const monthOptions = React.useMemo(() => {
+    return Array.from(new Set(rows.map((d) => extractMonthYear(d.vencto)).filter(Boolean))).sort();
+  }, [rows]);
+
+  const applyFilters = (calcStatusFn) => {
+    return rows.filter((d) => {
+      if (search && !(`${d.doc} ${d.descricao}`.toLowerCase().includes(search.toLowerCase()))) return false;
+      if (monthFilter !== 'todos' && extractMonthYear(d.vencto) !== monthFilter) return false;
+      if (statusFilter !== 'todos') {
+        const statusOk = calcStatusFn(d);
+        if (statusFilter === 'aberto' && statusOk) return false;
+        if ((statusFilter === 'pago' || statusFilter === 'recebido') && !statusOk) return false;
+      }
+      return true;
+    });
+  };
+
+  return { rows, search, setSearch, monthFilter, setMonthFilter, statusFilter, setStatusFilter, handleImport, monthOptions, applyFilters };
+};
+
+const DespesasFixas = () => {
+  const { rows, search, setSearch, monthFilter, setMonthFilter, statusFilter, setStatusFilter, handleImport, monthOptions, applyFilters } = useFinancialSection();
+
+  const filtered = React.useMemo(() => applyFilters((d) => d.valorPago >= d.valor), [applyFilters, rows, search, monthFilter, statusFilter]);
+
+  const totalPrevisto = React.useMemo(() => filtered.reduce((s, d) => s + d.valor, 0), [filtered]);
+  const totalPago = React.useMemo(() => filtered.reduce((s, d) => s + d.valorPago, 0), [filtered]);
+  const saldo = totalPrevisto - totalPago;
+  const percentPago = totalPrevisto ? ((totalPago / totalPrevisto) * 100).toFixed(1) : 0;
+
+  const pieData = [
+    { name: 'Pago', value: totalPago },
+    { name: 'Em aberto', value: Math.max(saldo, 0) },
+  ];
+
+  const exportData = filtered.map((d) => ({
+    vencimento: d.vencto,
+    documento: d.doc,
+    descricao: d.descricao,
+    valor: d.valor,
+    data_pagto: d.dtPagto,
+    valor_pago: d.valorPago,
+    mes_ano: extractMonthYear(d.vencto),
+  }));
+
+  const exportColumns = [
+    { key: 'vencimento', header: 'Vencimento' },
+    { key: 'documento', header: 'Doc' },
+    { key: 'descricao', header: 'Descrição' },
+    { key: 'valor', header: 'Valor' },
+    { key: 'data_pagto', header: 'Dt Pagto' },
+    { key: 'valor_pago', header: 'Valor Pago' },
+    { key: 'mes_ano', header: 'Mês/Ano' },
+  ];
+
+  const pdfOptions = {
+    title: 'Relatório - Contas a Pagar (Despesas Fixas)',
+    orientation: 'l',
+    filtersSummary: `Filtros: ${[
+      search ? `Busca: "${search}"` : '',
+      monthFilter !== 'todos' ? `Mês: ${monthFilter}` : '',
+      statusFilter !== 'todos' ? `Status: ${statusFilter}` : '',
+    ].filter(Boolean).join(' | ') || 'Nenhum'}`,
+    footerContent: `Previsto ${BRL(totalPrevisto)} | Pago ${BRL(totalPago)} | Saldo ${BRL(saldo)}`,
+  };
+
+  return (
+    <section className="mb-12">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold">Contas a Pagar (Despesas Fixas)</h2>
+        <div className="flex gap-2">
+          <ExportMenu data={exportData} columns={exportColumns} filename="contas_pagar" pdfOptions={pdfOptions} />
+          <Button asChild>
+            <label className="cursor-pointer flex gap-2 items-center">
+              <Upload className="h-4 w-4" /> Importar Planilha
+              <input type="file" accept=".xlsx,.xls" hidden onChange={handleImport} />
+            </label>
+          </Button>
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input className="pl-9" placeholder="Buscar por DOC/Descrição..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="border rounded px-3 py-2 text-sm">
+          <option value="todos">Todos os meses</option>
+          {monthOptions.map((m) => (<option key={m} value={m}>{m}</option>))}
+        </select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border rounded px-3 py-2 text-sm">
+          <option value="todos">Todos</option>
+          <option value="pago">Pago</option>
+          <option value="aberto">Em aberto</option>
+        </select>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+        <Card><CardHeader><CardTitle>Total Previsto</CardTitle></CardHeader><CardContent>{BRL(totalPrevisto)}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Total Pago</CardTitle></CardHeader><CardContent>{BRL(totalPago)}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Saldo a Pagar</CardTitle></CardHeader><CardContent>{BRL(saldo)}</CardContent></Card>
+        <Card><CardHeader><CardTitle>% Pago</CardTitle></CardHeader><CardContent>{percentPago}%</CardContent></Card>
+      </div>
+
+      {/* Gráfico + Tabela */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <Card>
+          <CardHeader><CardTitle>Status</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} outerRadius={80} dataKey="value">
+                  {pieData.map((entry, i) => (<Cell key={i} />))}
+                </Pie>
+                <Tooltip formatter={(v) => BRL(v)} />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Lista</CardTitle></CardHeader>
+          <CardContent className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Vencimento</TableHead>
+                  <TableHead>Doc</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead>Dt Pagto</TableHead>
+                  <TableHead>Valor Pago</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="text-center">Nenhum dado</TableCell></TableRow>
+                ) : filtered.map((d, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{d.vencto}</TableCell>
+                    <TableCell>{d.doc}</TableCell>
+                    <TableCell>{d.descricao}</TableCell>
+                    <TableCell>{BRL(d.valor)}</TableCell>
+                    <TableCell>{d.dtPagto}</TableCell>
+                    <TableCell>{BRL(d.valorPago)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  );
+};
+
+const ContasReceber = () => {
+  const { rows, search, setSearch, monthFilter, setMonthFilter, statusFilter, setStatusFilter, handleImport, monthOptions, applyFilters } = useFinancialSection();
+
+  const filtered = React.useMemo(() => applyFilters((d) => d.valorPago >= d.valor), [applyFilters, rows, search, monthFilter, statusFilter]);
+
+  const totalPrevisto = React.useMemo(() => filtered.reduce((s, d) => s + d.valor, 0), [filtered]);
+  const totalRecebido = React.useMemo(() => filtered.reduce((s, d) => s + d.valorPago, 0), [filtered]);
+  const saldo = totalPrevisto - totalRecebido;
+  const percentRecebido = totalPrevisto ? ((totalRecebido / totalPrevisto) * 100).toFixed(1) : 0;
+
+  const pieData = [
+    { name: 'Recebido', value: totalRecebido },
+    { name: 'Em aberto', value: Math.max(saldo, 0) },
+  ];
+
+  const exportData = filtered.map((d) => ({
+    vencimento: d.vencto,
+    documento: d.doc,
+    descricao: d.descricao,
+    valor: d.valor,
+    data_receb: d.dtPagto,
+    valor_recebido: d.valorPago,
+    mes_ano: extractMonthYear(d.vencto),
+  }));
+
+  const exportColumns = [
+    { key: 'vencimento', header: 'Vencimento' },
+    { key: 'documento', header: 'Doc' },
+    { key: 'descricao', header: 'Descrição' },
+    { key: 'valor', header: 'Valor' },
+    { key: 'data_receb', header: 'Dt Recebimento' },
+    { key: 'valor_recebido', header: 'Valor Recebido' },
+    { key: 'mes_ano', header: 'Mês/Ano' },
+  ];
+
+  const pdfOptions = {
+    title: 'Relatório - Contas a Receber',
+    orientation: 'l',
+    filtersSummary: `Filtros: ${[
+      search ? `Busca: "${search}"` : '',
+      monthFilter !== 'todos' ? `Mês: ${monthFilter}` : '',
+      statusFilter !== 'todos' ? `Status: ${statusFilter}` : '',
+    ].filter(Boolean).join(' | ') || 'Nenhum'}`,
+    footerContent: `Previsto ${BRL(totalPrevisto)} | Recebido ${BRL(totalRecebido)} | Saldo ${BRL(saldo)}`,
+  };
+
+  return (
+    <section className="mb-12">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold">Contas a Receber</h2>
+        <div className="flex gap-2">
+          <ExportMenu data={exportData} columns={exportColumns} filename="contas_receber" pdfOptions={pdfOptions} />
+          <Button asChild>
+            <label className="cursor-pointer flex gap-2 items-center">
+              <Upload className="h-4 w-4" /> Importar Planilha
+              <input type="file" accept=".xlsx,.xls" hidden onChange={handleImport} />
+            </label>
+          </Button>
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input className="pl-9" placeholder="Buscar por DOC/Descrição..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="border rounded px-3 py-2 text-sm">
+          <option value="todos">Todos os meses</option>
+          {monthOptions.map((m) => (<option key={m} value={m}>{m}</option>))}
+        </select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border rounded px-3 py-2 text-sm">
+          <option value="todos">Todos</option>
+          <option value="recebido">Recebido</option>
+          <option value="aberto">Em aberto</option>
+        </select>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+        <Card><CardHeader><CardTitle>Total Previsto</CardTitle></CardHeader><CardContent>{BRL(totalPrevisto)}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Total Recebido</CardTitle></CardHeader><CardContent>{BRL(totalRecebido)}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Saldo a Receber</CardTitle></CardHeader><CardContent>{BRL(saldo)}</CardContent></Card>
+        <Card><CardHeader><CardTitle>% Recebido</CardTitle></CardHeader><CardContent>{percentRecebido}%</CardContent></Card>
+      </div>
+
+      {/* Gráfico + Tabela */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <Card>
+          <CardHeader><CardTitle>Status</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} outerRadius={80} dataKey="value">
+                  {pieData.map((entry, i) => (<Cell key={i} />))}
+                </Pie>
+                <Tooltip formatter={(v) => BRL(v)} />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Lista</CardTitle></CardHeader>
+          <CardContent className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Vencimento</TableHead>
+                  <TableHead>Doc</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead>Dt Receb.</TableHead>
+                  <TableHead>Valor Recebido</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="text-center">Nenhum dado</TableCell></TableRow>
+                ) : filtered.map((d, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{d.vencto}</TableCell>
+                    <TableCell>{d.doc}</TableCell>
+                    <TableCell>{d.descricao}</TableCell>
+                    <TableCell>{BRL(d.valor)}</TableCell>
+                    <TableCell>{d.dtPagto}</TableCell>
+                    <TableCell>{BRL(d.valorPago)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  );
+};
+
+/* =====================================================================================
+   Componente principal unificado
+===================================================================================== */
+const Finance = () => {
+  return (
+    <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
+      <h1 className="text-2xl font-bold mb-6">Finanças</h1>
+      <DespesasFixas />
+      <ContasReceber />
+      <TransacoesSection />
+    </div>
   );
 };
 
