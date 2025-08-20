@@ -11,22 +11,29 @@ import { useAuth } from '../contexts/AuthContext';
 
 const COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#2563eb', '#7c3aed', '#0ea5e9', '#22c55e', '#f97316', '#e11d48'];
 
-/* ===== Legend lateral fixa (lista) ===== */
-const SideLegend = ({ data = [] }) => {
+/* ===== Legend lateral fixa (compacta e rolável) ===== */
+const SideLegend = ({ data = [], maxHeight = 200 }) => {
   const total = (data || []).reduce((acc, d) => acc + (Number(d.value) || 0), 0) || 1;
   return (
-    <ul className="text-xs sm:text-sm space-y-1">
-      {data.map((d, idx) => {
-        const pct = Math.round(((Number(d.value) || 0) / total) * 100);
-        const color = d.color || COLORS[idx % COLORS.length];
-        return (
-          <li key={idx} className="flex items-center gap-2">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm border border-black/10" style={{ background: color }} />
-            <span className="truncate">{d.name} {pct}%</span>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="overflow-y-auto pr-1" style={{ maxHeight }}>
+      <ul className="space-y-1">
+        {data.map((d, idx) => {
+          const pct = Math.round(((Number(d.value) || 0) / total) * 100);
+          const color = d.color || COLORS[idx % COLORS.length];
+          return (
+            <li key={idx} className="flex items-center gap-2">
+              <span
+                className="inline-block rounded-sm border border-black/10"
+                style={{ width: 9, height: 9, background: color }}
+              />
+              <span className="truncate text-[11px] sm:text-xs leading-tight">
+                {d.name} {pct}%
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 };
 
@@ -120,7 +127,7 @@ function buildPieDataFromMap(map, opts = {}) {
   const keepNames = new Set(keep.map(e => e.name));
   const rest = withPct.filter(e => !keepNames.has(e.name));
 
-  // monta dataset com paleta
+  // dataset com paleta
   const data = keep.map((e, idx) => ({
     name: e.name,
     value: e.value,
@@ -142,7 +149,7 @@ function buildPieDataFromMap(map, opts = {}) {
 
 /* ================= componente ================= */
 const Dashboard = () => {
-  const { user, isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
   const [stats, setStats] = useState({
     totalClients: 0,
     totalMaterials: 0,
@@ -232,8 +239,8 @@ const Dashboard = () => {
         map.set(seg, (map.get(seg) || 0) + 1);
       }
     }
-    // manter ≥ 2% e até 12 fatias
-    return buildPieDataFromMap(map, { maxSlices: 12, minPercent: 0.02, labelOthers: 'Outros' });
+    // TOP 10 (sem limiar), resto vai para "Outros"
+    return buildPieDataFromMap(map, { maxSlices: 10, minPercent: 0, labelOthers: 'Outros' });
   }, [clientsArr]);
 
   const actionTypesPie = useMemo(() => {
@@ -251,9 +258,6 @@ const Dashboard = () => {
     () => monthlyData.some(d => (d.receita || 0) > 0),
     [monthlyData]
   );
-
-  // rótulo de pizza: só mostra ≥ 3% para evitar poluição visual (NÃO USADO AGORA)
-  const pieLabel = ({ name, percent }) => (percent >= 0.03 ? `${name} ${(percent * 100).toFixed(0)}%` : '');
 
   return (
     <div className="space-y-6">
@@ -326,7 +330,7 @@ const Dashboard = () => {
             <CardDescription>Últimos meses</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={230}>
               <LineChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
@@ -351,7 +355,7 @@ const Dashboard = () => {
             <CardDescription>Número de campanhas realizadas</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={230}>
               <BarChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
@@ -371,18 +375,18 @@ const Dashboard = () => {
           <Card>
             <CardHeader>
               <CardTitle className="text-base sm:text-lg">Segmentos (Clientes)</CardTitle>
-              <CardDescription>Percentual por segmento cadastrado nos clientes</CardDescription>
+              <CardDescription>Percentual por segmento cadastrado nos clientes (Top 10)</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-4">
+              <div className="flex items-start gap-4">
                 <div className="flex-1">
-                  <ResponsiveContainer width="100%" height={260}>
+                  <ResponsiveContainer width="100%" height={240}>
                     <PieChart>
                       <Pie
                         data={clientsSegmentsPie}
                         cx="50%"
                         cy="50%"
-                        outerRadius={90}
+                        outerRadius={80}   // menor
                         labelLine={false}
                         label={false}
                         dataKey="value"
@@ -395,8 +399,8 @@ const Dashboard = () => {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="w-48 sm:w-56">
-                  <SideLegend data={clientsSegmentsPie} />
+                <div className="w-44 sm:w-52">
+                  <SideLegend data={clientsSegmentsPie} maxHeight={200} />
                 </div>
               </div>
             </CardContent>
@@ -410,15 +414,15 @@ const Dashboard = () => {
             <CardDescription>Percentual por tipo (com suporte a múltiplos por ação)</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-4">
+            <div className="flex items-start gap-4">
               <div className="flex-1">
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={240}>
                   <PieChart>
                     <Pie
                       data={actionTypesPie}
                       cx="50%"
                       cy="50%"
-                      outerRadius={90}
+                      outerRadius={80}   // menor
                       labelLine={false}
                       label={false}
                       dataKey="value"
@@ -431,11 +435,11 @@ const Dashboard = () => {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="w-48 sm:w-56">
-                <SideLegend data={actionTypesPie} />
+              <div className="w-44 sm:w-52">
+                <SideLegend data={actionTypesPie} maxHeight={200} />
               </div>
-            </div>
-          </CardContent>
+            </CardContent>
+          </Card>
         </Card>
       </div>
 
@@ -453,7 +457,9 @@ const Dashboard = () => {
                   <Activity className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{activity.text}</p>
-                    <p className="text-xs text-muted-foreground">{activity.date ? new Date(activity.date).toLocaleDateString('pt-BR') : ''}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {activity.date ? new Date(activity.date).toLocaleDateString('pt-BR') : ''}
+                    </p>
                   </div>
                 </div>
               ))
