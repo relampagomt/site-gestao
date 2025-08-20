@@ -30,6 +30,8 @@ import ImagePreview from "@/components/ImagePreview.jsx";
 
 // Export
 import ExportMenu from "@/components/export/ExportMenu";
+// >>> ADICIONADO: utilizar barra de paginação responsiva
+import PaginationBar from "@/components/PaginationBar.jsx";
 
 /* ===== Helpers de Data e Normalização ===== */
 
@@ -740,45 +742,19 @@ const Materials = () => {
             </Table>
           </div>
 
-          {/* Paginação (corrigida) */}
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              Exibindo <b>{pageItems.length}</b> de <b>{total}</b> — Qtd total exibida: <b>{fmtInt.format(totalQtdFiltrada)}</b>
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="min-w-[92px] h-9"
-                disabled={page <= 1}
-                onPointerUp={goPrev}
-                aria-label="Página anterior"
-                title="Anterior"
-              >
-                Anterior
-              </Button>
-
-              <div className="shrink-0 text-xs tabular-nums">
-                <span className="inline-block rounded-md border bg-muted px-3 py-1">
-                  Página <b>{page}</b><span className="opacity-60">/{totalPages}</span>
-                </span>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="min-w-[92px] h-9"
-                disabled={page >= totalPages}
-                onPointerUp={goNext}
-                aria-label="Próxima página"
-                title="Próxima"
-              >
-                Próxima
-              </Button>
-            </div>
-          </div>
+          {/* Paginação — SUBSTITUÍDO pelo componente responsivo */}
+          <PaginationBar
+            page={page}
+            totalPages={totalPages}
+            onPrev={goPrev}
+            onNext={goNext}
+            left={
+              <p className="text-xs text-muted-foreground">
+                Exibindo <b>{pageItems.length}</b> de <b>{total}</b> — Qtd total exibida:{" "}
+                <b>{fmtInt.format(totalQtdFiltrada)}</b>
+              </p>
+            }
+          />
 
           {/* Filtros Avançados */}
           {openFilters && (

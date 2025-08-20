@@ -43,6 +43,8 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 import ExportMenu from "@/components/export/ExportMenu";
+// >>> ADICIONADO: utilizar barra de paginação responsiva
+import PaginationBar from "@/components/PaginationBar.jsx";
 
 /* ========================================================================== */
 /* Utilitários                                                                */
@@ -409,7 +411,7 @@ function SegmentosSelect({ value = [], onChange, onCreate }) {
         align="start"
         sideOffset={6}
         collisionPadding={32}
-        className="p-0 z-[70] w-[min(92vw,320px)] sm:w-[360px] bg-background"
+        className="p-0 z-[70] w_[min(92vw,320px)] sm:w-[360px] bg-background"
       >
         <div
           className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2"
@@ -1222,45 +1224,18 @@ const Clients = () => {
             </Table>
           </div>
 
-          {/* Paginação (corrigida) */}
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              Exibindo <b>{pageItems.length}</b> de <b>{filtered.length}</b> registros
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="min-w-[92px] h-9"
-                disabled={page <= 1}
-                onPointerUp={goPrev}
-                aria-label="Página anterior"
-                title="Anterior"
-              >
-                Anterior
-              </Button>
-
-              <div className="shrink-0 text-xs tabular-nums">
-                <span className="inline-block rounded-md border bg-muted px-3 py-1">
-                  Página <b>{page}</b><span className="opacity-60">/{totalPages}</span>
-                </span>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="min-w-[92px] h-9"
-                disabled={page >= totalPages}
-                onPointerUp={goNext}
-                aria-label="Próxima página"
-                title="Próxima"
-              >
-                Próxima
-              </Button>
-            </div>
-          </div>
+          {/* Paginação — SUBSTITUÍDO pelo componente responsivo */}
+          <PaginationBar
+            page={page}
+            totalPages={totalPages}
+            onPrev={goPrev}
+            onNext={goNext}
+            left={
+              <p className="text-xs text-muted-foreground">
+                Exibindo <b>{pageItems.length}</b> de <b>{filtered.length}</b> registros
+              </p>
+            }
+          />
         </CardContent>
       </Card>
 
