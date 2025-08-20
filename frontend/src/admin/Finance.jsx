@@ -1,6 +1,7 @@
 // frontend/src/admin/Finance.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '@/services/api';
+import { Upload, Search } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Button } from '@/components/ui/button.jsx';
