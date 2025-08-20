@@ -20,7 +20,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -38,56 +37,53 @@ import {
   Check,
   X,
   Filter as FilterIcon,
-  FileDown,           // CSV
-  FileSpreadsheet,    // Excel
-  FileText            // PDF
 } from "lucide-react";
 
-/* ============================================================================
-   TELEFONE BR (+55) — normalização e máscara com celular/fixo
-============================================================================ */
-function normalizePhoneBR(input) {
-  let digits = String(input || "").replace(/\D/g, "");
+// Gráfico (donut)
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
-  digits = digits.replace(/^0+/, "");
-  if (digits.startsWith("55")) digits = digits.slice(2);
+import ExportMenu from "@/components/export/ExportMenu";
 
-  const ddd = digits.slice(0, 2);
-  let localRaw = digits.slice(2);
+/* ========================================================================== */
+/* Utilitários                                                                */
+/* ========================================================================== */
+const normalizePhoneBR = (input) => {
+  if (!input) return "";
+  const digits = String(input).replace(/\D/g, "");
+  let clean = digits.startsWith("55") ? digits.slice(2) : digits;
+  if (clean.length === 11 && clean[2] === "9") return `+55${clean}`;
+  if (clean.length === 10) return `+55${clean}`;
+  return input;
+};
 
-  const looksLikeFixed = (nums) => nums.length >= 8 && /^[2-5]/.test(nums);
-
-  if (localRaw.length >= 10) {
-    localRaw = localRaw[0] === "9" ? localRaw.slice(0, 9) : localRaw.slice(0, 8);
-  } else if (localRaw.length === 9) {
-    localRaw = localRaw[0] === "9" ? localRaw : localRaw.slice(0, 8);
-  } else if (localRaw.length === 8) {
-    if (!looksLikeFixed(localRaw) && /^[7-9]/.test(localRaw)) {
-      localRaw = "9" + localRaw;
-    }
-  } else if (localRaw.length > 0 && localRaw.length < 8) {
-    if (/^[7-9]/.test(localRaw) && localRaw[0] !== "9") {
-      localRaw = "9" + localRaw;
+const formatPhoneDisplay = (phone) => {
+  if (!phone) return "";
+  const digits = String(phone).replace(/\D/g, "");
+  if (digits.startsWith("55") && digits.length >= 12) {
+    const clean = digits.slice(2);
+    const ddd = clean.slice(0, 2);
+    const number = clean.slice(2);
+    if (number.length === 9 && number[0] === "9") {
+      return `+55 (${ddd}) ${number.slice(0, 5)}-${number.slice(5)}`;
+    } else if (number.length === 8) {
+      return `+55 (${ddd}) ${number.slice(0, 4)}-${number.slice(4)}`;
     }
   }
+  return phone;
+};
 
-  const local = localRaw;
-  const e164 = `+55${ddd}${local}`;
+const ensureArraySegments = (client) => {
+  if (!client) return [];
+  const segs = client.segments || client.segment || [];
+  if (Array.isArray(segs)) return segs.filter(Boolean);
+  if (typeof segs === "string") return segs.split(",").map((s) => s.trim()).filter(Boolean);
+  return [];
+};
 
-  let display = "+55";
-  if (ddd) display += `(${ddd})`;
-  if (local) display += `${local}`;
-
-  return { e164, display, ddd, local };
-}
-
-function formatPhoneDisplay(v) {
-  const { display } = normalizePhoneBR(v);
-  return display || "";
-}
-
-/* ====== SEGMENTOS AGRUPADOS (expandido) ================================== */
-export const SEGMENTOS_GRUPOS = [
+/* ========================================================================== */
+/* Segmentos (grupos) — lista completa                                        */
+/* ========================================================================== */
+const SEGMENTOS_GRUPOS = [
   {
     group: "Tecnologia e Informática",
     options: [
@@ -99,9 +95,18 @@ export const SEGMENTOS_GRUPOS = [
       { value: "Suporte e Help Desk", desc: "Atendimento técnico, Field" },
       { value: "Consultoria em TI", desc: "Implantação, Governança, RPA" },
       { value: "E-commerce & Marketplaces", desc: "Lojas virtuais, Marketplaces" },
+      { value: "SaaS", desc: "Software como serviço, produto digital" },
+      { value: "Startups", desc: "Empreendimentos inovadores, aceleração" },
+      { value: "Fintech", desc: "Pagamentos, crédito, meios de pagamento" },
+      { value: "Healthtech", desc: "Tecnologia para saúde" },
+      { value: "Edtech", desc: "Tecnologia para educação" },
+      { value: "Agtech", desc: "Tecnologia para agronegócio" },
+      { value: "Govtech", desc: "Tecnologia para setor público" },
+      { value: "IoT e Automação", desc: "Internet das Coisas, sensores, automação" },
+      { value: "Robótica", desc: "Robôs, automação avançada" },
+      { value: "Cloud & DevOps", desc: "Nuvem, CI/CD, SRE, observabilidade" },
     ],
   },
-
   {
     group: "Saúde e Bem-Estar",
     options: [
@@ -116,9 +121,13 @@ export const SEGMENTOS_GRUPOS = [
       { value: "Clínicas Populares", desc: "Multiespecialidades" },
       { value: "Clínica Veterinária", desc: "Consultas, Cirurgias, Exames" },
       { value: "Farmácia e Drogaria", desc: "Medicamentos, Manipulação" },
+      { value: "Estética Avançada", desc: "Procedimentos estéticos, harmonização" },
+      { value: "Fonoaudiologia", desc: "Voz, audição, linguagem" },
+      { value: "Fisioterapia Desportiva", desc: "Reabilitação de atletas" },
+      { value: "Home Care", desc: "Atendimento domiciliar" },
+      { value: "Clínica de Vacinação", desc: "Imunização, campanhas" },
     ],
   },
-
   {
     group: "Engenharia e Indústria",
     options: [
@@ -129,9 +138,17 @@ export const SEGMENTOS_GRUPOS = [
       { value: "Indústria", desc: "Operador de Máquinas, Automação" },
       { value: "Manutenção Industrial", desc: "PCM, Caldeiraria, Solda" },
       { value: "Energias Renováveis", desc: "Solar, Eólica, Projetos" },
+      { value: "Têxtil e Confecção", desc: "Fiações, malharias, vestuário" },
+      { value: "Plástico e Borracha", desc: "Transformadores, injeção" },
+      { value: "Química e Petroquímica", desc: "Tintas, resinas, petroquímica" },
+      { value: "Papel e Celulose", desc: "Fábricas, conversão" },
+      { value: "Mineração", desc: "Extração, beneficiamento" },
+      { value: "Petróleo e Gás", desc: "Upstream, downstream, distribuição" },
+      { value: "Cerâmica e Pisos", desc: "Revestimentos, louças" },
+      { value: "Metalurgia e Siderurgia", desc: "Fundição, aços, ligas" },
+      { value: "Moveleiro Industrial", desc: "Linha seriada, usinagem" },
     ],
   },
-
   {
     group: "Comunicação e Marketing",
     options: [
@@ -143,9 +160,11 @@ export const SEGMENTOS_GRUPOS = [
       { value: "Produtora de Vídeo/Áudio", desc: "Filmagem, Podcast, Estúdio" },
       { value: "Fotografia", desc: "Estúdio, Ensaios, Still" },
       { value: "Eventos e Locação", desc: "Som, Luz, Palco, Estruturas" },
+      { value: "Assessoria de Imprensa", desc: "Press kit, media training" },
+      { value: "Influencer Marketing", desc: "Creators, parcerias" },
+      { value: "Branding e Naming", desc: "Posicionamento, identidade" },
     ],
   },
-
   {
     group: "Negócios e Finanças",
     options: [
@@ -156,9 +175,13 @@ export const SEGMENTOS_GRUPOS = [
       { value: "Corretora de Seguros", desc: "Auto, Vida, Saúde, Empresarial" },
       { value: "Correspondente Bancário", desc: "Crédito, Consignado, Empréstimos" },
       { value: "Franquias", desc: "Expansão, Gestão de Franqueados" },
+      { value: "Atacado e Distribuição", desc: "Cash & carry, distribuidoras" },
+      { value: "Consultoria Empresarial", desc: "Estratégia, processos, finanças" },
+      { value: "BPO e Terceirização", desc: "Backoffice, folha, fiscal" },
+      { value: "Cartórios e Notariais", desc: "Registro civil, títulos" },
+      { value: "Cobrança e Recuperação", desc: "Cobrança extrajudicial, crédito" },
     ],
   },
-
   {
     group: "Educação e Cultura",
     options: [
@@ -172,9 +195,11 @@ export const SEGMENTOS_GRUPOS = [
       { value: "Cursos Profissionalizantes", desc: "TI, Saúde, Indústria" },
       { value: "Autoescola", desc: "CNH, Reciclagem" },
       { value: "Esporte e Lazer", desc: "Clubes, Academias, Estúdios" },
+      { value: "Pré-vestibular e Reforço", desc: "Cursinhos, ENEM" },
+      { value: "Escolas de Música e Dança", desc: "Conservatórios, estúdios" },
+      { value: "Produção Cultural", desc: "Editais, projetos, captação" },
     ],
   },
-
   {
     group: "Direito e Segurança",
     options: [
@@ -184,9 +209,10 @@ export const SEGMENTOS_GRUPOS = [
       { value: "Perícia", desc: "Perito Criminal/Judicial" },
       { value: "Compliance e LGPD", desc: "Proteção de Dados, Governança" },
       { value: "Defesa Civil", desc: "Proteção e resposta a desastres" },
+      { value: "Cartórios e Registros", desc: "Notas, registro de imóveis" },
+      { value: "Detran e Trânsito", desc: "Órgãos, despachantes" },
     ],
   },
-
   {
     group: "Serviços e Social",
     options: [
@@ -205,9 +231,13 @@ export const SEGMENTOS_GRUPOS = [
       { value: "Coworking e Escritórios", desc: "Salas privativas, Compartilhadas" },
       { value: "Igrejas e Comunidades", desc: "Templos, Entidades religiosas" },
       { value: "ONGs e Terceiro Setor", desc: "Associações, Fundações" },
+      { value: "Barbearia", desc: "Cortes, grooming masculino" },
+      { value: "Perfumaria e Cosméticos", desc: "Varejo de beleza" },
+      { value: "Coaching e Mentoria", desc: "Desenvolvimento pessoal e negócios" },
+      { value: "Tradução e Interpretação", desc: "Traduções técnicas, simultânea" },
+      { value: "Agência de Empregos", desc: "RH, recrutamento, temporários" },
     ],
   },
-
   {
     group: "Comércio Varejista",
     options: [
@@ -225,9 +255,12 @@ export const SEGMENTOS_GRUPOS = [
       { value: "Floricultura", desc: "Flores, Presentes" },
       { value: "Loja de Utilidades", desc: "Variedades, 1,99" },
       { value: "Pet Shop", desc: "Rações, Acessórios, Banho e Tosa" },
+      { value: "Distribuidora de Bebidas", desc: "Atacado, B2B, eventos" },
+      { value: "Shopping e Quiosques", desc: "Lojas de shopping, quiosques" },
+      { value: "Perfumaria", desc: "Fragrâncias e cosméticos" },
+      { value: "Papelaria Especializada", desc: "Materiais artísticos e técnicos" },
     ],
   },
-
   {
     group: "Alimentação e Bebidas (Foodservice)",
     options: [
@@ -242,9 +275,10 @@ export const SEGMENTOS_GRUPOS = [
       { value: "Cozinha Industrial e Marmitaria", desc: "Corporativo, PF" },
       { value: "Delivery/Cozinha Fantasma", desc: "Somente entrega" },
       { value: "Bares e Pubs", desc: "Drinks, Petiscos, Música" },
+      { value: "Padaria Artesanal", desc: "Fermentação natural, pâtisserie" },
+      { value: "Doceria Especializada", desc: "Bolos artísticos, brigadeiria" },
     ],
   },
-
   {
     group: "Automotivo",
     options: [
@@ -257,9 +291,11 @@ export const SEGMENTOS_GRUPOS = [
       { value: "Concessionária/Revenda", desc: "Novos, Seminovos" },
       { value: "Motocicletas - Oficina e Peças", desc: "Motos, Acessórios" },
       { value: "Guincho e Socorro", desc: "24h, Reboque" },
+      { value: "Vistoria e Laudos", desc: "Vistorias cautelar e transferência" },
+      { value: "Carros por Assinatura", desc: "Locadoras, mobilidade" },
+      { value: "Estética Automotiva Premium", desc: "Detailing, PPF, vitrificação" },
     ],
   },
-
   {
     group: "Construção, Imobiliário e Manutenção",
     options: [
@@ -274,292 +310,273 @@ export const SEGMENTOS_GRUPOS = [
       { value: "Imobiliária e Condomínios", desc: "Vendas, Locação, Gestão" },
       { value: "Paisagismo e Irrigação", desc: "Projetos, Manutenção" },
       { value: "Energia Solar", desc: "Projetos, Instalação" },
+      { value: "Arquitetura e Urbanismo", desc: "Projetos, interiores" },
+      { value: "Condomínios e Síndicos", desc: "Gestão condominial" },
+      { value: "Automação Residencial", desc: "Casa inteligente, CFTV" },
+      { value: "Gesso e Drywall", desc: "Forros, divisórias" },
+      { value: "Topografia e Georreferenciamento", desc: "Levantamentos, GPS" },
     ],
   },
-
   {
     group: "Transporte e Logística",
     options: [
       { value: "Transporte de Cargas", desc: "Rodoviário, Fracionado" },
       { value: "Entregas Rápidas/Courier", desc: "Express, Same-day" },
-      { value: "Motoboy", desc: "Delivery urbano" },
-      { value: "Fretamento e Turismo", desc: "Ônibus, Vans" },
-      { value: "Transporte Escolar", desc: "Escolar, Universitário" },
-      { value: "Logística e Armazenagem", desc: "CDs, 3PL" },
-      { value: "Locação de Veículos", desc: "Curto e longo prazo" },
+      { value: "Transporte de Passageiros", desc: "Fretamento, Turismo" },
+      { value: "Logística e Armazenagem", desc: "CD, WMS, Cross-docking" },
+      { value: "Correios e Postagem", desc: "Franquia, Agência" },
+      { value: "Uber/99/Taxi", desc: "Mobilidade urbana" },
+      { value: "Locação de Veículos", desc: "Carros, Vans, Caminhões" },
+      { value: "Despachante", desc: "Documentação veicular" },
     ],
   },
-
   {
-    group: "Agro, Campo e Insumos",
+    group: "Agricultura e Pecuária",
     options: [
-      { value: "Agropecuária", desc: "Fazendas, Cooperativas" },
-      { value: "Casa Agropecuária", desc: "Rações, Insumos" },
-      { value: "Sementes e Defensivos", desc: "Distribuidores, Revendas" },
-      { value: "Madeireira", desc: "Madeiras, Compensados" },
-      { value: "Veterinária Rural", desc: "Bovinos, Equinos" },
-      { value: "Frigorífico/Entreposto", desc: "Abate, Processamento" },
+      { value: "Agricultura", desc: "Grãos, Hortaliças, Frutas" },
+      { value: "Pecuária", desc: "Bovinos, Suínos, Aves" },
+      { value: "Agronegócio", desc: "Commodities, Trading" },
+      { value: "Insumos Agrícolas", desc: "Sementes, Defensivos, Fertilizantes" },
+      { value: "Máquinas Agrícolas", desc: "Tratores, Colheitadeiras" },
+      { value: "Cooperativas", desc: "Cooperativismo rural" },
+      { value: "Veterinária Rural", desc: "Grandes animais, reprodução" },
+      { value: "Irrigação", desc: "Sistemas, Pivôs" },
     ],
   },
 ];
 
-export const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap(g => g.options.map(o => o.value));
+const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap((grp) => grp.options.map((opt) => opt.value));
 
-const ensureArraySegments = (row) => {
-  if (Array.isArray(row?.segments)) return row.segments;
-  if (typeof row?.segment === "string" && row.segment.trim()) {
-    return row.segment.split(",").map(s => s.trim()).filter(Boolean);
-  }
-  if (typeof row?.segmentos === "string" && row.segmentos.trim()) {
-    return row.segmentos.split(",").map(s => s.trim()).filter(Boolean);
-  }
-  return [];
-};
-
-/* ====== Combobox multi — COMPACTO + MODO LIVRE (FIX SCROLL) =============== */
+/* ========================================================================== */
+/* SegmentosSelect — Dialog centralizado com rolagem liberada (touch/touchpad)*/
+/* ========================================================================== */
 function SegmentosSelect({ value = [], onChange, onCreate }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
 
-  const baseOptions = useMemo(
-    () => SEGMENTOS_GRUPOS.flatMap(g => g.options.map(o => o.value)),
-    []
-  );
-
-  const allSelectedLower = useMemo(
-    () => new Set(value.map(v => v.toLowerCase())),
-    [value]
-  );
-
-  const existsInBase  = (label) => baseOptions.some(v => v.toLowerCase() === label.toLowerCase());
-  const existsInValue = (label) => allSelectedLower.has(label.toLowerCase());
-
-  const toggle = (label) => {
-    const exists = value.includes(label);
-    const next = exists ? value.filter((s) => s !== label) : [...value, label];
+  const toggle = (segValue) => {
+    const next = value.includes(segValue)
+      ? value.filter((v) => v !== segValue)
+      : [...value, segValue];
     onChange(next);
   };
 
-  const addCustom = (label) => {
-    const clean = label.trim();
-    if (!clean) return;
-    if (!existsInValue(clean)) onChange([...value, clean]);
-    onCreate?.(clean);
+  const handleCreate = () => {
+    const label = query.trim();
+    if (!label) return;
+    if (value.includes(label)) return;
+    if (baseSegmentSet.has(label)) {
+      toggle(label);
+    } else {
+      onChange([...value, label]);
+      onCreate?.(label);
+    }
     setQuery("");
-    setOpen(true);
   };
 
-  const shouldSuggestCreate = useMemo(() => {
-    const t = query.trim();
-    if (!t) return false;
-    return !existsInBase(t) && !existsInValue(t);
-  }, [query, baseOptions, value]);
+  const canCreate = query.trim() && !value.includes(query.trim());
+
+  // 🔧 Libera rolagem dentro do modal (impede o Dialog de engolir os eventos)
+  const stopScrollCapture = useCallback((e) => e.stopPropagation(), []);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
         <Button variant="outline" role="combobox" className="w-full justify-between">
-          {value.length === 0 ? "Selecionar segmentos" : (
+          {value.length ? (
             <span className="truncate">
               {value.slice(0, 2).join(", ")}{value.length > 2 ? ` +${value.length - 2}` : ""}
             </span>
-          )}
+          ) : "Selecionar segmentos"}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
-      </PopoverTrigger>
+      </DialogTrigger>
 
-      <PopoverContent
-        side="bottom"
-        align="start"
-        sideOffset={6}
-        collisionPadding={32}
-        className="p-0 z-[70] w-[min(92vw,320px)] sm:w-[360px] bg-background"
+      <DialogContent
+        className="p-0 w-[min(96vw,640px)]"
+        style={{ maxHeight: "80vh" }}
       >
-        {/* SCROLLER: captura no *capture* para vencer o bloqueio do Dialog */}
-        <div
-          className="max-h-[45vh] overflow-y-auto overscroll-contain pb-2"
-          style={{
-            WebkitOverflowScrolling: "touch",
-            touchAction: "pan-y",
-            overscrollBehavior: "contain",
-          }}
-          onWheelCapture={(e) => e.stopPropagation()}
-          onTouchMoveCapture={(e) => e.stopPropagation()}
-          onScrollCapture={(e) => e.stopPropagation()}
-        >
-          <Command className="text-[13px] leading-tight">
-            <div className="sticky top-0 z-10 bg-background">
-              <CommandInput
-                placeholder="Buscar ou digitar novo segmento…"
-                value={query}
-                onValueChange={setQuery}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && shouldSuggestCreate) {
-                    e.preventDefault();
-                    addCustom(query);
-                  }
-                }}
-              />
-            </div>
+        <div className="grid grid-rows-[auto,1fr,auto] h-full">
+          {/* Header */}
+          <div className="p-4 border-b">
+            <DialogHeader className="gap-2">
+              <DialogTitle>Selecionar segmentos</DialogTitle>
+              <Command>
+                <CommandInput
+                  placeholder="Buscar ou criar segmento..."
+                  value={query}
+                  onValueChange={setQuery}
+                  className="h-9"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && canCreate) {
+                      e.preventDefault();
+                      handleCreate();
+                    }
+                  }}
+                />
+              </Command>
+            </DialogHeader>
+          </div>
 
-            <CommandList className="max-h-none">
-              {shouldSuggestCreate && (
-                <CommandGroup heading={<span className="text-[11px] font-semibold text-muted-foreground">Ações</span>}>
-                  <CommandItem
-                    value={`__create:${query}`}
-                    className="flex items-center gap-2 py-2 px-2"
-                    onSelect={() => addCustom(query)}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Adicionar “{query.trim()}” como novo segmento
-                  </CommandItem>
-                </CommandGroup>
-              )}
+          {/* Body rolável (touch + touchpad OK) */}
+          <div
+            className="overflow-y-auto overscroll-contain touch-pan-y"
+            style={{ WebkitOverflowScrolling: "touch" }}
+            onWheelCapture={stopScrollCapture}
+            onTouchMoveCapture={stopScrollCapture}
+            onScrollCapture={stopScrollCapture}
+          >
+            <Command className="text-[13px] leading-tight">
+              <CommandList className="max-h-none">
+                {canCreate && (
+                  <CommandGroup>
+                    <CommandItem onSelect={handleCreate} className="cursor-pointer">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Criar “{query.trim()}”
+                    </CommandItem>
+                  </CommandGroup>
+                )}
 
-              {SEGMENTOS_GRUPOS.map((grp) => (
-                <CommandGroup
-                  key={grp.group}
-                  heading={<span className="text-[11px] font-semibold text-muted-foreground">{grp.group}</span>}
-                  className="px-1 py-1"
-                >
-                  {grp.options.map((opt) => {
-                    const checked = value.includes(opt.value);
-                    const searchable = `${opt.value} ${opt.desc || ""}`;
-                    return (
-                      <CommandItem
-                        key={`${grp.group}-${opt.value}`}
-                        value={searchable}
-                        className="flex items-start gap-2 py-1 px-2"
-                        onSelect={() => toggle(opt.value)}
-                      >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={() => toggle(opt.value)}
-                          className="mt-0.5"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium">{opt.value}</div>
-                          {opt.desc && (
-                            <div className="text-[11px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
-                              {opt.desc}
-                            </div>
-                          )}
-                        </div>
-                        {checked && <Check className="h-4 w-4 opacity-70" />}
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              ))}
-              <div className="h-1" />
-            </CommandList>
-          </Command>
+                {SEGMENTOS_GRUPOS.map((grp) => {
+                  const q = query.trim().toLowerCase();
+                  const shown = grp.options.filter(
+                    (opt) =>
+                      !q ||
+                      opt.value.toLowerCase().includes(q) ||
+                      (opt.desc && opt.desc.toLowerCase().includes(q))
+                  );
+                  if (!shown.length) return null;
+
+                  return (
+                    <CommandGroup key={grp.group} heading={grp.group}>
+                      {shown.map((opt) => (
+                        <CommandItem
+                          key={opt.value}
+                          onSelect={() => toggle(opt.value)}
+                          className="cursor-pointer"
+                        >
+                          <Check
+                            className={`mr-2 h-4 w-4 ${
+                              value.includes(opt.value) ? "opacity-100" : "opacity-0"
+                            }`}
+                          />
+                          <div>
+                            <div className="font-medium">{opt.value}</div>
+                            {opt.desc && (
+                              <div className="text-xs text-muted-foreground">{opt.desc}</div>
+                            )}
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  );
+                })}
+              </CommandList>
+            </Command>
+          </div>
+
+          {/* Footer */}
+          <div className="p-3 border-t">
+            <Button variant="outline" size="sm" className="w-full" onClick={() => setOpen(false)}>
+              Fechar
+            </Button>
+          </div>
         </div>
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-/* ====== Página ============================================================= */
+/* ========================================================================== */
+/* Página Clientes — KPIs responsivos + pizza + paginação                     */
+/* ========================================================================== */
 const Clients = () => {
   const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
-  // modal (create/edit)
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("create");
+  const [form, setForm] = useState({
+    id: null,
+    name: "", company: "", email: "", phone: "", segments: [], notes: ""
+  });
   const [saving, setSaving] = useState(false);
 
-  // dialog excluir
   const [openDelete, setOpenDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const emptyForm = {
-    id: null,
-    name: "",
-    company: "",
-    segments: [],
-    email: "",
-    phone: "",
-    notes: "",
-  };
-  const [form, setForm] = useState(emptyForm);
+  // paginação
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
 
-  // segmentos extras digitados na sessão (aparecem nos filtros imediatamente)
   const [extraSegments, setExtraSegments] = useState([]);
-
   const baseSegmentSet = useMemo(() => new Set(SEGMENTOS), []);
 
-  async function fetchClients() {
+  const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/clients");
-      setClients(Array.isArray(data) ? data : data?.items ?? []);
-    } catch (e) {
-      console.error("Erro ao carregar clientes:", e);
+      const response = await api.get("/clients");
+      setClients(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      console.error("Erro ao buscar clientes:", err);
+      setClients([]);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     fetchClients();
-  }, []);
+  }, [fetchClients]);
 
-  function onChange(e) {
+  const onChange = (e) => {
     const { name, value } = e.target;
-    if (name === "phone") {
-      const { display } = normalizePhoneBR(value);
-      setForm((f) => ({ ...f, phone: display }));
-      return;
-    }
-    setForm((f) => ({ ...f, [name]: value }));
-  }
+    setForm(prev => ({
+      ...prev,
+      [name]: name === "phone" ? normalizePhoneBR(value) : value
+    }));
+  };
 
-  function openCreate() {
+  const openCreate = () => {
     setMode("create");
-    setForm(emptyForm);
+    setForm({ id: null, name: "", company: "", email: "", phone: "", segments: [], notes: "" });
     setOpen(true);
-  }
+  };
 
-  function openEdit(row) {
+  const openEdit = (client) => {
     setMode("edit");
     setForm({
-      id: row.id ?? row._id ?? row.uuid ?? null,
-      name: row.name ?? "",
-      company: row.company ?? row.company_name ?? row.companyName ?? "",
-      segments: ensureArraySegments(row),
-      email: row.email ?? "",
-      phone: formatPhoneDisplay(row.phone ?? ""),
-      notes: row.notes ?? "",
+      id: client.id ?? client._id ?? client.uuid ?? null,
+      name: client.name || "",
+      company: client.company || client.company_name || client.companyName || "",
+      email: client.email || "",
+      phone: client.phone || "",
+      segments: ensureArraySegments(client),
+      notes: client.notes || ""
     });
     setOpen(true);
-  }
+  };
 
-  function confirmDelete(row) {
-    setRowToDelete(row);
+  const confirmDelete = (client) => {
+    setRowToDelete(client);
     setOpenDelete(true);
-  }
+  };
 
   async function onSubmit(e) {
     e.preventDefault();
     setSaving(true);
     try {
-      const { e164 } = normalizePhoneBR(form.phone);
-
       const payload = {
         name: form.name,
-        company: form.company || "",
-        company_name: form.company || "",
-        segments: form.segments,
-        segment: form.segments.join(", "),
+        company: form.company,
         email: form.email,
-        phone: e164,
-        notes: form.notes || "",
+        phone: form.phone,
+        segments: form.segments,
+        notes: form.notes,
       };
-
       if (mode === "create") {
         await api.post("/clients", payload);
       } else {
@@ -567,9 +584,7 @@ const Clients = () => {
         if (!id) throw new Error("ID do registro não encontrado para edição.");
         await api.put(`/clients/${id}`, payload);
       }
-
       setOpen(false);
-      setForm(emptyForm);
       fetchClients();
     } catch (err) {
       console.error("Erro ao salvar cliente:", err);
@@ -599,10 +614,11 @@ const Clients = () => {
 
   /* ===================== FILTROS ===================== */
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [fCompanies, setFCompanies] = useState([]);     // múltipla
-  const [fSegments, setFSegments] = useState([]);      // múltipla
-  const [fHasEmail, setFHasEmail] = useState("");      // '', 'sim', 'nao'
-  const [fHasPhone, setFHasPhone] = useState("");      // '', 'sim', 'nao'
+  const [fCompanies, setFCompanies] = useState([]);
+  const [fSegments, setFSegments] = useState([]);
+  const [fHasEmail, setFHasEmail] = useState("");
+  const [fHasPhone, setFHasPhone] = useState("");
+  const [fSegmentsQuery, setFSegmentsQuery] = useState("");
 
   const uniqueCompanies = useMemo(() => {
     const s = new Set();
@@ -636,6 +652,7 @@ const Clients = () => {
     setFSegments([]);
     setFHasEmail("");
     setFHasPhone("");
+    setFSegmentsQuery("");
   };
 
   const filtersCount =
@@ -644,7 +661,30 @@ const Clients = () => {
     (fHasEmail ? 1 : 0) +
     (fHasPhone ? 1 : 0);
 
-  /* --------- Lista filtrada --------- */
+  const shownSegmentValues = useMemo(() => {
+    const q = fSegmentsQuery.trim().toLowerCase();
+    const base = [];
+    SEGMENTOS_GRUPOS.forEach((grp) => {
+      grp.options.forEach((opt) => {
+        if (!q || opt.value.toLowerCase().includes(q) || (opt.desc && opt.desc.toLowerCase().includes(q))) {
+          base.push(opt.value);
+        }
+      });
+    });
+    const custom = customSegmentsFromData.filter((s) => !q || s.toLowerCase().includes(q));
+    return Array.from(new Set([...base, ...custom]));
+  }, [fSegmentsQuery, customSegmentsFromData]);
+
+  const allShownAlreadySelected = useMemo(
+    () => shownSegmentValues.length > 0 && shownSegmentValues.every((v) => fSegments.includes(v)),
+    [shownSegmentValues, fSegments]
+  );
+
+  const selectShownSegments = () => {
+    if (shownSegmentValues.length === 0) return;
+    setFSegments((prev) => Array.from(new Set([...prev, ...shownSegmentValues])));
+  };
+
   const filtered = useMemo(() => {
     let list = Array.isArray(clients) ? [...clients] : [];
 
@@ -681,152 +721,103 @@ const Clients = () => {
     return list;
   }, [clients, q, fCompanies, fSegments, fHasEmail, fHasPhone]);
 
-  /* ===================== EXPORTAÇÕES ===================== */
-  const downloadBlob = (blob, filename) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
+  // KPI: totais
+  const totalClients = clients.length;
+  const totalAfterFilters = filtered.length;
 
-  const nowStamp = () => {
-    const d = new Date();
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
-  };
-
-  const tableRows = useMemo(() => {
-    return filtered.map((c) => {
-      const name = c.name || "";
-      const company = c.company ?? c.company_name ?? c.companyName ?? "";
+  // Pizza Top 10 — % sobre os exibidos (filtered)
+  const pieData = useMemo(() => {
+    const counts = new Map();
+    filtered.forEach((c) => {
       const segs = ensureArraySegments(c);
-      const email = c.email || "";
-      const phone = formatPhoneDisplay(c.phone || "");
-      return {
-        Nome: name,
-        Empresa: company,
-        Segmentos: segs.join(" | "),
-        "E-mail": email,
-        Telefone: phone,
-      };
+      if (segs.length === 0) return;
+      segs.forEach((s) => {
+        counts.set(s, (counts.get(s) || 0) + 1);
+      });
     });
-  }, [filtered]);
+    const arr = Array.from(counts.entries()).map(([name, count]) => ({ name, count }));
+    arr.sort((a, b) => b.count - a.count);
+    const top10 = arr.slice(0, 10);
+    const base = totalAfterFilters || 1;
+    return top10.map((it) => ({
+      name: it.name,
+      value: Number(((it.count / base) * 100).toFixed(1)), // %
+      count: it.count,
+    }));
+  }, [filtered, totalAfterFilters]);
 
-  const exportCSV = () => {
-    const headers = ["Nome", "Empresa", "Segmentos", "E-mail", "Telefone"];
-    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const lines = [
-      headers.join(";"),
-      ...tableRows.map((r) => headers.map((h) => esc(r[h])).join(";")),
-    ];
-    const csv = "\uFEFF" + lines.join("\n");
-    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `clientes_${nowStamp()}.csv`);
-  };
+  const PIE_COLORS = ["#F97316","#EF4444","#3B82F6","#22C55E","#A855F7","#06B6D4","#F59E0B","#64748B","#84CC16","#EC4899"];
 
-  const exportExcel = () => {
-    const headers = ["Nome", "Empresa", "Segmentos", "E-mail", "Telefone"];
-    const htmlEscape = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const rowsHtml = tableRows
-      .map((r) => `<tr>${headers.map((h) => `<td>${htmlEscape(r[h])}</td>`).join("")}</tr>`)
-      .join("");
-    const tableHtml = `
-      <table border="1" cellspacing="0" cellpadding="4">
-        <thead><tr>${headers.map((h) => `<th>${htmlEscape(h)}</th>`).join("")}</tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    `;
-    const doc = `
-      <!DOCTYPE html>
-      <html>
-        <head><meta charset="UTF-8"><title>Clientes</title></head>
-        <body>${tableHtml}</body>
-      </html>
-    `;
-    downloadBlob(
-      new Blob([doc], { type: "application/vnd.ms-excel;charset=utf-8;" }),
-      `clientes_${nowStamp()}.xls`
-    );
-  };
+  // paginação derivada
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [page, totalPages]);
 
-  const exportPDF = () => {
-    const headers = ["Nome", "Empresa", "Segmentos", "E-mail", "Telefone"];
-    const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const bodyRows = tableRows
-      .map((r) => `<tr>${headers.map((h) => `<td>${esc(r[h])}</td>`).join("")}</tr>`)
-      .join("");
-    const html = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-      <head>
-        <meta charset="utf-8"/>
-        <title>Clientes</title>
-        <style>
-          * { box-sizing: border-box; }
-          body { font: 12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; color: #111; margin: 24px; }
-          h1 { font-size: 18px; margin: 0 0 12px; }
-          table { width: 100%; border-collapse: collapse; }
-          thead th { text-align: left; background: #f4f4f5; }
-          th, td { border: 1px solid #e5e7eb; padding: 8px 10px; vertical-align: top; }
-          @media print {
-            @page { margin: 16mm; size: A4 portrait; }
-            a { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <h1>Clientes</h1>
-        <table>
-          <thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
-          <tbody>${bodyRows}</tbody>
-        </table>
-        <script>window.onload = () => { setTimeout(() => { window.print(); }, 200); };</script>
-      </body>
-      </html>
-    `;
-    const w = window.open("", "_blank");
-    if (!w) {
-      alert("Permita pop-ups para exportar em PDF.");
-      return;
-    }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-  };
+  const pageItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page]);
 
   /* ===================== UI ===================== */
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+    <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-semibold">Clientes</h1>
       </div>
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Registros</CardTitle>
-          <CardDescription>Lista de clientes cadastrados</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg md:text-xl font-semibold">Registros</CardTitle>
+              <CardDescription>Lista de clientes cadastrados</CardDescription>
+            </div>
+            <div className="ml-auto">
+              <ExportMenu
+                data={filtered.map((c) => ({
+                  name: c.name || "",
+                  company: c.company ?? c.company_name ?? c.companyName ?? "",
+                  segments: ensureArraySegments(c).join(" | "),
+                  email: c.email || "",
+                  phone: formatPhoneDisplay(c.phone || ""),
+                }))}
+                columns={[
+                  { key: 'name', header: 'Nome' },
+                  { key: 'company', header: 'Empresa' },
+                  { key: 'segments', header: 'Segmentos' },
+                  { key: 'email', header: 'E-mail' },
+                  { key: 'phone', header: 'Telefone' },
+                ]}
+                filename="clientes"
+                pdfOptions={{
+                  title: 'Relatório de Clientes',
+                  orientation: 'p',
+                  filtersSummary: `Exibidos: ${totalAfterFilters} / ${totalClients}`,
+                }}
+              />
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
-          {/* Filtros + botões */}
-          <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3 mb-4">
-            <div className="relative flex-1 w-full">
+
+        <CardContent className="space-y-4">
+          {/* Busca + Filtros + Novo */}
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
+            <div className="relative flex-1 w-full md:w-[320px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="+55(DD)Número"
+                placeholder="Buscar clientes..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
             </div>
 
-            {/* ====== FILTROS AVANÇADOS (scroll seguro) ====== */}
+            {/* FILTROS */}
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="gap-2 w-full sm:w-auto">
+                <Button variant="outline" size="sm" className="gap-2">
                   <FilterIcon className="size-4" />
                   Filtros
                   {filtersCount > 0 && <Badge variant="secondary">{filtersCount}</Badge>}
@@ -838,38 +829,49 @@ const Clients = () => {
                 side="bottom"
                 sideOffset={8}
                 collisionPadding={12}
-                className="w-[min(92vw,620px)] p-0"
+                className="w-[min(96vw,860px)] p-0"
+                style={{ height: 'min(72vh, 600px)' }}
               >
-                <div className="flex flex-col max-h-[calc(100vh-120px)]">
-                  <div className="px-4 py-3 border-b">
-                    <p className="text-sm font-medium">Filtrar clientes</p>
-                    <p className="text-xs text-muted-foreground">Refine os resultados com seletores.</p>
+                <div className="grid h-full grid-rows-[auto,1fr,auto] text-[12px] leading-tight">
+                  {/* HEADER */}
+                  <div className="px-3 py-2 border-b flex items-center justify-between bg-background">
+                    <div>
+                      <p className="text-[13px] font-medium">Filtrar clientes</p>
+                      <p className="text-[11px] text-muted-foreground">Refine os resultados com seletores.</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-[12px]"
+                      onClick={clearFilters}
+                    >
+                      Limpar
+                    </Button>
                   </div>
 
-                  {/* BODY (usa capture pra não travar no Dialog) */}
+                  {/* BODY */}
                   <div
-                    className="p-4 grid md:grid-cols-2 gap-4 flex-1 overflow-y-auto pr-2 overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
-                    onWheelCapture={(e) => e.stopPropagation()}
-                    onTouchMoveCapture={(e) => e.stopPropagation()}
-                    onScrollCapture={(e) => e.stopPropagation()}
+                    className="p-3 grid md:grid-cols-2 gap-3 overflow-y-auto overscroll-contain touch-pan-y pr-2"
+                    style={{ WebkitOverflowScrolling: 'touch', maxHeight: 'calc(72vh - 120px)' }}
                   >
                     {/* Empresas */}
-                    <div className="space-y-2">
-                      <Label>Empresas</Label>
-                      <div className="max-h-[32vh] overflow-y-auto pr-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px]">Empresas</Label>
+                      <div className="max-h-[40vh] overflow-y-auto overscroll-contain touch-pan-y pr-1" style={{ WebkitOverflowScrolling: 'touch' }}>
                         {uniqueCompanies.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">—</p>
+                          <p className="text-[11px] text-muted-foreground">—</p>
                         ) : uniqueCompanies.map((comp) => (
-                          <label key={comp} className="flex items-center gap-2 text-sm cursor-pointer">
-                            <Checkbox checked={fCompanies.includes(comp)} onCheckedChange={() => toggle(setFCompanies, comp)} />
+                          <label key={comp} className="flex items-center gap-1.5 text-[12px] cursor-pointer">
+                            <Checkbox checked={fCompanies.includes(comp)} onCheckedChange={() => toggle(setFCompanies, comp)} className="h-3 w-3" />
                             <span className="truncate">{comp}</span>
                           </label>
                         ))}
                       </div>
+
                       {fCompanies.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-1.5">
                           {fCompanies.map((c) => (
-                            <Badge key={c} variant="secondary" className="gap-1">
+                            <Badge key={c} variant="secondary" className="gap-1 py-0.5 text-[11px]">
                               {c}
                               <button type="button" onClick={() => toggle(setFCompanies, c)} className="ml-1 opacity-70 hover:opacity-100">
                                 <X className="size-3" />
@@ -880,47 +882,63 @@ const Clients = () => {
                       )}
                     </div>
 
-                    {/* Segmentos (agrupados + personalizados) */}
-                    <div className="space-y-2 md:col-span-1">
-                      <Label>Segmentos</Label>
-                      <div
-                        className="grid sm:grid-cols-1 gap-2 max-h-[48vh] overflow-y-auto pr-1"
-                      >
-                        {SEGMENTOS_GRUPOS.map((grp) => (
-                          <div key={grp.group}>
-                            <p className="text-xs font-semibold text-muted-foreground mb-2">{grp.group}</p>
-                            <div className="space-y-1.5">
-                              {grp.options.map((opt) => (
-                                <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
-                                  <Checkbox checked={fSegments.includes(opt.value)} onCheckedChange={() => toggle(setFSegments, opt.value)} />
+                    {/* Segmentos */}
+                    <div className="space-y-1.5">
+                      <Label className="flex items-center justify-between text-[12px]">
+                        <span>Segmentos</span>
+                      </Label>
+
+                      {/* Busca + Selecionar exibidos */}
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                          <Input
+                            className="pl-7 h-8 text-[12px]"
+                            placeholder="Buscar segmento nos filtros..."
+                            value={fSegmentsQuery}
+                            onChange={(e) => setFSegmentsQuery(e.target.value)}
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          className="h-8 px-2 text-[12px]"
+                          variant="secondary"
+                          disabled={shownSegmentValues.length === 0 || allShownAlreadySelected}
+                          onClick={selectShownSegments}
+                        >
+                          Selecionar exibidos
+                        </Button>
+                      </div>
+
+                      <div className="max-h-[40vh] overflow-y-auto overscroll-contain touch-pan-y pr-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+                        {SEGMENTOS_GRUPOS.map((grp) => {
+                          const q = fSegmentsQuery.trim().toLowerCase();
+                          const shownOpts = grp.options.filter((opt) =>
+                            !q || opt.value.toLowerCase().includes(q) || (opt.desc && opt.desc.toLowerCase().includes(q))
+                          );
+                          if (shownOpts.length === 0) return null;
+                          return (
+                            <div key={grp.group} className="mb-2">
+                              <p className="text-[11px] font-medium text-muted-foreground mb-1">{grp.group}</p>
+                              {shownOpts.map((opt) => (
+                                <label key={opt.value} className="flex items-center gap-1.5 text-[12px] cursor-pointer mb-1">
+                                  <Checkbox
+                                    checked={fSegments.includes(opt.value)}
+                                    onCheckedChange={() => toggle(setFSegments, opt.value)}
+                                    className="h-3 w-3"
+                                  />
                                   <span className="truncate">{opt.value}</span>
                                 </label>
                               ))}
                             </div>
-                            <Separator className="my-3" />
-                          </div>
-                        ))}
-
-                        {customSegmentsFromData.length > 0 && (
-                          <div>
-                            <p className="text-xs font-semibold text-muted-foreground mb-2">Personalizados</p>
-                            <div className="space-y-1.5">
-                              {customSegmentsFromData.map((opt) => (
-                                <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
-                                  <Checkbox checked={fSegments.includes(opt)} onCheckedChange={() => toggle(setFSegments, opt)} />
-                                  <span className="truncate">{opt}</span>
-                                </label>
-                              ))}
-                            </div>
-                            <Separator className="my-3" />
-                          </div>
-                        )}
+                          );
+                        })}
                       </div>
 
                       {fSegments.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-1.5">
                           {fSegments.map((s) => (
-                            <Badge key={s} variant="secondary" className="gap-1">
+                            <Badge key={s} variant="secondary" className="gap-1 py-0.5 text-[11px]">
                               {s}
                               <button type="button" onClick={() => toggle(setFSegments, s)} className="ml-1 opacity-70 hover:opacity-100">
                                 <X className="size-3" />
@@ -931,11 +949,11 @@ const Clients = () => {
                       )}
                     </div>
 
-                    {/* E-mail / Telefone */}
-                    <div className="space-y-2">
-                      <Label>E-mail</Label>
+                    {/* E-mail e Telefone */}
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px]">E-mail</Label>
                       <select
-                        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                        className="w-full border rounded-md px-2 py-1.5 h-8 text-[12px] bg-background"
                         value={fHasEmail}
                         onChange={(e) => setFHasEmail(e.target.value)}
                       >
@@ -944,10 +962,10 @@ const Clients = () => {
                         <option value="nao">Sem e-mail</option>
                       </select>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Telefone</Label>
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px]">Telefone</Label>
                       <select
-                        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                        className="w-full border rounded-md px-2 py-1.5 h-8 text-[12px] bg-background"
                         value={fHasPhone}
                         onChange={(e) => setFHasPhone(e.target.value)}
                       >
@@ -958,137 +976,195 @@ const Clients = () => {
                     </div>
                   </div>
 
-                  <div className="px-4 py-3 border-t flex justify-between">
-                    <Button variant="ghost" onClick={clearFilters}>Limpar filtros</Button>
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => setFiltersOpen(false)}>Fechar</Button>
-                      <Button onClick={() => setFiltersOpen(false)}>Aplicar</Button>
-                    </div>
+                  {/* FOOTER */}
+                  <div className="px-3 py-2 border-t flex justify-end gap-2 items-center bg-background">
+                    <Button variant="outline" size="sm" className="h-8 px-2 text-[12px]" onClick={() => setFiltersOpen(false)}>Fechar</Button>
+                    <Button size="sm" className="h-8 px-3 text-[12px]" onClick={() => setFiltersOpen(false)}>Aplicar</Button>
                   </div>
                 </div>
               </PopoverContent>
             </Popover>
 
-            {/* Exportações */}
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={exportCSV} className="gap-2">
-                <FileDown className="size-4" /> CSV
-              </Button>
-              <Button variant="outline" onClick={exportExcel} className="gap-2">
-                <FileSpreadsheet className="size-4" /> Excel
-              </Button>
-              <Button variant="outline" onClick={exportPDF} className="gap-2">
-                <FileText className="size-4" /> PDF
-              </Button>
-            </div>
-
             {/* Novo Cliente */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button className="admin-btn-primary gap-2 min-h-[36px]" onClick={openCreate}>
-                  <Plus className="h-5 w-5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+                <Button size="sm" className="gap-2" onClick={openCreate}>
+                  <Plus className="size-4" />
                   <span className="whitespace-nowrap">Novo Cliente</span>
                 </Button>
               </DialogTrigger>
 
-              {/* Modal estreito, centralizado e com rolagem segura */}
-              <DialogContent className="p-0 sm:max-w-[560px] md:max-w-[600px]">
-                <div
-                  className="max-h-[80vh] overflow-y-auto p-6"
-                  onWheelCapture={(e) => e.stopPropagation()}
-                  onTouchMoveCapture={(e) => e.stopPropagation()}
-                  onScrollCapture={(e) => e.stopPropagation()}
-                  style={{ WebkitOverflowScrolling: "touch" }}
-                >
-                  <DialogHeader className="pb-2">
-                    <DialogTitle>{mode === "create" ? "Novo Cliente" : "Editar Cliente"}</DialogTitle>
-                    <DialogDescription>
-                      {mode === "create" ? "Cadastre um novo cliente." : "Atualize os dados do cliente."}
-                    </DialogDescription>
-                  </DialogHeader>
+              <DialogContent
+                className="p-0 sm:max-w-[560px] md:max-w-[600px]"
+                style={{ height: 'min(85vh, 700px)' }}
+              >
+                <div className="grid h-full grid-rows-[auto,1fr,auto]">
+                  {/* Header */}
+                  <div className="p-6 pb-2 border-b bg-background">
+                    <DialogHeader>
+                      <DialogTitle>{mode === "create" ? "Novo Cliente" : "Editar Cliente"}</DialogTitle>
+                      <DialogDescription>
+                        {mode === "create" ? "Cadastre um novo cliente." : "Atualize os dados do cliente."}
+                      </DialogDescription>
+                    </DialogHeader>
+                  </div>
 
-                  <form onSubmit={onSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="md:col-span-2">
-                        <Label>Nome</Label>
-                        <Input name="name" value={form.name} onChange={onChange} required />
-                      </div>
+                  {/* Body */}
+                  <div
+                    className="p-6 overflow-y-auto overscroll-contain touch-pan-y"
+                    style={{ WebkitOverflowScrolling: 'touch', maxHeight: 'calc(85vh - 120px)' }}
+                  >
+                    <form onSubmit={onSubmit} className="space-y-4" id="client-form">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="md:col-span-2">
+                          <Label>Nome</Label>
+                          <Input name="name" value={form.name} onChange={onChange} required />
+                        </div>
 
-                      <div className="md:col-span-2">
-                        <Label>Empresa</Label>
-                        <Input name="company" value={form.company} onChange={onChange} />
-                      </div>
+                        <div className="md:col-span-2">
+                          <Label>Empresa</Label>
+                          <Input name="company" value={form.company} onChange={onChange} />
+                        </div>
 
-                      {/* Segmentos */}
-                      <div className="md:col-span-2 space-y-2">
-                        <Label>Segmentos</Label>
-                        <SegmentosSelect
-                          value={form.segments}
-                          onChange={(next) => setForm((f) => ({ ...f, segments: next }))}
-                          onCreate={(label) => {
-                            setExtraSegments((prev) =>
-                              prev.includes(label) ? prev : [...prev, label]
-                            );
-                          }}
-                        />
-                        {form.segments.length > 0 && (
-                          <div className="flex flex-wrap gap-2 justify-start">
-                            {form.segments.map((s) => (
-                              <Badge key={s} variant="secondary" className="gap-1">
-                                {s}
-                                <button
-                                  type="button"
-                                  className="ml-1 opacity-70 hover:opacity-100"
-                                  onClick={() =>
-                                    setForm((f) => ({ ...f, segments: f.segments.filter((x) => x !== s) }))
-                                  }
-                                  title="Remover"
-                                >
-                                  <X className="size-3" />
-                                </button>
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                        {/* Segmentos */}
+                        <div className="md:col-span-2 space-y-2">
+                          <Label>Segmentos</Label>
+                          <SegmentosSelect
+                            value={form.segments}
+                            onChange={(next) => setForm((f) => ({ ...f, segments: next }))}
+                            onCreate={(label) => {
+                              setExtraSegments((prev) => (prev.includes(label) ? prev : [...prev, label]));
+                            }}
+                          />
+                          {form.segments.length > 0 && (
+                            <div className="flex flex-wrap gap-2 justify-start">
+                              {form.segments.map((s) => (
+                                <Badge key={s} variant="secondary" className="gap-1">
+                                  {s}
+                                  <button
+                                    type="button"
+                                    className="ml-1 opacity-70 hover:opacity-100"
+                                    onClick={() =>
+                                      setForm((f) => ({ ...f, segments: f.segments.filter((x) => x !== s) }))
+                                    }
+                                    title="Remover"
+                                  >
+                                    <X className="size-3" />
+                                  </button>
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
 
-                      <div>
-                        <Label>E-mail</Label>
-                        <Input type="email" name="email" value={form.email} onChange={onChange} />
-                      </div>
-                      <div>
-                        <Label>Telefone</Label>
-                        <Input
-                          name="phone"
-                          inputMode="numeric"
-                          placeholder="+55(DD)Número"
-                          value={form.phone}
-                          onChange={onChange}
-                        />
-                      </div>
+                        <div>
+                          <Label>E-mail</Label>
+                          <Input name="email" type="email" value={form.email} onChange={onChange} />
+                        </div>
 
-                      <div className="md:col-span-2">
-                        <Label>Observações</Label>
-                        <Textarea name="notes" value={form.notes} onChange={onChange} />
-                      </div>
-                    </div>
+                        <div>
+                          <Label>Telefone</Label>
+                          <Input
+                            name="phone"
+                            value={form.phone}
+                            onChange={onChange}
+                            placeholder="+55(DD)Número"
+                          />
+                        </div>
 
-                    <div className="flex justify-end gap-2 pt-2">
-                      <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                        <div className="md:col-span-2">
+                          <Label>Observações</Label>
+                          <Textarea name="notes" value={form.notes} onChange={onChange} />
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="p-6 pt-2 border-t bg-background">
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
                         Cancelar
                       </Button>
-                      <Button type="submit" disabled={saving}>
+                      <Button type="submit" size="sm" disabled={saving} form="client-form">
                         {saving ? "Salvando..." : mode === "create" ? "Salvar" : "Atualizar"}
                       </Button>
                     </div>
-                  </form>
+                  </div>
                 </div>
               </DialogContent>
             </Dialog>
           </div>
 
-          {/* Tabela centralizada (títulos + dados) */}
-          <div className="overflow-x-auto">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {/* Total */}
+            <div className="rounded-xl border bg-card p-4 min-h-[180px] sm:min-h-[220px] flex items-center justify-center text-center">
+              <div>
+                <p className="text-xs text-muted-foreground">Total de clientes (geral)</p>
+                <div className="mt-1 text-5xl sm:text-6xl font-bold leading-none">{totalClients}</div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Exibidos após filtros: <b>{totalAfterFilters}</b>
+                </p>
+              </div>
+            </div>
+
+            {/* Pizza */}
+            <div className="rounded-xl border bg-card p-3 sm:p-4">
+              <p className="text-xs text-muted-foreground px-1 mb-2">Top 10 segmentos (% dos clientes exibidos)</p>
+
+              <div className="flex flex-col space-y-3">
+                <div className="w-full h-[200px] sm:h-[240px] lg:h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius="45%"
+                        outerRadius="75%"
+                        paddingAngle={1}
+                        strokeWidth={1}
+                      >
+                        {pieData.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(val, name, props) => [`${val}% (${props?.payload?.count})`, name]}
+                        contentStyle={{
+                          fontSize: '12px',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid #e2e8f0',
+                          backgroundColor: 'white'
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="max-h-[120px] overflow-y-auto overscroll-contain touch-pan-y px-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] leading-tight">
+                    {pieData.map((d, i) => (
+                      <div key={d.name} className="flex items-center gap-2 min-w-0 py-1">
+                        <span className="inline-block h-3 w-3 rounded-sm flex-shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                        <span className="truncate flex-1 text-xs">{d.name}</span>
+                        <span className="text-xs font-medium text-muted-foreground flex-shrink-0">
+                          {d.value}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabela */}
+          <div className="overflow-x-auto rounded-xl border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1103,10 +1179,10 @@ const Clients = () => {
               <TableBody>
                 {loading ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-6">Carregando…</TableCell></TableRow>
-                ) : filtered.length === 0 ? (
+                ) : pageItems.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-6">Nenhum registro</TableCell></TableRow>
                 ) : (
-                  filtered.map((c) => {
+                  pageItems.map((c) => {
                     const id = c.id ?? c._id ?? c.uuid;
                     const company = c.company ?? c.company_name ?? c.companyName ?? "—";
                     const segs = ensureArraySegments(c);
@@ -1144,6 +1220,29 @@ const Clients = () => {
               </TableBody>
             </Table>
           </div>
+
+          {/* Paginação */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Exibindo <b>{pageItems.length}</b> de <b>{filtered.length}</b> registros
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                Anterior
+              </Button>
+              <div className="text-xs text-muted-foreground">
+                Página <b>{page}</b> / <b>{totalPages}</b>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Próxima
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -1155,8 +1254,8 @@ const Clients = () => {
             <DialogDescription>Esta ação não pode ser desfeita.</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpenDelete(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={onDelete} disabled={deleting}>
+            <Button variant="outline" size="sm" onClick={() => setOpenDelete(false)}>Cancelar</Button>
+            <Button variant="destructive" size="sm" onClick={onDelete} disabled={deleting}>
               {deleting ? "Excluindo..." : "Excluir"}
             </Button>
           </div>
