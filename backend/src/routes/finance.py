@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from flask import Blueprint, request, jsonify, Response
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import get_jwt_identity
 from src.middleware.auth_middleware import roles_allowed
 
 log = logging.getLogger(__name__)
@@ -401,7 +401,7 @@ def delete_transaction(txid):
 
 
 # =============================== Aliases ================================
-@finance_bp.route("/api/contas-pagar", methods=["POST"])
+@finance_bp.route("/contas-pagar", methods=["POST"])
 @roles_allowed('admin')
 def criar_conta_pagar():
     """
@@ -413,7 +413,7 @@ def criar_conta_pagar():
     return create_transaction()
 
 
-@finance_bp.route("/api/contas-receber", methods=["POST"])
+@finance_bp.route("/contas-receber", methods=["POST"])
 @roles_allowed('admin')
 def criar_conta_receber():
     """
