@@ -2,9 +2,15 @@
   "dependencies": {
     "read-excel-file": "^5.8.8",
     "socket.io-client": "^4.8.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "buffer": "^6.0.3",
+    "process": "^0.11.10",
+    "axios": "1.6.8"
   },
   "devDependencies": {
-    "rollup-plugin-node-polyfills": "^0.2.1"
+    "@vitejs/plugin-react": "^4.4.1",
+    "@tailwindcss/vite": "^4.0.0",
+    "@rollup/plugin-inject": "^5.0.5",
+    "vite": "^6.3.5"
   }
 }
