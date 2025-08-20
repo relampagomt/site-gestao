@@ -1,4 +1,5 @@
 // frontend/src/admin/Dashboard.jsx
+import RecentActivities from "./RecentActivities.jsx";
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Activity, Briefcase, Package, Target, Users } from 'lucide-react';
