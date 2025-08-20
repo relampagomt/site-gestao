@@ -81,9 +81,9 @@ export default function RecentActivities() {
     return filteredHistory.slice(start, start + pageSize);
   }, [filteredHistory, page, pageSize]);
 
-  // abrir modal
-  const openDetails = (row) => {
-    setSelected(row || null);
+  // abrir modal apenas para histórico (sem ação específica)
+  const openHistory = () => {
+    setSelected(null);
     setOpen(true);
   };
 
@@ -98,7 +98,7 @@ export default function RecentActivities() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => openDetails(null)}
+            onClick={openHistory}
             title="Abrir histórico completo"
           >
             Ver todo o histórico
@@ -110,12 +110,11 @@ export default function RecentActivities() {
           ) : (
             <>
               {latest.map((a, i) => (
-                <button
+                <div
                   key={i}
-                  onClick={() => openDetails(a)}
-                  className="w-full text-left group"
+                  className="w-full"
                 >
-                  <div className="flex items-center gap-3 rounded-lg border px-3 py-2 hover:bg-muted/40 transition">
+                  <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
                     <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">
@@ -131,14 +130,14 @@ export default function RecentActivities() {
                       </Badge>
                     )}
                   </div>
-                </button>
+                </div>
               ))}
               <div className="pt-1">
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-8 px-2"
-                  onClick={() => openDetails(null)}
+                  onClick={openHistory}
                 >
                   Ver todo o histórico
                 </Button>
@@ -386,3 +385,4 @@ function Info({ label, value }) {
     </div>
   );
 }
+
