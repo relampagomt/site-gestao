@@ -168,7 +168,7 @@ const TypeSelector = ({ value = [], onChange }) => {
 };
 
 /* ========= DayCell ========= */
-function DayCell({ dateObj, inMonth, isToday, events, onNewOnDate, onOpenEdit, onMoveAction }) {
+function DayCell({ dateObj, inMonth, isToday, events, onNewOnDate, onOpenEdit, onMoveAction, onOpenDay }) {
   const key = toYMD(dateObj);
   const maxVisible = 3;
 
@@ -191,7 +191,12 @@ function DayCell({ dateObj, inMonth, isToday, events, onNewOnDate, onOpenEdit, o
     <div className={`bg-card min-h-[112px] sm:min-h-[130px] p-1.5 sm:p-2 flex flex-col ${inMonth ? "" : "opacity-50"}`}
          onDragOver={onDragOver} onDrop={onDrop}>
       <div className="flex items-center justify-between mb-1">
-        <button onClick={()=>onNewOnDate(key)} className={`text-xs rounded px-1 ${isToday ? "bg-primary text-primary-foreground" : "text-foreground/80 hover:bg-accent"}`}>
+        {/* Agora: clicar no número do dia abre o modal com TODAS as ações do dia */}
+        <button
+          onClick={()=>onOpenDay(key, events)}
+          className={`text-xs rounded px-1 ${isToday ? "bg-primary text-primary-foreground" : "text-foreground/80 hover:bg-accent"}`}
+          title="Ver ações do dia"
+        >
           {dateObj.getDate()}
         </button>
         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={()=>onNewOnDate(key)} title="Nova ação">
@@ -216,7 +221,14 @@ function DayCell({ dateObj, inMonth, isToday, events, onNewOnDate, onOpenEdit, o
           );
         })}
         {events.length > maxVisible && (
-          <div className="text-[10px] sm:text-xs text-muted-foreground">+{events.length - maxVisible} mais…</div>
+          <button
+            type="button"
+            onClick={()=>onOpenDay(key, events)}
+            className="text-left w-full text-[10px] sm:text-xs text-muted-foreground hover:underline"
+            title="Ver todas as ações do dia"
+          >
+            +{events.length - maxVisible} mais…
+          </button>
         )}
       </div>
     </div>
@@ -224,7 +236,7 @@ function DayCell({ dateObj, inMonth, isToday, events, onNewOnDate, onOpenEdit, o
 }
 
 /* ========= Views ========= */
-const CalendarMonth = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, onMoveAction }) => {
+const CalendarMonth = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, onMoveAction, onOpenDay }) => {
   const gridStart = startOfWeekMon(startOfMonth(cursor));
   const gridEnd   = endOfWeekMon(endOfMonth(cursor));
 
@@ -282,7 +294,7 @@ const CalendarMonth = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, on
               const events = daysMap.get(key) || [];
               return (
                 <DayCell key={`${wi}-${key}`} dateObj={day} inMonth={inMonth} isToday={isToday}
-                         events={events} onNewOnDate={onNewOnDate} onOpenEdit={onOpenEdit} onMoveAction={onMoveAction}/>
+                         events={events} onNewOnDate={onNewOnDate} onOpenEdit={onOpenEdit} onMoveAction={onMoveAction} onOpenDay={onOpenDay}/>
               );
             })
           )}
@@ -298,7 +310,7 @@ const CalendarMonth = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, on
   );
 };
 
-const CalendarWeek = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, onMoveAction }) => {
+const CalendarWeek = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, onMoveAction, onOpenDay }) => {
   const weekStart = startOfWeekMon(cursor);
   const days = [0,1,2,3,4,5,6].map(i=>addDays(weekStart,i));
 
@@ -339,7 +351,7 @@ const CalendarWeek = ({ actions, cursor, setCursor, onNewOnDate, onOpenEdit, onM
             const key = toYMD(d);
             return (
               <DayCell key={key} dateObj={d} inMonth={true} isToday={key===toYMD(new Date())}
-                       events={(groups.get(key)||[])} onNewOnDate={onNewOnDate} onOpenEdit={onOpenEdit} onMoveAction={onMoveAction}/>
+                       events={(groups.get(key)||[])} onNewOnDate={onNewOnDate} onOpenEdit={onOpenEdit} onMoveAction={onMoveAction} onOpenDay={onOpenDay}/>
             );
           })}
         </div>
@@ -436,6 +448,12 @@ const Actions = () => {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editing, setEditing] = useState(null);
 
+  // ===== Modal de ações do dia =====
+  const [isDayOpen, setIsDayOpen] = useState(false);
+  const [dayYMD, setDayYMD] = useState("");
+  const [dayItems, setDayItems] = useState([]);
+  const openDayModal = (ymd, items=[]) => { setDayYMD(ymd); setDayItems(items); setIsDayOpen(true); };
+
   const [form, setForm] = useState({
     client_name: "", company_name: "", types: [],
     startBr: "", endBr: "", startTime: "", endTime: "",
@@ -465,7 +483,7 @@ const Actions = () => {
     } catch {
       setActions([]);
     } finally {
-           setLoading(false);
+      setLoading(false);
     }
   };
   useEffect(()=>{ loadActions(); }, []);
@@ -677,9 +695,24 @@ const Actions = () => {
         return aStart <= end && aEnd >= start;
       });
     }
+    // Mais recentes primeiro (já era assim; mantido)
     list.sort((a,b)=> (pickYMD(b).sYMD || "0000-01-01").localeCompare(pickYMD(a).sYMD || "0000-01-01"));
     return list;
   }, [actions, q, fClients, fCompanies, fTypes, fPeriods, fStatus, fStartBr, fEndBr]);
+
+  // ===== Paginação (igual às outras páginas) =====
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [page, totalPages]);
+  const pageItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page]);
+  const goPrev = () => setPage((p)=>Math.max(1, p-1));
+  const goNext = () => setPage((p)=>Math.min(totalPages, p+1));
 
   const exportData = useMemo(() => {
     return filtered.map((a) => {
@@ -750,8 +783,8 @@ const Actions = () => {
         </div>
       </div>
 
-      {view==="month" && <CalendarMonth actions={actions} cursor={cursor} setCursor={setCursor} onNewOnDate={newOnDate} onOpenEdit={openEdit} onMoveAction={handleMoveAction} />}
-      {view==="week"  && <CalendarWeek  actions={actions} cursor={cursor} setCursor={setCursor} onNewOnDate={newOnDate} onOpenEdit={openEdit} onMoveAction={handleMoveAction} />}
+      {view==="month" && <CalendarMonth actions={actions} cursor={cursor} setCursor={setCursor} onNewOnDate={newOnDate} onOpenEdit={openEdit} onMoveAction={handleMoveAction} onOpenDay={openDayModal} />}
+      {view==="week"  && <CalendarWeek  actions={actions} cursor={cursor} setCursor={setCursor} onNewOnDate={newOnDate} onOpenEdit={openEdit} onMoveAction={handleMoveAction} onOpenDay={openDayModal} />}
       {view==="agenda"&& <AgendaList    actions={actions} cursor={cursor} setCursor={setCursor} onOpenEdit={openEdit} />}
 
       {/* Registros */}
@@ -1030,10 +1063,10 @@ const Actions = () => {
               <TableBody>
                 {loading ? (
                   <TableRow><TableCell colSpan={11} className="text-center py-6">Carregando…</TableCell></TableRow>
-                ) : filtered.length === 0 ? (
+                ) : pageItems.length === 0 ? (
                   <TableRow><TableCell colSpan={11} className="text-center py-6">Nenhum registro</TableCell></TableRow>
                 ) : (
-                  filtered.map((a) => {
+                  pageItems.map((a) => {
                     const types   = ensureArrayTypes(a);
                     const periods = Array.isArray(a.day_periods) ? a.day_periods : [];
                     const status  = deriveStatusFromItem(a);
@@ -1081,9 +1114,48 @@ const Actions = () => {
               </TableBody>
             </Table>
           </div>
-          <p className="text-xs text-muted-foreground mt-3">
-            Total: <strong>{filtered.length}</strong> ação(ões)
-          </p>
+
+          {/* Paginação — igual aos Clientes */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="order-2 sm:order-1 text-xs text-muted-foreground">
+              Exibindo <b>{pageItems.length}</b> de <b>{filtered.length}</b> registros
+            </div>
+
+            <div className="order-1 sm:order-2 flex items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-w-[92px] h-9"
+                disabled={page <= 1}
+                onClick={goPrev}
+                aria-label="Página anterior"
+                title="Anterior"
+              >
+                Anterior
+              </Button>
+
+              <div className="shrink-0 text-xs tabular-nums">
+                <span className="inline-block rounded-md border bg-muted/60 px-2.5 py-1">
+                  Página <b>{page}</b>
+                  <span className="opacity-60">/{totalPages}</span>
+                </span>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-w-[92px] h-9"
+                disabled={page >= totalPages}
+                onClick={goNext}
+                aria-label="Próxima página"
+                title="Próxima"
+              >
+                Próxima
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -1221,6 +1293,69 @@ const Actions = () => {
                 <Button type="submit" size="sm">Atualizar</Button>
               </div>
             </form>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Ações do dia */}
+      <Dialog open={isDayOpen} onOpenChange={setIsDayOpen}>
+        <DialogContent className="w-full max-w-2xl max-h-[85vh] overflow-y-auto p-0">
+          <div className="px-5 pt-5 pb-3 border-b">
+            <DialogHeader>
+              <DialogTitle className="text-base">Ações do dia — {dayYMD ? formatDateBR(dayYMD) : ""}</DialogTitle>
+              <DialogDescription className="text-xs">
+                Clique em uma ação para editar, ou crie uma nova para esta data.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="px-5 py-4">
+            {(!dayItems || dayItems.length === 0) ? (
+              <div className="text-sm text-muted-foreground">Nenhuma ação para este dia.</div>
+            ) : (
+              <div className="space-y-2">
+                {dayItems.map((a) => {
+                  const st = deriveStatusFromItem(a);
+                  const { sYMD, eYMD } = pickYMD(a);
+                  return (
+                    <div key={a.id} className={`border rounded p-3 ${statusChipClass(st)} flex flex-col gap-1`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-medium truncate">
+                          {a.client_name || a.company_name || "Ação"}
+                          {a.supervisor ? <span className="opacity-70"> • Sup: {a.supervisor}</span> : null}
+                        </div>
+                        <Badge variant={st==="concluido" ? "default" : st==="andamento" ? "secondary" : "outline"} className="capitalize">
+                          {st}
+                        </Badge>
+                      </div>
+                      <div className="text-xs opacity-80">
+                        {sYMD ? formatDateBR(sYMD) : ""}{eYMD ? " → " + formatDateBR(eYMD) : ""}
+                        {a.start_time ? ` • ${a.start_time}` : ""}{a.end_time ? ` – ${a.end_time}` : ""}
+                      </div>
+                      <div className="text-[11px] opacity-75 truncate">
+                        {(ensureArrayTypes(a).join(" • ") || "—")}
+                        {Array.isArray(a.day_periods) && a.day_periods.length ? ` • ${a.day_periods.join(" • ")}` : ""}
+                      </div>
+                      <div className="pt-1">
+                        <Button size="sm" variant="outline" className="h-8" onClick={()=>{ setIsDayOpen(false); openEdit(a); }}>
+                          <Edit className="size-4 mr-2" /> Editar
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 mt-4">
+              <Button
+                size="sm"
+                onClick={() => { setIsDayOpen(false); newOnDate(dayYMD); }}
+                className="gap-2"
+              >
+                <Plus className="size-4" /> Nova Ação neste dia
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
