@@ -39,7 +39,7 @@ const AdminDashboard = () => {
   const handleLogout = () => logout();
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home, component: Dashboard };
+    { id: 'dashboard', label: 'Dashboard', icon: Home, component: Dashboard },
     { id: 'clients',   label: 'Clientes',  icon: UsersIcon, component: Clients },   // 👈 Users (plural)
     { id: 'users',     label: 'Usuários',  icon: UserCog,   component: UsersPage }, // 👈 UserCog
     { id: 'materials', label: 'Materiais', icon: Package,   component: Materials },
@@ -51,9 +51,11 @@ const AdminDashboard = () => {
 
   const ActiveComponent = menuItems.find((i) => i.id === activeTab)?.component || Dashboard;
 
-  // CSS global para evitar corte de legendas/labels nos gráficos (desktop e mobile)
-  const chartOverflowFix = `
-    /* Permite que textos de legendas quebrem e não sejam cortados */
+  // CSS global:
+  // 1) evita corte e permite quebra de linha nas legendas/labels
+  // 2) reduz levemente APENAS os gráficos (svg/canvas), preservando o tamanho das legendas
+  const chartOverflowAndScale = `
+    /* Quebra/overflow para legendas comuns (Recharts/GoogleCharts/etc) */
     .recharts-legend-wrapper,
     .recharts-default-legend,
     .google-visualization-legend,
@@ -65,20 +67,39 @@ const AdminDashboard = () => {
       word-break: break-word !important;
       max-width: 100% !important;
     }
-    /* Recharts/GoogleCharts: evita clipping de labels posicionadas fora do arco */
+
+    /* Evita clipping do SVG ao redor do gráfico */
     .recharts-wrapper,
     .recharts-surface,
     .google-visualization-chart,
     .google-visualization-chart svg {
       overflow: visible !important;
     }
-    /* Em mobile, reduz levemente a fonte das legendas para caber melhor */
+
+    /* ===== Redução suave do tamanho do GRÁFICO (não da legenda) =====
+       - Recharts: .recharts-surface é o <svg> principal
+       - Google Charts: alvo no <svg> dentro do container
+       - Chart.js (se houver): canvas com classes mais comuns
+    */
+    .recharts-surface,
+    .google-visualization-chart svg,
+    canvas.chartjs-render-monitor,
+    .chartjs-size-monitor + canvas,
+    .chart-container canvas,
+    .chart-container svg {
+      transform: scale(0.94);
+      transform-origin: top left;
+    }
+
+    /* Em telas pequenas, reduz um pouco mais o gráfico */
     @media (max-width: 640px) {
-      .recharts-legend-item text,
-      .google-visualization-legend text,
-      .chart-legend * {
-        font-size: 11px !important;
-        line-height: 1.25 !important;
+      .recharts-surface,
+      .google-visualization-chart svg,
+      canvas.chartjs-render-monitor,
+      .chartjs-size-monitor + canvas,
+      .chart-container canvas,
+      .chart-container svg {
+        transform: scale(0.88);
       }
     }
   `;
@@ -158,8 +179,8 @@ const AdminDashboard = () => {
 
         {/* Page Content */}
         <main className="p-3 sm:p-6 lg:p-8 max-w-full overflow-x-auto md:overflow-x-visible">
-          {/* CSS de correção para gráficos */}
-          <style dangerouslySetInnerHTML={{ __html: chartOverflowFix }} />
+          {/* CSS de correção e escala dos gráficos */}
+          <style dangerouslySetInnerHTML={{ __html: chartOverflowAndScale }} />
           <div className="max-w-7xl mx-auto">
             <ActiveComponent />
           </div>
