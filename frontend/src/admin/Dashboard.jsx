@@ -37,6 +37,18 @@ const SideLegend = ({ data = [], maxHeight = 200 }) => {
   );
 };
 
+/* ===== Hook: detectar mobile ===== */
+const useIsMobile = (breakpoint = 640) => {
+  const get = () => (typeof window !== 'undefined' ? window.innerWidth < breakpoint : false);
+  const [isMobile, setIsMobile] = useState(get);
+  useEffect(() => {
+    const onResize = () => setIsMobile(get());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [breakpoint]);
+  return isMobile;
+};
+
 /* ================= helpers de data ================= */
 function monthKey(d) {
   const y = d.getFullYear();
@@ -97,8 +109,8 @@ function buildMonthlyFromActions(actions, monthsDates) {
 /** ===== Pizza: dinâmica (top N + manter >= minPercent + "Outros (n)") ===== */
 function buildPieDataFromMap(map, opts = {}) {
   const {
-    maxSlices = 12,       // máximo de categorias visíveis
-    minPercent = 0.03,    // mantém sempre >= 3%
+    maxSlices = 12,
+    minPercent = 0.03,
     labelOthers = 'Outros'
   } = opts;
 
@@ -110,10 +122,7 @@ function buildPieDataFromMap(map, opts = {}) {
   const total = entries.reduce((acc, e) => acc + e.value, 0) || 1;
   const withPct = entries.map(e => ({ ...e, percent: e.value / total }));
 
-  // 1) tudo acima do limiar fica
   const keep = withPct.filter(e => e.percent >= minPercent);
-
-  // 2) completa com as maiores restantes até atingir maxSlices (ou todas)
   const limit = Math.min(maxSlices, withPct.length);
   if (keep.length < limit) {
     for (const e of withPct) {
@@ -127,14 +136,12 @@ function buildPieDataFromMap(map, opts = {}) {
   const keepNames = new Set(keep.map(e => e.name));
   const rest = withPct.filter(e => !keepNames.has(e.name));
 
-  // dataset com paleta
   const data = keep.map((e, idx) => ({
     name: e.name,
     value: e.value,
     color: COLORS[idx % COLORS.length],
   }));
 
-  // agrega "Outros"
   const restTotal = rest.reduce((acc, e) => acc + e.value, 0);
   if (restTotal > 0) {
     data.push({
@@ -150,6 +157,15 @@ function buildPieDataFromMap(map, opts = {}) {
 /* ================= componente ================= */
 const Dashboard = () => {
   const { isAdmin } = useAuth();
+  const isMobile = useIsMobile();
+
+  // Dimensões responsivas (~45% menores no mobile)
+  const lineBarHeight = isMobile ? 125 : 230; // 230 * 0.55 ≈ 126
+  const pieHeight = isMobile ? 130 : 240;     // 240 * 0.55 ≈ 132
+  const pieOuterR = isMobile ? 44 : 80;       // 80 * 0.55 ≈ 44
+  const legendMaxH = isMobile ? 120 : 200;
+  const legendWClass = isMobile ? 'w-36' : 'w-44 sm:w-52';
+
   const [stats, setStats] = useState({
     totalClients: 0,
     totalMaterials: 0,
@@ -200,7 +216,6 @@ const Dashboard = () => {
       setClientsArr(clients);
       setActionsArr(actions);
 
-      // atividades recentes
       const lastActions = actions
         .slice()
         .sort((a, b) => new Date(b.created_at || b.start_date || 0) - new Date(a.created_at || a.start_date || 0))
@@ -212,7 +227,6 @@ const Dashboard = () => {
         }));
       setRecentActivities(lastActions);
 
-      // mensal (back-end) ou derivado das ações
       if (Array.isArray(monthlyRes.data) && monthlyRes.data.length) {
         const normalized = monthlyRes.data.map((row, i) => ({
           month: row.month ?? row.label ?? monthLabelPT(monthsDates[i] || new Date()),
@@ -239,7 +253,7 @@ const Dashboard = () => {
         map.set(seg, (map.get(seg) || 0) + 1);
       }
     }
-    // TOP 10 (sem limiar), resto vai para "Outros"
+    // TOP 10 (sem limiar), resto em "Outros"
     return buildPieDataFromMap(map, { maxSlices: 10, minPercent: 0, labelOthers: 'Outros' });
   }, [clientsArr]);
 
@@ -250,7 +264,6 @@ const Dashboard = () => {
       const arr = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : Array.isArray(a?.types) ? a.types : [];
       for (const t of arr) map.set(t, (map.get(t) || 0) + 1);
     }
-    // manter ≥ 3% e até 10 fatias
     return buildPieDataFromMap(map, { maxSlices: 10, minPercent: 0.03, labelOthers: 'Outros' });
   }, [actionsArr]);
 
@@ -330,7 +343,7 @@ const Dashboard = () => {
             <CardDescription>Últimos meses</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={230}>
+            <ResponsiveContainer width="100%" height={lineBarHeight}>
               <LineChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
@@ -355,7 +368,7 @@ const Dashboard = () => {
             <CardDescription>Número de campanhas realizadas</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={230}>
+            <ResponsiveContainer width="100%" height={lineBarHeight}>
               <BarChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
@@ -375,18 +388,18 @@ const Dashboard = () => {
           <Card>
             <CardHeader>
               <CardTitle className="text-base sm:text-lg">Segmentos (Clientes)</CardTitle>
-              <CardDescription>Percentual por segmento dos clientes</CardDescription>
+              <CardDescription>Percentual por segmento cadastrado nos clientes (Top 10)</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-start gap-4">
                 <div className="flex-1">
-                  <ResponsiveContainer width="100%" height={240}>
+                  <ResponsiveContainer width="100%" height={pieHeight}>
                     <PieChart>
                       <Pie
                         data={clientsSegmentsPie}
                         cx="50%"
                         cy="50%"
-                        outerRadius={80}
+                        outerRadius={pieOuterR}
                         labelLine={false}
                         label={false}
                         dataKey="value"
@@ -399,8 +412,8 @@ const Dashboard = () => {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="w-44 sm:w-52">
-                  <SideLegend data={clientsSegmentsPie} maxHeight={200} />
+                <div className={legendWClass}>
+                  <SideLegend data={clientsSegmentsPie} maxHeight={legendMaxH} />
                 </div>
               </div>
             </CardContent>
@@ -416,13 +429,13 @@ const Dashboard = () => {
           <CardContent>
             <div className="flex items-start gap-4">
               <div className="flex-1">
-                <ResponsiveContainer width="100%" height={240}>
+                <ResponsiveContainer width="100%" height={pieHeight}>
                   <PieChart>
                     <Pie
                       data={actionTypesPie}
                       cx="50%"
                       cy="50%"
-                      outerRadius={80}
+                      outerRadius={pieOuterR}
                       labelLine={false}
                       label={false}
                       dataKey="value"
@@ -435,8 +448,8 @@ const Dashboard = () => {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="w-44 sm:w-52">
-                <SideLegend data={actionTypesPie} maxHeight={200} />
+              <div className={legendWClass}>
+                <SideLegend data={actionTypesPie} maxHeight={legendMaxH} />
               </div>
             </div>
           </CardContent>
