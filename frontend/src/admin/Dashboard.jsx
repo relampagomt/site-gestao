@@ -375,7 +375,7 @@ const Dashboard = () => {
           <Card>
             <CardHeader>
               <CardTitle className="text-base sm:text-lg">Segmentos (Clientes)</CardTitle>
-              <CardDescription>Percentual por segmento cadastrado nos clientes (Top 10)</CardDescription>
+              <CardDescription>Percentual por segmento dos clientes</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-start gap-4">
