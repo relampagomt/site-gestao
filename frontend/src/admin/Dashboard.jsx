@@ -11,6 +11,25 @@ import { useAuth } from '../contexts/AuthContext';
 
 const COLORS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#2563eb', '#7c3aed', '#0ea5e9', '#22c55e', '#f97316', '#e11d48'];
 
+/* ===== Legend lateral fixa (lista) ===== */
+const SideLegend = ({ data = [] }) => {
+  const total = (data || []).reduce((acc, d) => acc + (Number(d.value) || 0), 0) || 1;
+  return (
+    <ul className="text-xs sm:text-sm space-y-1">
+      {data.map((d, idx) => {
+        const pct = Math.round(((Number(d.value) || 0) / total) * 100);
+        const color = d.color || COLORS[idx % COLORS.length];
+        return (
+          <li key={idx} className="flex items-center gap-2">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm border border-black/10" style={{ background: color }} />
+            <span className="truncate">{d.name} {pct}%</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
+
 /* ================= helpers de data ================= */
 function monthKey(d) {
   const y = d.getFullYear();
@@ -41,12 +60,6 @@ const splitComma = (s) =>
     .split(',')
     .map(v => v.trim())
     .filter(Boolean);
-
-function ensureArrayTypes(item) {
-  if (Array.isArray(item?.types)) return item.types.filter(Boolean);
-  const cand = item?.service_type || item?.type || item?.category || item?.action_type || '';
-  return typeof cand === 'string' && cand.trim() ? splitComma(cand) : [];
-}
 
 function ensureClientSegments(c) {
   if (Array.isArray(c?.segments)) return c.segments.filter(Boolean);
@@ -114,12 +127,13 @@ function buildPieDataFromMap(map, opts = {}) {
     color: COLORS[idx % COLORS.length],
   }));
 
-  if (rest.length) {
-    const otherVal = rest.reduce((acc, e) => acc + e.value, 0);
+  // agrega "Outros"
+  const restTotal = rest.reduce((acc, e) => acc + e.value, 0);
+  if (restTotal > 0) {
     data.push({
       name: `${labelOthers} (${rest.length})`,
-      value: otherVal,
-      color: COLORS[data.length % COLORS.length],
+      value: restTotal,
+      color: '#9ca3af',
     });
   }
 
@@ -159,21 +173,15 @@ const Dashboard = () => {
         api.get('/clients').catch(() => ({ data: [] })),
         api.get('/materials').catch(() => ({ data: [] })),
         api.get('/actions').catch(() => ({ data: [] })),
-        api.get('/job-vacancies').catch(() => ({ data: [] })),
-        api.get('/metrics/monthly-campaigns').catch(() => ({ data: null })),
+        api.get('/vacancies').catch(() => ({ data: [] })),
+        api.get('/reports/monthly').catch(() => ({ data: [] }))
       ]);
 
-      const arr = d => (Array.isArray(d) ? d : (d?.items || d?.data || d?.actions || d?.results || []));
-      const clients = arr(clientsRes.data);
-      const materials = arr(materialsRes.data);
-      const actions = arr(actionsRes.data);
-      const vacancies = arr(vacanciesRes.data);
+      const clients = Array.isArray(clientsRes.data) ? clientsRes.data : [];
+      const actions = Array.isArray(actionsRes.data) ? actionsRes.data : [];
+      const materials = Array.isArray(materialsRes.data) ? materialsRes.data : [];
+      const vacancies = Array.isArray(vacanciesRes.data) ? vacanciesRes.data : [];
 
-      // guardar para as pizzas
-      setClientsArr(clients);
-      setActionsArr(actions);
-
-      // contadores
       setStats({
         totalClients: clients.length,
         totalMaterials: materials.length,
@@ -182,15 +190,22 @@ const Dashboard = () => {
         loading: false
       });
 
-      // atividades recentes simples
-      const activities = [];
-      if (clients.length > 0) activities.push({ id: 'c', action: 'Cliente cadastrado', client: clients.at(-1)?.name || 'Cliente', time: 'Recente' });
-      if (actions.length > 0) activities.push({ id: 'a', action: 'Ação criada', client: actions.at(-1)?.client_name || 'Cliente', time: 'Recente' });
-      if (materials.length > 0) activities.push({ id: 'm', action: 'Material registrado', client: materials.at(-1)?.client_name || 'Cliente', time: 'Recente' });
-      if (vacancies.length > 0) activities.push({ id: 'v', action: 'Vaga publicada', client: vacancies.at(-1)?.company || 'Empresa', time: 'Recente' });
-      setRecentActivities(activities);
+      setClientsArr(clients);
+      setActionsArr(actions);
 
-      // campanhas por mês (API -> fallback)
+      // atividades recentes
+      const lastActions = actions
+        .slice()
+        .sort((a, b) => new Date(b.created_at || b.start_date || 0) - new Date(a.created_at || a.start_date || 0))
+        .slice(0, 6)
+        .map((a, idx) => ({
+          id: a.id || idx,
+          text: a.client_name || a.company_name || a.title || 'Ação criada',
+          date: a.created_at || a.start_date || a.updated_at || '',
+        }));
+      setRecentActivities(lastActions);
+
+      // mensal (back-end) ou derivado das ações
       if (Array.isArray(monthlyRes.data) && monthlyRes.data.length) {
         const normalized = monthlyRes.data.map((row, i) => ({
           month: row.month ?? row.label ?? monthLabelPT(monthsDates[i] || new Date()),
@@ -224,15 +239,12 @@ const Dashboard = () => {
   const actionTypesPie = useMemo(() => {
     const map = new Map();
     for (const a of actionsArr) {
-      const types = ensureArrayTypes(a);
-      if (types.length === 0) {
-        map.set('Outro', (map.get('Outro') || 0) + 1);
-      } else {
-        for (const t of types) map.set(t, (map.get(t) || 0) + 1);
-      }
+      const raw = String(a?.type || '').trim();
+      const arr = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : Array.isArray(a?.types) ? a.types : [];
+      for (const t of arr) map.set(t, (map.get(t) || 0) + 1);
     }
-    // manter ≥ 3% e até 12 fatias
-    return buildPieDataFromMap(map, { maxSlices: 12, minPercent: 0.03, labelOthers: 'Outros' });
+    // manter ≥ 3% e até 10 fatias
+    return buildPieDataFromMap(map, { maxSlices: 10, minPercent: 0.03, labelOthers: 'Outros' });
   }, [actionsArr]);
 
   const hasRevenue = useMemo(
@@ -240,32 +252,31 @@ const Dashboard = () => {
     [monthlyData]
   );
 
-  // rótulo de pizza: só mostra ≥ 3% para evitar poluição visual
+  // rótulo de pizza: só mostra ≥ 3% para evitar poluição visual (NÃO USADO AGORA)
   const pieLabel = ({ name, percent }) => (percent >= 0.03 ? `${name} ${(percent * 100).toFixed(0)}%` : '');
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl md:text-2xl font-semibold">Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-semibold">Dashboard</h2>
+        </div>
       </div>
 
-      {/* Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        {/* Client card - Admin only */}
-        {isAdmin() && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total de Clientes</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-xl sm:text-2xl font-bold">
-                {stats.loading ? <div className="animate-pulse bg-gray-200 h-6 w-16 rounded" /> : stats.totalClients.toLocaleString()}
-              </div>
-              <p className="text-xs text-muted-foreground">Clientes cadastrados</p>
-            </CardContent>
-          </Card>
-        )}
+      {/* Cards de KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total de Clientes</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl sm:text-2xl font-bold">
+              {stats.loading ? <div className="animate-pulse bg-gray-200 h-6 w-16 rounded" /> : stats.totalClients}
+            </div>
+            <p className="text-xs text-muted-foreground">Clientes cadastrados</p>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -302,19 +313,17 @@ const Dashboard = () => {
             <div className="text-xl sm:text-2xl font-bold">
               {stats.loading ? <div className="animate-pulse bg-gray-200 h-6 w-16 rounded" /> : stats.totalVacancies}
             </div>
-            <p className="text-xs text-muted-foreground">Vagas disponíveis</p>
+            <p className="text-xs text-muted-foreground">Vagas cadastradas</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Linhas e Barras */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+      {/* Gráficos de linha/barras */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg">
-              {hasRevenue ? 'Campanhas e Receita (últimos 6 meses)' : 'Campanhas por Mês (últimos 6 meses)'}
-            </CardTitle>
-            <CardDescription>Dados calculados a partir das ações</CardDescription>
+            <CardTitle className="text-base sm:text-lg">Receita e Campanhas</CardTitle>
+            <CardDescription>Últimos meses</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
@@ -323,10 +332,10 @@ const Dashboard = () => {
                 <XAxis dataKey="month" />
                 <YAxis />
                 <Tooltip
-                  formatter={(v, k) =>
-                    k === 'receita'
-                      ? [`R$ ${Number(v).toLocaleString()}`, 'Receita']
-                      : [v, 'Campanhas']
+                  formatter={(value, name) =>
+                    name === 'receita'
+                      ? [`R$ ${Number(value || 0).toLocaleString('pt-BR')}`, 'Receita']
+                      : [value, 'Campanhas']
                   }
                 />
                 <Line type="monotone" dataKey="campanhas" stroke="#2563eb" strokeWidth={2} />
@@ -365,24 +374,31 @@ const Dashboard = () => {
               <CardDescription>Percentual por segmento cadastrado nos clientes</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie
-                    data={clientsSegmentsPie}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={90}
-                    labelLine={false}
-                    dataKey="value"
-                    label={pieLabel}
-                  >
-                    {clientsSegmentsPie.map((entry, idx) => (
-                      <Cell key={`cseg-${idx}`} fill={entry.color || COLORS[idx % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v, n, p) => [v, p?.payload?.name]} />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie
+                        data={clientsSegmentsPie}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={90}
+                        labelLine={false}
+                        label={false}
+                        dataKey="value"
+                      >
+                        {clientsSegmentsPie.map((entry, idx) => (
+                          <Cell key={`cseg-${idx}`} fill={entry.color || COLORS[idx % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v, n, p) => [v, p?.payload?.name]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="w-48 sm:w-56">
+                  <SideLegend data={clientsSegmentsPie} />
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -394,24 +410,31 @@ const Dashboard = () => {
             <CardDescription>Percentual por tipo (com suporte a múltiplos por ação)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={actionTypesPie}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={90}
-                  labelLine={false}
-                  dataKey="value"
-                  label={pieLabel}
-                >
-                  {actionTypesPie.map((entry, idx) => (
-                    <Cell key={`atype-${idx}`} fill={entry.color || COLORS[idx % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(v, n, p) => [v, p?.payload?.name]} />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie
+                      data={actionTypesPie}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={90}
+                      labelLine={false}
+                      label={false}
+                      dataKey="value"
+                    >
+                      {actionTypesPie.map((entry, idx) => (
+                        <Cell key={`atype-${idx}`} fill={entry.color || COLORS[idx % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v, n, p) => [v, p?.payload?.name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="w-48 sm:w-56">
+                <SideLegend data={actionTypesPie} />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -428,19 +451,14 @@ const Dashboard = () => {
               recentActivities.map((activity) => (
                 <div key={activity.id} className="flex items-center space-x-4">
                   <Activity className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <div className="flex-1 space-y-1 min-w-0">
-                    <p className="text-sm font-medium leading-none">{activity.action}</p>
-                    <p className="text-sm text-muted-foreground truncate">{activity.client}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{activity.text}</p>
+                    <p className="text-xs text-muted-foreground">{activity.date ? new Date(activity.date).toLocaleDateString('pt-BR') : ''}</p>
                   </div>
-                  <div className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">{activity.time}</div>
                 </div>
               ))
             ) : (
-              <div className="text-center py-4">
-                <Activity className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Nenhuma atividade recente</p>
-                <p className="text-xs text-muted-foreground">Comece adicionando clientes, ações ou materiais</p>
-              </div>
+              <p className="text-sm text-muted-foreground">Sem atividades recentes.</p>
             )}
           </div>
         </CardContent>
