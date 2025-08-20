@@ -24,7 +24,7 @@ import {
 
 import Dashboard from './Dashboard';
 import Clients from './Clients';
-import UsersPage from './Users';     // 👈 evita colisão de nome com o ícone
+import UsersPage from './Users';
 import Materials from './Materials';
 import Actions from './Actions';
 import Vacancies from './Vacancies';
@@ -40,8 +40,8 @@ const AdminDashboard = () => {
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home, component: Dashboard },
-    { id: 'clients',   label: 'Clientes',  icon: UsersIcon, component: Clients },   // 👈 Users (plural)
-    { id: 'users',     label: 'Usuários',  icon: UserCog,   component: UsersPage }, // 👈 UserCog
+    { id: 'clients',   label: 'Clientes',  icon: UsersIcon, component: Clients },
+    { id: 'users',     label: 'Usuários',  icon: UserCog,   component: UsersPage },
     { id: 'materials', label: 'Materiais', icon: Package,   component: Materials },
     { id: 'actions',   label: 'Ações',     icon: Activity,  component: Actions },
     { id: 'finance',   label: 'Finanças',  icon: Wallet,    component: Finance },
@@ -51,72 +51,124 @@ const AdminDashboard = () => {
 
   const ActiveComponent = menuItems.find((i) => i.id === activeTab)?.component || Dashboard;
 
-  // CSS global:
-  // - Mantém legendas sem clipping (quebra de linha / overflow visível)
-  // - Reduz AINDA MAIS apenas o gráfico (SVG/canvas), preservando o tamanho das legendas
-  // - Adiciona um "acolchoamento" no wrapper dos gráficos para dar espaço às legendas
-  const chartOverflowAndScale = `
-    /* Quebra/overflow para legendas comuns (Recharts/GoogleCharts/etc) */
-    .recharts-legend-wrapper,
-    .recharts-default-legend,
-    .google-visualization-legend,
-    .google-visualization-tooltip,
-    .chart-legend {
-      white-space: normal !important;
-      overflow: visible !important;
-      text-overflow: clip !important;
-      word-break: break-word !important;
-      max-width: 100% !important;
-    }
-
-    /* Evita clipping do SVG ao redor do gráfico */
+  /* ===== CSS global para “legend em lista no canto” =====
+     - Move a legend para a lateral direita como lista vertical (rolável no mobile)
+     - Dá padding à área do gráfico para não ficar por baixo da legend
+     - Esconde os rótulos que ficavam ao redor das fatias (pie labels)
+     - Vale para Recharts e Google Charts (sem alterar JS dos gráficos)
+  */
+  const sideLegendCSS = `
+    /* ---------- Base: evitar clipping e permitir que a legend fique visível ---------- */
     .recharts-wrapper,
-    .recharts-surface,
     .google-visualization-chart,
     .google-visualization-chart svg {
       overflow: visible !important;
     }
 
-    /* Dá um pequeno "respiro" lateral para as legendas */
-    .recharts-wrapper,
-    .google-visualization-chart {
-      padding: 6px 18px !important;
+    /* ---------- RECHARTS: reservar espaço à direita para a legend ---------- */
+    .recharts-wrapper {
+      position: relative !important;
+      padding-right: 240px !important;   /* espaço p/ a lista */
       box-sizing: border-box;
+      min-height: 280px;                  /* evita esmagar em cards baixos */
+    }
+    @media (max-width: 640px) {
+      .recharts-wrapper { padding-right: 190px !important; min-height: 260px; }
     }
 
-    /* ===== Redução do tamanho do GRÁFICO (não da legenda) ===== */
-    .recharts-surface,
-    .google-visualization-chart svg,
-    canvas.chartjs-render-monitor,
-    .chartjs-size-monitor + canvas,
-    .chart-container canvas,
-    .chart-container svg {
-      transform: scale(0.82);                /* desktop */
-      transform-origin: center center;
-      will-change: transform;
+    /* RECHARTS: posicionar e “listar” a legend no canto direito */
+    .recharts-legend-wrapper {
+      position: absolute !important;
+      pointer-events: auto !important;
+      left: auto !important;
+      right: 10px !important;
+      top: 50% !important;
+      transform: translateY(-50%);
+      width: 220px;
+      max-width: 40vw;
+      max-height: calc(100% - 20px);
+      overflow: auto;                     /* rola no mobile se precisar */
+      text-align: left !important;
+      background: transparent;
+      padding: 4px 0;
+    }
+    .recharts-default-legend {
+      display: block !important;
+    }
+    .recharts-default-legend ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: block !important;
+    }
+    .recharts-default-legend li {
+      display: flex !important;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0;
+      line-height: 1.2;
+      white-space: normal;
+      word-break: break-word;
     }
 
-    /* Larguras intermediárias (notebooks/tablets) */
-    @media (max-width: 1024px) {
-      .recharts-surface,
-      .google-visualization-chart svg,
-      canvas.chartjs-render-monitor,
-      .chartjs-size-monitor + canvas,
-      .chart-container canvas,
-      .chart-container svg {
-        transform: scale(0.78);
+    /* RECHARTS: esconder rótulos ao redor das fatias do pie */
+    .recharts-pie-label-line,
+    .recharts-pie-label-text {
+      display: none !important;
+    }
+
+    /* ---------- GOOGLE CHARTS: reservar espaço à direita e posicionar legend ---------- */
+    .google-visualization-piechart,
+    .google-visualization-chart {
+      position: relative !important;
+      padding-right: 240px !important;
+      box-sizing: border-box;
+      min-height: 280px;
+    }
+    @media (max-width: 640px) {
+      .google-visualization-piechart,
+      .google-visualization-chart {
+        padding-right: 190px !important;
+        min-height: 260px;
       }
     }
 
-    /* Mobile: redução extra para sobrar espaço às legendas */
+    /* A legend do Google é HTML; posicionamos absoluta no canto */
+    .google-visualization-legend {
+      position: absolute !important;
+      right: 10px !important;
+      top: 50% !important;
+      transform: translateY(-50%);
+      width: 220px;
+      max-width: 40vw;
+      max-height: calc(100% - 20px);
+      overflow: auto;
+      text-align: left;
+    }
+    .google-visualization-legend table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .google-visualization-legend tr > td {
+      padding: 3px 0;
+      vertical-align: top;
+    }
+
+    /* GOOGLE CHARTS: esconder rótulos que ficavam “ao redor” das fatias */
+    .google-visualization-piechart svg text {
+      display: none !important;
+    }
+
+    /* ---------- Ajuste opcional: reduzir levemente SÓ o gráfico, não a legend ---------- */
+    .recharts-surface,
+    .google-visualization-chart svg {
+      transform: scale(0.90);
+      transform-origin: center center;
+    }
     @media (max-width: 640px) {
       .recharts-surface,
-      .google-visualization-chart svg,
-      canvas.chartjs-render-monitor,
-      .chartjs-size-monitor + canvas,
-      .chart-container canvas,
-      .chart-container svg {
-        transform: scale(0.70);
+      .google-visualization-chart svg {
+        transform: scale(0.84);
       }
     }
   `;
@@ -173,7 +225,6 @@ const AdminDashboard = () => {
 
               <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
                 <div className="hidden sm:flex items-center space-x-2">
-                  {/* Ícone do usuário logado no header */}
                   {isAdmin() ? (
                     <Shield className="w-4 h-4 text-gray-500" />
                   ) : (
@@ -196,8 +247,8 @@ const AdminDashboard = () => {
 
         {/* Page Content */}
         <main className="p-3 sm:p-6 lg:p-8 max-w-full overflow-x-auto md:overflow-x-visible">
-          {/* CSS de correção e escala dos gráficos */}
-          <style dangerouslySetInnerHTML={{ __html: chartOverflowAndScale }} />
+          {/* CSS que move a legend p/ o canto e oculta labels ao redor do gráfico */}
+          <style dangerouslySetInnerHTML={{ __html: sideLegendCSS }} />
           <div className="max-w-7xl mx-auto">
             <ActiveComponent />
           </div>
