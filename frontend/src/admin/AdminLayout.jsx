@@ -9,8 +9,6 @@ import {
   Wallet,
   Briefcase,
   LogOut,
-  ChevronsLeft,
-  ChevronsRight,
   Menu as MenuIcon,
   UserCog,
 } from "lucide-react";
@@ -109,7 +107,7 @@ export default function AdminLayout() {
         {/* Cabeçalho da Sidebar */}
         <div className="h-16 flex items-center justify-between px-3">
           {collapsed ? (
-            // Logo recolhido — quadrado (AGORA CLICÁVEL PARA EXPANDIR/RECOLHER)
+            // Logo recolhido — quadrado (CLICÁVEL PARA EXPANDIR/RECOLHER)
             <button
               type="button"
               onClick={() => setCollapsed((v) => !v)}
@@ -120,7 +118,7 @@ export default function AdminLayout() {
               <span className="font-bold leading-none text-base">R</span>
             </button>
           ) : (
-            // Logo expandido — retangular (AGORA CLICÁVEL PARA EXPANDIR/RECOLHER)
+            // Logo expandido — retangular (CLICÁVEL PARA EXPANDIR/RECOLHER)
             <button
               type="button"
               onClick={() => setCollapsed((v) => !v)}
@@ -133,27 +131,7 @@ export default function AdminLayout() {
               </span>
             </button>
           )}
-
-          {/* Botão de expandir/recolher — mantido (logo também funciona como botão) */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setCollapsed((v) => !v)}
-            title={collapsed ? "Expandir menu" : "Recolher menu"}
-            aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
-            className={cn(
-              "shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
-              collapsed
-                ? "h-8 w-8 rounded-none hover:bg-transparent focus-visible:ring-red-500"
-                : "h-8 w-8 rounded-full hover:bg-muted focus-visible:ring-ring"
-            )}
-          >
-            {collapsed ? (
-              <ChevronsRight className="w-5 h-5" />
-            ) : (
-              <ChevronsLeft className="w-5 h-5" />
-            )}
-          </Button>
+          {/* (Seta removida a pedido — a logo já serve como botão) */}
         </div>
 
         {/* Navegação */}
