@@ -291,7 +291,7 @@ const Materials = () => {
 
   // Export (com fallback dos campos)
   const exportData = useMemo(() => {
-    return filtered.map((item) => ({
+    return (Array.isArray(filtered) ? filtered : []).map((item) => ({
       "Cliente": item.client_name || "",
       "Responsável": item.responsible || "",
       "Data": ymdToBR(item._ymd || toYMDInCuiaba(item.date) || ""),
