@@ -1,150 +1,140 @@
 // frontend/src/admin/RecentActivities.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
-import { Button } from "@/components/ui/button.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog.jsx";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
-import { Separator } from "@/components/ui/separator.jsx";
-import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
 
-/* Utils pequenos (para não depender de Actions.jsx) */
-const ensureArrayTypes = (item) => {
-  if (Array.isArray(item?.types)) return item.types;
-  if (typeof item?.type === "string" && item.type.trim())
-    return item.type.split(",").map((s) => s.trim()).filter(Boolean);
-  return [];
-};
-const br = (ymd) => {
-  if (!ymd) return "";
-  const s = String(ymd);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    const [y, m, d] = s.split("-");
-    return `${d}/${m}/${y}`;
-  }
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
-  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-  return s;
-};
-const statusChip = (s) =>
-  s === "andamento" ? "bg-blue-100 text-blue-800 border-blue-300"
-  : s === "concluido" ? "bg-green-100 text-green-800 border-green-300"
-  : "bg-amber-100 text-amber-800 border-amber-300";
-const getStatus = (a) => a?.status ? a.status : (a?.active === false ? "concluido" : "aguardando");
+import { Activity, Search, ChevronLeft, ChevronRight } from "lucide-react";
+
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 
 export default function RecentActivities() {
-  const [actions, setActions] = useState([]);
-  const [loading, setLoading] = useState(true);
-
+  const [list, setList] = useState([]);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(null);
 
-  // Histórico (dentro do modal)
-  const [histQuery, setHistQuery] = useState("");
+  // histórico dentro do modal
+  const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 8;
 
-  const fetchActions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await api.get("/actions");
-      const list = Array.isArray(res.data) ? res.data : [];
-      // ordena: mais recentes primeiro (por start_date/start_datetime)
-      list.sort((a, b) => {
-        const ax = (a.start_date || a.start_datetime || "").toString();
-        const bx = (b.start_date || b.start_datetime || "").toString();
-        return bx.localeCompare(ax);
-      });
-      setActions(list);
-    } catch {
-      setActions([]);
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get("/actions");
+        const arr = Array.isArray(res.data) ? res.data : [];
+        // mais recentes primeiro
+        const sorted = arr
+          .slice()
+          .sort(
+            (a, b) =>
+              new Date(b.created_at || b.start_date || 0) -
+              new Date(a.created_at || a.start_date || 0)
+          );
+        setList(sorted);
+      } catch (e) {
+        setList([]);
+      }
+    })();
   }, []);
 
-  useEffect(() => { fetchActions(); }, [fetchActions]);
+  const latest = useMemo(() => list.slice(0, 12), [list]);
 
-  // Lista curta da seção (5 mais recentes)
-  const recent = useMemo(() => actions.slice(0, 8), [actions]);
+  const filteredHistory = useMemo(() => {
+    const k = q.trim().toLowerCase();
+    if (!k) return list;
+    return list.filter((a) =>
+      [
+        a.client_name,
+        a.company_name,
+        a.title,
+        a.type,
+        a.status,
+        a.supervisor,
+        a.material_quantity,
+        a.notes,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(k)
+    );
+  }, [list, q]);
 
-  // Histórico com busca + paginação dentro do modal
-  const filteredHist = useMemo(() => {
-    const q = histQuery.trim().toLowerCase();
-    if (!q) return actions;
-    return actions.filter((a) => {
-      const txt = [
-        a.client_name, a.company_name, a.notes, a.supervisor,
-        ensureArrayTypes(a).join(" ")
-      ].filter(Boolean).join(" ").toLowerCase();
-      return txt.includes(q);
-    });
-  }, [actions, histQuery]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredHist.length / pageSize));
-  useEffect(() => { if (page > totalPages) setPage(1); }, [page, totalPages]);
-
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / pageSize));
   const pageItems = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return filteredHist.slice(start, start + pageSize);
-  }, [filteredHist, page]);
+    return filteredHistory.slice(start, start + pageSize);
+  }, [filteredHistory, page]);
 
-  const openDetails = (item) => { setSelected(item); setOpen(true); };
+  // abrir modal
+  const openDetails = (row) => {
+    setSelected(row);
+    setOpen(true);
+  };
 
   return (
     <>
-      <Card className="h-full">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg md:text-xl font-semibold">Atividades Recentes</CardTitle>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base sm:text-lg">Atividades Recentes</CardTitle>
           <CardDescription>Últimas ações realizadas no sistema</CardDescription>
         </CardHeader>
-
-        <CardContent>
-          {loading ? (
-            <div className="text-sm text-muted-foreground py-6">Carregando…</div>
-          ) : recent.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-6">Sem atividades ainda.</div>
+        <CardContent className="space-y-3">
+          {latest.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sem atividades recentes.</p>
           ) : (
-            <div className="divide-y">
-              {recent.map((a) => {
-                const id = a.id ?? a._id ?? a.uuid ?? Math.random();
-                return (
-                  <button
-                    key={id}
-                    onClick={() => openDetails(a)}
-                    className="w-full text-left py-3 flex items-start gap-3 hover:bg-accent/40 rounded-md px-2 transition"
-                  >
-                    <div className="mt-1 h-5 w-5 rounded-full border flex items-center justify-center text-muted-foreground">∿</div>
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{a.client_name || a.company_name || "Ação"}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {br(a.start_date || a.start_datetime)}
-                      </div>
-                    </div>
-                    <div className="ml-auto">
-                      <Badge variant="outline" className={`capitalize ${statusChip(getStatus(a))}`}>
-                        {getStatus(a)}
-                      </Badge>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            latest.map((a, i) => (
+              <button
+                key={i}
+                onClick={() => openDetails(a)}
+                className="w-full text-left group"
+              >
+                <div className="flex items-center gap-3 rounded-lg border px-3 py-2 hover:bg-muted/40 transition">
+                  <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">
+                      {a.client_name || a.company_name || a.title || "Ação"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {fmtDate(a.start_date || a.created_at)}
+                    </p>
+                  </div>
+                  {a.status && (
+                    <Badge variant="secondary" className="text-[10px] px-2 py-0 h-5">
+                      {a.status}
+                    </Badge>
+                  )}
+                </div>
+              </button>
+            ))
           )}
         </CardContent>
       </Card>
 
-      {/* MODAL: Detalhes + Histórico com paginação */}
+      {/* ===== Modal super compacto, sem cortes ===== */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-full max-w-3xl max-h-[85vh] overflow-hidden p-0">
-          <div className="grid grid-rows-[auto,1fr] h-full">
-            <div className="px-5 pt-5 pb-3 border-b">
-              <DialogHeader>
-                <DialogTitle className="text-base">
-                  {selected ? (selected.client_name || selected.company_name || "Detalhes da ação") : "Detalhes da ação"}
+        <DialogContent
+          // largura/altura responsivas e corpo rolável
+          className="p-0 w-[min(96vw,760px)] sm:max-w-[760px] max-h-[85vh] overflow-hidden fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        >
+          <div className="grid h-full grid-rows-[auto,1fr]">
+            {/* Cabeçalho */}
+            <div className="px-5 pt-5 pb-3 border-b bg-background">
+              <DialogHeader className="space-y-1">
+                <DialogTitle className="text-lg">
+                  {selected?.client_name || selected?.company_name || selected?.title || "Detalhes"}
                 </DialogTitle>
                 <DialogDescription className="text-xs">
                   Visualize os dados completos e acesse o histórico logo abaixo.
@@ -152,156 +142,170 @@ export default function RecentActivities() {
               </DialogHeader>
             </div>
 
-            <div className="overflow-y-auto p-5 space-y-6">
-              {/* Detalhes */}
-              {selected && (
-                <div className="rounded-lg border p-4">
-                  <div className="flex flex-wrap gap-x-8 gap-y-3">
-                    <div>
-                      <div className="text-xs text-muted-foreground">Cliente</div>
-                      <div className="text-sm font-medium">{selected.client_name || "—"}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Empresa</div>
-                      <div className="text-sm font-medium">{selected.company_name || "—"}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Período</div>
-                      <div className="text-sm font-medium">
-                        {br(selected.start_date || selected.start_datetime)}{selected.end_date || selected.end_datetime ? " → " + br(selected.end_date || selected.end_datetime) : ""}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Status</div>
-                      <div>
-                        <Badge className={`capitalize ${statusChip(getStatus(selected))}`}>{getStatus(selected)}</Badge>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Supervisor</div>
-                      <div className="text-sm font-medium">{selected.supervisor || "—"}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Qtd. Material</div>
-                      <div className="text-sm font-medium">{selected.material_qty ?? "—"}</div>
-                    </div>
-                  </div>
+            {/* Corpo rolável */}
+            <div
+              className="overflow-y-auto overscroll-contain"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              {/* Detalhes compactos */}
+              <div className="p-5 pb-4">
+                <div className="rounded-lg border bg-card p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                    <Info label="Cliente" value={selected?.client_name} />
+                    <Info label="Empresa" value={selected?.company_name} />
 
-                  <Separator className="my-3" />
-
-                  <div className="flex flex-wrap gap-2">
-                    {ensureArrayTypes(selected).map((t) => (
-                      <Badge key={t} variant="secondary">{t}</Badge>
-                    ))}
-                    {(!ensureArrayTypes(selected).length) && (
-                      <span className="text-xs text-muted-foreground">Sem tipos informados</span>
-                    )}
-                  </div>
-
-                  {Array.isArray(selected?.day_periods) && selected.day_periods.length > 0 && (
-                    <>
-                      <Separator className="my-3" />
-                      <div className="flex flex-wrap gap-2">
-                        {selected.day_periods.map((p) => (
-                          <Badge key={p} variant="outline">{p}</Badge>
-                        ))}
-                      </div>
-                    </>
-                  )}
-
-                  {Array.isArray(selected?.team_members) && selected.team_members.length > 0 && (
-                    <>
-                      <Separator className="my-3" />
-                      <div className="text-xs text-muted-foreground mb-1">Equipe</div>
-                      <div className="flex flex-wrap gap-2">
-                        {selected.team_members.map((n) => (
-                          <Badge key={n} variant="outline">{n}</Badge>
-                        ))}
-                      </div>
-                    </>
-                  )}
-
-                  {selected?.notes && (
-                    <>
-                      <Separator className="my-3" />
-                      <div className="text-xs text-muted-foreground mb-1">Observações</div>
-                      <p className="text-sm whitespace-pre-wrap">{selected.notes}</p>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Histórico com paginação */}
-              <div className="rounded-lg border">
-                <div className="p-4 flex flex-wrap items-center gap-3 justify-between">
-                  <div className="font-medium">Histórico de Atividades</div>
-                  <div className="relative w-full sm:w-[260px]">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <Input
-                      className="pl-8 h-9"
-                      placeholder="Buscar no histórico…"
-                      value={histQuery}
-                      onChange={(e)=>setHistQuery(e.target.value)}
+                    <Info
+                      label="Período"
+                      value={
+                        selected
+                          ? `${fmtDate(selected.start_date)} → ${fmtDate(
+                              selected.end_date || selected.start_date
+                            )}`
+                          : "—"
+                      }
                     />
+                    <Info label="Supervisor" value={selected?.supervisor} />
+
+                    <Info
+                      label="Qtd. Material"
+                      value={
+                        typeof selected?.material_quantity === "number"
+                          ? String(selected.material_quantity)
+                          : String(selected?.material_quantity || "0")
+                      }
+                    />
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground">Status</span>
+                      {selected?.status ? (
+                        <Badge variant="secondary" className="h-5 text-[10px] px-2">
+                          {selected.status}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs">—</span>
+                      )}
+                    </div>
+
+                    {/* Tipos / Turno */}
+                    <div className="sm:col-span-2 flex flex-wrap items-center gap-2">
+                      {(Array.isArray(selected?.types)
+                        ? selected?.types
+                        : String(selected?.type || "")
+                            .split(",")
+                            .map((s) => s.trim())
+                      )
+                        .filter(Boolean)
+                        .map((t, i) => (
+                          <Badge key={i} variant="outline" className="h-5 text-[10px]">
+                            {t}
+                          </Badge>
+                        ))}
+                      {selected?.shift && (
+                        <Badge variant="outline" className="h-5 text-[10px]">
+                          {selected.shift}
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <p className="text-[11px] text-muted-foreground mb-1">Observações</p>
+                      <p className="text-xs whitespace-pre-wrap">
+                        {selected?.notes || "—"}
+                      </p>
+                    </div>
                   </div>
                 </div>
+              </div>
 
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-center">Cliente</TableHead>
-                        <TableHead className="text-center">Empresa</TableHead>
-                        <TableHead className="text-center">Período</TableHead>
-                        <TableHead className="text-center">Status</TableHead>
-                        <TableHead className="text-center">Ação</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {pageItems.length === 0 ? (
+              {/* Histórico com busca + paginação */}
+              <div className="px-5 pb-5">
+                <div className="rounded-lg border bg-card">
+                  <div className="flex items-center justify-between gap-2 p-3 border-b">
+                    <p className="text-sm font-medium">Histórico de Atividades</p>
+                    <div className="relative w-[min(64vw,320px)]">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={q}
+                        onChange={(e) => {
+                          setQ(e.target.value);
+                          setPage(1);
+                        }}
+                        placeholder="Buscar no histórico…"
+                        className="pl-8 h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Tabela rolável (limite de altura) */}
+                  <div className="max-h-[40vh] overflow-y-auto">
+                    <Table>
+                      <TableHeader>
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-6 text-sm text-muted-foreground">
-                            Nada encontrado.
-                          </TableCell>
+                          <TableHead className="text-[11px]">Cliente</TableHead>
+                          <TableHead className="text-[11px]">Empresa</TableHead>
+                          <TableHead className="text-[11px]">Período</TableHead>
+                          <TableHead className="text-[11px]">Status</TableHead>
                         </TableRow>
-                      ) : pageItems.map((a) => {
-                        const { start_date, start_datetime, end_date, end_datetime } = a;
-                        const st = getStatus(a);
-                        return (
-                          <TableRow key={(a.id ?? a._id ?? a.uuid) + (a.start_date || a.start_datetime || "")}>
-                            <TableCell className="text-center font-medium">{a.client_name || "—"}</TableCell>
-                            <TableCell className="text-center">{a.company_name || "—"}</TableCell>
-                            <TableCell className="text-center">
-                              {br(start_date || start_datetime)}{(end_date || end_datetime) ? " → " + br(end_date || end_datetime) : ""}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge className={`capitalize ${statusChip(st)}`}>{st}</Badge>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Button size="sm" variant="outline" onClick={()=>setSelected(a)}>Ver</Button>
+                      </TableHeader>
+                      <TableBody>
+                        {pageItems.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-xs py-6">
+                              Sem registros.
                             </TableCell>
                           </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* Paginação */}
-                <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="text-xs text-muted-foreground order-2 sm:order-1">
-                    Exibindo <b>{pageItems.length}</b> de <b>{filteredHist.length}</b> registros
+                        ) : (
+                          pageItems.map((r, i) => (
+                            <TableRow key={`${r.id || i}-${r.start_date || ""}`}>
+                              <TableCell className="text-xs">{r.client_name || "—"}</TableCell>
+                              <TableCell className="text-xs">{r.company_name || "—"}</TableCell>
+                              <TableCell className="text-xs">
+                                {fmtDate(r.start_date)} → {fmtDate(r.end_date || r.start_date)}
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                {r.status ? (
+                                  <Badge variant="secondary" className="h-5 text-[10px] px-2">
+                                    {r.status}
+                                  </Badge>
+                                ) : (
+                                  "—"
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
                   </div>
-                  <div className="order-1 sm:order-2 flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="min-w-[92px] h-9" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>
-                      <ChevronLeft className="size-4 mr-1" /> Anterior
-                    </Button>
-                    <span className="text-xs tabular-nums inline-block rounded-md border bg-muted/60 px-2.5 py-1">
-                      Página <b>{page}</b><span className="opacity-60">/{totalPages}</span>
+
+                  {/* Paginação compacta */}
+                  <div className="flex items-center justify-between p-3 border-t">
+                    <span className="text-[11px] text-muted-foreground">
+                      Exibindo <b>{pageItems.length}</b> de{" "}
+                      <b>{filteredHistory.length}</b> registros
                     </span>
-                    <Button variant="outline" size="sm" className="min-w-[92px] h-9" disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>
-                      Próxima <ChevronRight className="size-4 ml-1" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-2"
+                        disabled={page <= 1}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-xs tabular-nums">
+                        {page} <span className="opacity-60">/ {totalPages}</span>
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-2"
+                        disabled={page >= totalPages}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -310,5 +314,15 @@ export default function RecentActivities() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/* --------- subcomponente de info compacto --------- */
+function Info({ label, value }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="text-xs font-medium truncate">{value || "—"}</p>
+    </div>
   );
 }
