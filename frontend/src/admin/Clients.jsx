@@ -1003,8 +1003,9 @@ const Clients = () => {
                 </Button>
               </DialogTrigger>
 
+              {/* CENTRALIZADO (horizontal e vertical) */}
               <DialogContent
-                className="p-0 sm:max-w-[560px] md:max-w-[600px]"
+                className="p-0 sm:max-w-[560px] md:max-w-[600px] fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
                 style={{ height: 'min(85vh, 700px)' }}
               >
                 <div className="grid h-full grid-rows-[auto,1fr,auto]">
@@ -1107,67 +1108,50 @@ const Clients = () => {
 
           {/* KPI Cards */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {/* Total */}
-            <div className="rounded-xl border bg-card p-4 min-h-[180px] sm:min-h-[220px] flex items-center justify-center text-center">
+            {/* Total (reduzido) */}
+            <div className="rounded-xl border bg-card p-3 sm:p-4 min-h-[120px] sm:min-h-[140px] flex items-center justify-center text-center">
               <div>
                 <p className="text-xs text-muted-foreground">Total de clientes (geral)</p>
-                <div className="mt-1 text-5xl sm:text-6xl font-bold leading-none">{totalClients}</div>
+                <div className="mt-1 text-3xl sm:text-4xl font-bold leading-none">{totalClients}</div>
                 <p className="mt-2 text-xs text-muted-foreground">
                   Exibidos após filtros: <b>{totalAfterFilters}</b>
                 </p>
               </div>
             </div>
 
-            {/* Pizza */}
+            {/* Pizza (reduzido, sem legendas) */}
             <div className="rounded-xl border bg-card p-3 sm:p-4">
               <p className="text-xs text-muted-foreground px-1 mb-2">Top 10 segmentos (% dos clientes exibidos)</p>
-
-              <div className="flex flex-col space-y-3">
-                <div className="w-full h-[200px] sm:h-[240px] lg:h-[220px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={pieData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius="45%"
-                        outerRadius="75%"
-                        paddingAngle={1}
-                        strokeWidth={1}
-                      >
-                        {pieData.map((_, i) => (
-                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(val, name, props) => [`${val}% (${props?.payload?.count})`, name]}
-                        contentStyle={{
-                          fontSize: '12px',
-                          padding: '8px',
-                          borderRadius: '6px',
-                          border: '1px solid #e2e8f0',
-                          backgroundColor: 'white'
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="max-h-[120px] overflow-y-auto overscroll-contain touch-pan-y px-1" style={{ WebkitOverflowScrolling: 'touch' }}>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] leading-tight">
-                    {pieData.map((d, i) => (
-                      <div key={d.name} className="flex items-center gap-2 min-w-0 py-1">
-                        <span className="inline-block h-3 w-3 rounded-sm flex-shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                        <span className="truncate flex-1 text-xs">{d.name}</span>
-                        <span className="text-xs font-medium text-muted-foreground flex-shrink-0">
-                          {d.value}%
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              <div className="w-full h-[160px] sm:h-[180px] lg:h-[180px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius="45%"
+                      outerRadius="70%"
+                      paddingAngle={1}
+                      strokeWidth={1}
+                    >
+                      {pieData.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(val, name, props) => [`${val}% (${props?.payload?.count})`, name]}
+                      contentStyle={{
+                        fontSize: '12px',
+                        padding: '8px',
+                        borderRadius: '6px',
+                        border: '1px solid #e2e8f0',
+                        backgroundColor: 'white'
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </div>
@@ -1255,9 +1239,9 @@ const Clients = () => {
         </CardContent>
       </Card>
 
-      {/* Dialog de exclusão */}
+      {/* Dialog de exclusão (centralizado) */}
       <Dialog open={openDelete} onOpenChange={setOpenDelete}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           <DialogHeader>
             <DialogTitle>Excluir cliente?</DialogTitle>
             <DialogDescription>Esta ação não pode ser desfeita.</DialogDescription>
