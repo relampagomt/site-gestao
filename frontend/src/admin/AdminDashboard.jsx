@@ -39,7 +39,7 @@ const AdminDashboard = () => {
   const handleLogout = () => logout();
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home, component: Dashboard },
+    { id: 'dashboard', label: 'Dashboard', icon: Home, component: Dashboard };
     { id: 'clients',   label: 'Clientes',  icon: UsersIcon, component: Clients },   // 👈 Users (plural)
     { id: 'users',     label: 'Usuários',  icon: UserCog,   component: UsersPage }, // 👈 UserCog
     { id: 'materials', label: 'Materiais', icon: Package,   component: Materials },
@@ -50,6 +50,38 @@ const AdminDashboard = () => {
   ];
 
   const ActiveComponent = menuItems.find((i) => i.id === activeTab)?.component || Dashboard;
+
+  // CSS global para evitar corte de legendas/labels nos gráficos (desktop e mobile)
+  const chartOverflowFix = `
+    /* Permite que textos de legendas quebrem e não sejam cortados */
+    .recharts-legend-wrapper,
+    .recharts-default-legend,
+    .google-visualization-legend,
+    .google-visualization-tooltip,
+    .chart-legend {
+      white-space: normal !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+      word-break: break-word !important;
+      max-width: 100% !important;
+    }
+    /* Recharts/GoogleCharts: evita clipping de labels posicionadas fora do arco */
+    .recharts-wrapper,
+    .recharts-surface,
+    .google-visualization-chart,
+    .google-visualization-chart svg {
+      overflow: visible !important;
+    }
+    /* Em mobile, reduz levemente a fonte das legendas para caber melhor */
+    @media (max-width: 640px) {
+      .recharts-legend-item text,
+      .google-visualization-legend text,
+      .chart-legend * {
+        font-size: 11px !important;
+        line-height: 1.25 !important;
+      }
+    }
+  `;
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -125,7 +157,9 @@ const AdminDashboard = () => {
         </header>
 
         {/* Page Content */}
-        <main className="p-3 sm:p-6 lg:p-8 max-w-full overflow-x-hidden">
+        <main className="p-3 sm:p-6 lg:p-8 max-w-full overflow-x-auto md:overflow-x-visible">
+          {/* CSS de correção para gráficos */}
+          <style dangerouslySetInnerHTML={{ __html: chartOverflowFix }} />
           <div className="max-w-7xl mx-auto">
             <ActiveComponent />
           </div>
