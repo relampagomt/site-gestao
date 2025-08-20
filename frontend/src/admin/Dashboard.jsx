@@ -386,7 +386,7 @@ const Dashboard = () => {
                         data={clientsSegmentsPie}
                         cx="50%"
                         cy="50%"
-                        outerRadius={80}   // menor
+                        outerRadius={80}
                         labelLine={false}
                         label={false}
                         dataKey="value"
@@ -422,7 +422,7 @@ const Dashboard = () => {
                       data={actionTypesPie}
                       cx="50%"
                       cy="50%"
-                      outerRadius={80}   // menor
+                      outerRadius={80}
                       labelLine={false}
                       label={false}
                       dataKey="value"
@@ -438,8 +438,8 @@ const Dashboard = () => {
               <div className="w-44 sm:w-52">
                 <SideLegend data={actionTypesPie} maxHeight={200} />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
         </Card>
       </div>
 
