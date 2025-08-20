@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "read-excel-file": "^5.8.8",
     "socket.io-client": "^4.8.1"
   }
 }
