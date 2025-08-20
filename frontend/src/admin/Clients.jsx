@@ -771,10 +771,9 @@ const Clients = () => {
       });
     });
     const arr = Array.from(counts.entries()).map(([name, count]) => ({ name, count }));
-    arr.sort((a, b) => b.count - a.count);
-    const top10 = arr.slice(0, 10);
+    arr.sort((a, b) => b.count - a.count); // mantém ordenado por maior participação
     const base = totalAfterFilters || 1;
-    return top10.map((it) => ({
+    return arr.map((it) => ({
       name: it.name,
       value: Number(((it.count / base) * 100).toFixed(1)), // %
       count: it.count,
@@ -1160,7 +1159,7 @@ const Clients = () => {
 
             {/* Pizza com legenda fixa e rolável */}
             <div className="rounded-xl border bg-card p-3 sm:p-4">
-              <p className="text-xs text-muted-foreground px-1 mb-2">Top 10 segmentos (% dos clientes exibidos)</p>
+              <p className="text-xs text-muted-foreground px-1 mb-2">Segmentos (% dos clientes exibidos)</p>
               <div className="w-full">
                 <div className="flex items-start gap-3">
                   {/* Gráfico */}
