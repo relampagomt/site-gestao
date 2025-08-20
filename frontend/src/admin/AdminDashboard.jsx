@@ -52,8 +52,9 @@ const AdminDashboard = () => {
   const ActiveComponent = menuItems.find((i) => i.id === activeTab)?.component || Dashboard;
 
   // CSS global:
-  // 1) evita corte e permite quebra de linha nas legendas/labels
-  // 2) reduz levemente APENAS os gráficos (svg/canvas), preservando o tamanho das legendas
+  // - Mantém legendas sem clipping (quebra de linha / overflow visível)
+  // - Reduz AINDA MAIS apenas o gráfico (SVG/canvas), preservando o tamanho das legendas
+  // - Adiciona um "acolchoamento" no wrapper dos gráficos para dar espaço às legendas
   const chartOverflowAndScale = `
     /* Quebra/overflow para legendas comuns (Recharts/GoogleCharts/etc) */
     .recharts-legend-wrapper,
@@ -76,22 +77,38 @@ const AdminDashboard = () => {
       overflow: visible !important;
     }
 
-    /* ===== Redução suave do tamanho do GRÁFICO (não da legenda) =====
-       - Recharts: .recharts-surface é o <svg> principal
-       - Google Charts: alvo no <svg> dentro do container
-       - Chart.js (se houver): canvas com classes mais comuns
-    */
+    /* Dá um pequeno "respiro" lateral para as legendas */
+    .recharts-wrapper,
+    .google-visualization-chart {
+      padding: 6px 18px !important;
+      box-sizing: border-box;
+    }
+
+    /* ===== Redução do tamanho do GRÁFICO (não da legenda) ===== */
     .recharts-surface,
     .google-visualization-chart svg,
     canvas.chartjs-render-monitor,
     .chartjs-size-monitor + canvas,
     .chart-container canvas,
     .chart-container svg {
-      transform: scale(0.94);
-      transform-origin: top left;
+      transform: scale(0.82);                /* desktop */
+      transform-origin: center center;
+      will-change: transform;
     }
 
-    /* Em telas pequenas, reduz um pouco mais o gráfico */
+    /* Larguras intermediárias (notebooks/tablets) */
+    @media (max-width: 1024px) {
+      .recharts-surface,
+      .google-visualization-chart svg,
+      canvas.chartjs-render-monitor,
+      .chartjs-size-monitor + canvas,
+      .chart-container canvas,
+      .chart-container svg {
+        transform: scale(0.78);
+      }
+    }
+
+    /* Mobile: redução extra para sobrar espaço às legendas */
     @media (max-width: 640px) {
       .recharts-surface,
       .google-visualization-chart svg,
@@ -99,7 +116,7 @@ const AdminDashboard = () => {
       .chartjs-size-monitor + canvas,
       .chart-container canvas,
       .chart-container svg {
-        transform: scale(0.88);
+        transform: scale(0.70);
       }
     }
   `;
