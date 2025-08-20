@@ -768,6 +768,14 @@ const Clients = () => {
     return filtered.slice(start, start + pageSize);
   }, [filtered, page]);
 
+  // ====== Navegação (corrigida para mobile) ======
+  const goPrev = useCallback(() => {
+    setPage((p) => Math.max(1, p - 1));
+  }, []);
+  const goNext = useCallback(() => {
+    setPage((p) => Math.min(totalPages, p + 1));
+  }, [totalPages]);
+
   /* ===================== UI ===================== */
 
   return (
@@ -1214,23 +1222,40 @@ const Clients = () => {
             </Table>
           </div>
 
-          {/* Paginação */}
+          {/* Paginação (corrigida) */}
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
               Exibindo <b>{pageItems.length}</b> de <b>{filtered.length}</b> registros
             </p>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Anterior
-              </Button>
-              <div className="text-xs text-muted-foreground">
-                Página <b>{page}</b> / <b>{totalPages}</b>
-              </div>
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
+                className="min-w-[92px] h-9"
+                disabled={page <= 1}
+                onPointerUp={goPrev}
+                aria-label="Página anterior"
+                title="Anterior"
+              >
+                Anterior
+              </Button>
+
+              <div className="shrink-0 text-xs tabular-nums">
+                <span className="inline-block rounded-md border bg-muted px-3 py-1">
+                  Página <b>{page}</b><span className="opacity-60">/{totalPages}</span>
+                </span>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-w-[92px] h-9"
                 disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
+                onPointerUp={goNext}
+                aria-label="Próxima página"
+                title="Próxima"
               >
                 Próxima
               </Button>
