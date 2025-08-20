@@ -85,17 +85,25 @@ export const exportToPDF = async (data, columns, filename, options = {}) => {
       body: tableData,
       startY: yPosition,
       styles: {
-        fontSize: 8,
-        cellPadding: 2,
+        fontSize: 9,
+        cellPadding: 3,
         overflow: 'linebreak',
         halign: 'left'
       },
       headStyles: {
         fillColor: [41, 128, 185],
         textColor: 255,
-        fontStyle: 'bold'
+        fontStyle: 'bold',
+        fontSize: 10
       },
-      columnStyles: columnStyles,
+      columnStyles: {
+        0: { cellWidth: 25 }, // Data
+        1: { cellWidth: 45 }, // Cliente
+        2: { cellWidth: 35 }, // Responsável
+        3: { cellWidth: 20, halign: 'center' }, // Qtd
+        4: { cellWidth: 65 }, // Observações
+        ...columnStyles
+      },
       margin: { top: 20, right: 20, bottom: 20, left: 20 },
       didDrawPage: (data) => {
         // Add page numbers

@@ -292,24 +292,20 @@ const Materials = () => {
   // Export (com fallback dos campos)
   const exportData = useMemo(() => {
     return (Array.isArray(filtered) ? filtered : []).map((item) => ({
+      "Data": ymdToBR(item._ymd || toYMDInCuiaba(item.date) || ""),
       "Cliente": item.client_name || "",
       "Responsável": item.responsible || "",
-      "Data": ymdToBR(item._ymd || toYMDInCuiaba(item.date) || ""),
-      "Quantidade": item.quantity ?? "",
+      "Qtd": item.quantity ?? "",
       "Observações": item.notes || "",
-      "Amostra (URL)": getSampleUrl(item),
-      "Protocolo (URL)": getProtocolUrl(item),
     }));
   }, [filtered]);
 
   const exportColumns = useMemo(() => [
+    { key: "Data", header: "Data" },
     { key: "Cliente", header: "Cliente" },
     { key: "Responsável", header: "Responsável" },
-    { key: "Data", header: "Data" },
-    { key: "Quantidade", header: "Quantidade" },
+    { key: "Qtd", header: "Qtd" },
     { key: "Observações", header: "Observações" },
-    { key: "Amostra (URL)", header: "Amostra (URL)" },
-    { key: "Protocolo (URL)", header: "Protocolo (URL)" },
   ], []);
 
   /* ================== Paginação ================== */
