@@ -25,7 +25,6 @@ import {
 
 // Export (CSV/XLSX/PDF) menu
 import ExportMenu from '@/components/export/ExportMenu';
-import ImportButton from '@/components/ImportButton';
 
 /* =============== Helpers =============== */
 const BRL = (n) =>
@@ -231,37 +230,13 @@ const ContasPagarTab = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Tem certeza que deseja excluir esta conta a pagar?")) return;
+    if (!window.confirm('Tem certeza que deseja excluir esta conta a pagar?')) return;
     try {
       await api.delete(`${PAYABLES_PATH}/${id}`);
       loadAll();
     } catch (err) {
-      console.error("Erro ao excluir conta a pagar:", err);
-      alert("Não foi possível excluir. Verifique o backend.");
-    }
-  };
-
-  const handleImportData = async (data) => {
-    setLoading(true);
-    try {
-      for (const item of data) {
-        const payload = {
-          vencimento: brToISO(item.VENCTO || ""),
-          documento: item.DOC || "",
-          descricao: item.DESCRIÇÃO || "",
-          valor: Number(item.VALOR || 0),
-          dataPagamento: item["DT PAGTO"] ? brToISO(item["DT PAGTO"]) : null,
-          valorPago: Number(item["VALOR PAGO"] || 0),
-        };
-        await api.post(PAYABLES_PATH, payload);
-      }
-      alert("Dados importados com sucesso!");
-      loadAll();
-    } catch (err) {
-      console.error("Erro ao importar dados:", err);
-      alert("Não foi possível importar os dados. Verifique o formato do arquivo e o backend.");
-    } finally {
-      setLoading(false);
+      console.error('Erro ao excluir conta a pagar:', err);
+      alert('Não foi possível excluir. Verifique o backend.');
     }
   };
 
@@ -369,8 +344,7 @@ const ContasPagarTab = () => {
               <CardTitle className="text-lg md:text-xl font-semibold">Contas a Pagar</CardTitle>
               <CardDescription>Gerencie suas contas a pagar</CardDescription>
             </div>
-            <div className="ml-auto flex gap-2">
-              <ImportButton onImport={handleImportData} />
+            <div className="ml-auto">
               <ExportMenu data={exportData} columns={exportColumns} filename="contas-pagar" pdfOptions={pdfOptions} />
             </div>
           </div>

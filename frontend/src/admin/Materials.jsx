@@ -292,21 +292,15 @@ const Materials = () => {
   // Export (com fallback dos campos)
   const exportData = useMemo(() => {
     return (Array.isArray(filtered) ? filtered : []).map((item) => ({
-      "Data": ymdToBR(item._ymd || toYMDInCuiaba(item.date) || ""),
       "Cliente": item.client_name || "",
       "Responsável": item.responsible || "",
-      "Qtd": item.quantity ?? "",
+      "Data": ymdToBR(item._ymd || toYMDInCuiaba(item.date) || ""),
+      "Quantidade": item.quantity ?? "",
       "Observações": item.notes || "",
+      "Amostra (URL)": getSampleUrl(item),
+      "Protocolo (URL)": getProtocolUrl(item),
     }));
   }, [filtered]);
-
-  const exportColumns = useMemo(() => [
-    { key: "Data", header: "Data" },
-    { key: "Cliente", header: "Cliente" },
-    { key: "Responsável", header: "Responsável" },
-    { key: "Qtd", header: "Qtd" },
-    { key: "Observações", header: "Observações" },
-  ], []);
 
   /* ================== Paginação ================== */
   const total = filtered.length;
@@ -478,7 +472,6 @@ const Materials = () => {
               {/* Export */}
               <ExportMenu
                 data={exportData}
-                columns={exportColumns}
                 fileBaseName={`materiais_${month || "filtrado"}`}
                 buttonProps={{ variant: "outline", size: "sm" }}
               />

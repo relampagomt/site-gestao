@@ -16,6 +16,7 @@ export const exportToPDF = async (data, columns, filename, options = {}) => {
     const {
       title = 'Relatório',
       orientation = 'p', // 'p' for portrait, 'l' for landscape
+      headers = columns.map(col => col.header),
       columnStyles = {},
       filtersSummary = '',
       pageNumbers = true,
@@ -59,51 +60,30 @@ export const exportToPDF = async (data, columns, filename, options = {}) => {
 
     // Prepare table data
     const tableData = data.map(item => {
-      if (columns && columns.length > 0) {
-        return columns.map(col => {
-          const value = item[col.key];
-          if (value === null || value === undefined) return '';
-          return String(value);
-        });
-      } else {
-        // Fallback: use object values if no columns provided
-        return Object.values(item).map(value => {
-          if (value === null || value === undefined) return '';
-          return String(value);
-        });
-      }
+      return columns.map(col => {
+        const value = item[col.key];
+        if (value === null || value === undefined) return '';
+        return String(value);
+      });
     });
-
-    // Prepare headers
-    const tableHeaders = columns && columns.length > 0 
-      ? columns.map(col => col.header)
-      : Object.keys(data[0] || {});
 
     // Add table
     doc.autoTable({
-      head: [tableHeaders],
+      head: [headers],
       body: tableData,
       startY: yPosition,
       styles: {
-        fontSize: 9,
-        cellPadding: 3,
+        fontSize: 8,
+        cellPadding: 2,
         overflow: 'linebreak',
         halign: 'left'
       },
       headStyles: {
         fillColor: [41, 128, 185],
         textColor: 255,
-        fontStyle: 'bold',
-        fontSize: 10
+        fontStyle: 'bold'
       },
-      columnStyles: {
-        0: { cellWidth: 25 }, // Data
-        1: { cellWidth: 45 }, // Cliente
-        2: { cellWidth: 35 }, // Responsável
-        3: { cellWidth: 20, halign: 'center' }, // Qtd
-        4: { cellWidth: 65 }, // Observações
-        ...columnStyles
-      },
+      columnStyles: columnStyles,
       margin: { top: 20, right: 20, bottom: 20, left: 20 },
       didDrawPage: (data) => {
         // Add page numbers

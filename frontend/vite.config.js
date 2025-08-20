@@ -1,41 +1,26 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
-import path from "path";
-import inject from "@rollup/plugin-inject";
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+import path from 'path'
 
+// https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-  ],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  optimizeDeps: {
-    include: ["buffer", "process"],
-  },
-  build: {
-    rollupOptions: {
-      plugins: [
-        inject({
-          Buffer: ["buffer", "Buffer"],
-          process: "process",
-        }),
-      ],
-    },
-  },
+  // Proxy para desenvolvimento: permite usar "/api" no frontend sem CORS
   server: {
-    host: "0.0.0.0",
+    host: '0.0.0.0',
     port: 5173,
     proxy: {
-      "/api": {
-        target: "http://localhost:5000",
+      '/api': {
+        target: 'http://localhost:5000',
         changeOrigin: true,
         secure: false,
       },
     },
   },
-});
+})
