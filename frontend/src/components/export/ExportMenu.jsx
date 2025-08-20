@@ -21,6 +21,7 @@ const ExportMenu = ({
   data, 
   columns, 
   filename, 
+  fileBaseName,
   pdfOptions = {} 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -28,19 +29,22 @@ const ExportMenu = ({
   const [pdfPreview, setPdfPreview] = useState(null);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
 
+  // Use fileBaseName if provided, otherwise fallback to filename
+  const baseFileName = fileBaseName || filename || 'export';
+
   const handleCSVExport = () => {
-    exportToCSV(data, columns, filename);
+    exportToCSV(data, columns, baseFileName);
     setIsOpen(false);
   };
 
   const handleJSONExport = () => {
-    exportToJSON(data, filename);
+    exportToJSON(data, baseFileName);
     setIsOpen(false);
   };
 
   const handleExcelExport = () => {
     // Excel export is essentially CSV with .xlsx extension for compatibility
-    exportToCSV(data, columns, filename);
+    exportToCSV(data, columns, baseFileName);
     setIsOpen(false);
   };
 
@@ -53,7 +57,7 @@ const ExportMenu = ({
     setIsGeneratingPDF(true);
     
     try {
-      const result = await exportToPDF(data, columns, filename, pdfOptions);
+      const result = await exportToPDF(data, columns, baseFileName, pdfOptions);
       if (result) {
         setPdfPreview(result);
         setShowPdfPreview(true);

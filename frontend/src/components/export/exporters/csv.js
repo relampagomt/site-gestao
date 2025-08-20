@@ -8,23 +8,47 @@ export const exportToCSV = (data, columns, filename) => {
     return;
   }
 
-  // Create CSV header
-  const headers = columns.map(col => col.header).join(',');
-  
-  // Create CSV rows
-  const rows = data.map(item => {
-    return columns.map(col => {
-      const value = item[col.key];
-      // Handle null/undefined values
-      if (value === null || value === undefined) return '';
-      // Escape quotes and wrap in quotes if contains comma, quote, or newline
-      const stringValue = String(value);
-      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-        return `"${stringValue.replace(/"/g, '""')}"`;
-      }
-      return stringValue;
-    }).join(',');
-  });
+  let headers, rows;
+
+  if (columns && columns.length > 0) {
+    // Create CSV header from columns
+    headers = columns.map(col => col.header).join(',');
+    
+    // Create CSV rows using columns
+    rows = data.map(item => {
+      return columns.map(col => {
+        const value = item[col.key];
+        // Handle null/undefined values
+        if (value === null || value === undefined) return '';
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        const stringValue = String(value);
+        if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+          return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+        return stringValue;
+      }).join(',');
+    });
+  } else {
+    // Fallback: use object keys as headers
+    const firstItem = data[0] || {};
+    const keys = Object.keys(firstItem);
+    headers = keys.join(',');
+    
+    // Create CSV rows using object values
+    rows = data.map(item => {
+      return keys.map(key => {
+        const value = item[key];
+        // Handle null/undefined values
+        if (value === null || value === undefined) return '';
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        const stringValue = String(value);
+        if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+          return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+        return stringValue;
+      }).join(',');
+    });
+  }
 
   // Combine headers and rows
   const csvContent = [headers, ...rows].join('\n');

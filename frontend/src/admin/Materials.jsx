@@ -302,6 +302,16 @@ const Materials = () => {
     }));
   }, [filtered]);
 
+  const exportColumns = useMemo(() => [
+    { key: "Cliente", header: "Cliente" },
+    { key: "Responsável", header: "Responsável" },
+    { key: "Data", header: "Data" },
+    { key: "Quantidade", header: "Quantidade" },
+    { key: "Observações", header: "Observações" },
+    { key: "Amostra (URL)", header: "Amostra (URL)" },
+    { key: "Protocolo (URL)", header: "Protocolo (URL)" },
+  ], []);
+
   /* ================== Paginação ================== */
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -472,6 +482,7 @@ const Materials = () => {
               {/* Export */}
               <ExportMenu
                 data={exportData}
+                columns={exportColumns}
                 fileBaseName={`materiais_${month || "filtrado"}`}
                 buttonProps={{ variant: "outline", size: "sm" }}
               />

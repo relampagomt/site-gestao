@@ -16,7 +16,6 @@ export const exportToPDF = async (data, columns, filename, options = {}) => {
     const {
       title = 'Relatório',
       orientation = 'p', // 'p' for portrait, 'l' for landscape
-      headers = columns.map(col => col.header),
       columnStyles = {},
       filtersSummary = '',
       pageNumbers = true,
@@ -60,16 +59,29 @@ export const exportToPDF = async (data, columns, filename, options = {}) => {
 
     // Prepare table data
     const tableData = data.map(item => {
-      return columns.map(col => {
-        const value = item[col.key];
-        if (value === null || value === undefined) return '';
-        return String(value);
-      });
+      if (columns && columns.length > 0) {
+        return columns.map(col => {
+          const value = item[col.key];
+          if (value === null || value === undefined) return '';
+          return String(value);
+        });
+      } else {
+        // Fallback: use object values if no columns provided
+        return Object.values(item).map(value => {
+          if (value === null || value === undefined) return '';
+          return String(value);
+        });
+      }
     });
+
+    // Prepare headers
+    const tableHeaders = columns && columns.length > 0 
+      ? columns.map(col => col.header)
+      : Object.keys(data[0] || {});
 
     // Add table
     doc.autoTable({
-      head: [headers],
+      head: [tableHeaders],
       body: tableData,
       startY: yPosition,
       styles: {
