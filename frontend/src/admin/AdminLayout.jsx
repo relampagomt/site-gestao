@@ -109,24 +109,32 @@ export default function AdminLayout() {
         {/* Cabeçalho da Sidebar */}
         <div className="h-16 flex items-center justify-between px-3">
           {collapsed ? (
-            // Logo recolhido — quadrado
-            <div
-              className="grid place-items-center box-border h-8 w-8 bg-white border-2 border-red-600 text-red-600 rounded-none select-none shrink-0"
-              title="Relâmpago"
-              aria-label="Relâmpago"
+            // Logo recolhido — quadrado (AGORA CLICÁVEL PARA EXPANDIR/RECOLHER)
+            <button
+              type="button"
+              onClick={() => setCollapsed((v) => !v)}
+              className="grid place-items-center box-border h-8 w-8 bg-white border-2 border-red-600 text-red-600 rounded-none select-none shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+              title={collapsed ? "Expandir menu" : "Recolher menu"}
+              aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
             >
               <span className="font-bold leading-none text-base">R</span>
-            </div>
+            </button>
           ) : (
-            // Logo expandido — retangular
-            <div className="grid place-items-center box-border h-8 bg-white border-2 border-red-600 rounded-none px-3 shrink-0">
+            // Logo expandido — retangular (AGORA CLICÁVEL PARA EXPANDIR/RECOLHER)
+            <button
+              type="button"
+              onClick={() => setCollapsed((v) => !v)}
+              className="grid place-items-center box-border h-8 bg-white border-2 border-red-600 rounded-none px-3 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              title={collapsed ? "Expandir menu" : "Recolher menu"}
+              aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+            >
               <span className="font-bold text-red-600 text-xl tracking-wide leading-none">
                 Relâmpago
               </span>
-            </div>
+            </button>
           )}
 
-          {/* Botão de expandir/recolher — afinado para não ficar “pílula” cinza no recolhido */}
+          {/* Botão de expandir/recolher — mantido (logo também funciona como botão) */}
           <Button
             variant="ghost"
             size="icon"
@@ -136,9 +144,7 @@ export default function AdminLayout() {
             className={cn(
               "shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
               collapsed
-                // Recolhido: quadrado, sem bg no hover (fica elegante ao lado do “R”)
                 ? "h-8 w-8 rounded-none hover:bg-transparent focus-visible:ring-red-500"
-                // Expandido: como estava, redondinho e com hover suave
                 : "h-8 w-8 rounded-full hover:bg-muted focus-visible:ring-ring"
             )}
           >
