@@ -5,9 +5,6 @@ import json
 import os
 
 bp = Blueprint("finance", __name__)
-# alias para compatibilidade com main.py: from src.routes.finance import finance_bp
-finance_bp = bp
-__all__ = ["finance_bp"]  # opcional, ajuda importadores
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
