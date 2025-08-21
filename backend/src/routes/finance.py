@@ -1,409 +1,238 @@
 # backend/src/routes/finance.py
 import os
 import json
-import base64
-import uuid
-import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+import threading
+from datetime import datetime
+from flask import Blueprint, request, jsonify
 
-from flask import Blueprint, request, jsonify, Response
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from src.middleware.auth_middleware import roles_allowed
-
-log = logging.getLogger(__name__)
 finance_bp = Blueprint("finance", __name__)
 
-# =========================== Config & Consts ===========================
-_VALID_TYPES = {"entrada", "saida", "despesa"}
-_COLL = os.getenv("FINANCE_COLL", "finance_transactions")
-
-# Fallback JSON (volátil no plano grátis da Render)
-_JSON_PATH = os.getenv("FINANCE_JSON_PATH") or "/tmp/finance_transactions.json"
-
-# Firestore toggle
-_USE_FIRESTORE = (os.getenv("USE_FIRESTORE", "true").lower() in ("1", "true", "yes"))
-
-# CORS: FRONTEND_URL pode ter várias origens separadas por vírgula
-# Ex.: "https://site-gestao-mu.vercel.app, http://localhost:5173"
-_ALLOWED_ORIGINS = set(
-    [o.strip() for o in (os.getenv("FRONTEND_URL") or "").split(",") if o.strip()]
-)
-_DEFAULT_ALLOW_ORIGIN = "*" if not _ALLOWED_ORIGINS else None
+# -----------------------------
+# Armazenamento em arquivo JSON
+# -----------------------------
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # .../backend/src
+DATA_DIR = os.path.join(BASE_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+TX_FILE = os.path.join(DATA_DIR, "transactions.json")
+_LOCK = threading.Lock()
 
 
-# ============================ Utils gerais =============================
-def _iso_date_only(val) -> str:
-    """Normaliza para YYYY-MM-DD; retorna '' se inválida."""
-    s = str(val or "")[:10]
+def _read_all():
+    if not os.path.exists(TX_FILE):
+        return []
     try:
-        d = datetime.strptime(s, "%Y-%m-%d")
-        return d.strftime("%Y-%m-%d")
+        with open(TX_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+            return []
     except Exception:
-        return ""
+        return []
 
-def _to_number(v):
+
+def _write_all(items):
+    tmp = TX_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, TX_FILE)
+
+
+def _next_id(items):
+    return (max([int(x.get("id", 0)) for x in items] + [0]) + 1)
+
+
+def _is_ymd(s):
+    try:
+        if not isinstance(s, str) or len(s) < 10:
+            return False
+        datetime.strptime(s[:10], "%Y-%m-%d")
+        return True
+    except Exception:
+        return False
+
+
+def _normalize_status(s):
+    if not s:
+        return "Pendente"
+    s = str(s).strip().lower()
+    if "pago" in s:
+        return "Pago"
+    if "cancel" in s:
+        return "Cancelado"
+    return "Pendente"
+
+
+def _normalize_type(t):
+    t = (t or "").lower()
+    if t in ("entrada", "saida", "despesa"):
+        return t
+    return "entrada"
+
+
+def _coerce_float(v, default=0.0):
     try:
         return float(v)
     except Exception:
-        return 0.0
-
-def _doc_to_json(doc: Dict[str, Any]) -> Dict[str, Any]:
-    d = dict(doc or {})
-    if not d.get("id"):
-        d["id"] = str(uuid.uuid4())
-    d["amount"] = _to_number(d.get("amount", 0))
-    d["date"] = _iso_date_only(d.get("date"))
-    return d
-
-def _month_bounds(ym: str) -> Optional[tuple]:
-    """Recebe 'YYYY-MM' e devolve ('YYYY-MM-01', 'YYYY-MM-último_dia')."""
-    if not (isinstance(ym, str) and len(ym) == 7 and ym[4] == "-"):
-        return None
-    y, m = ym.split("-")
-    try:
-        y, m = int(y), int(m)
-        start = datetime(y, m, 1)
-        if m == 12:
-            end = datetime(y + 1, 1, 1) - timedelta(days=1)
-        else:
-            end = datetime(y, m + 1, 1) - timedelta(days=1)
-        return (start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
-    except Exception:
-        return None
+        return float(default)
 
 
-# ========================== Fallback JSON I/O ==========================
-def _ensure_dir(path: str):
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-    except Exception as e:
-        log.warning("[finance] não foi possível criar diretório: %s", e)
-
-def _json_load() -> List[Dict[str, Any]]:
-    try:
-        if not os.path.exists(_JSON_PATH):
-            return []
-        with open(_JSON_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except Exception as e:
-        log.exception("[finance] erro lendo JSON: %s", e)
-        return []
-
-def _json_save(items: List[Dict[str, Any]]):
-    _ensure_dir(_JSON_PATH)
-    with open(_JSON_PATH, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2, default=str)
+def _sort_key(tx):
+    # Ordena por data desc e id desc
+    date = str(tx.get("date") or "0000-01-01")[:10]
+    return (date, int(tx.get("id", 0)))
 
 
-# ============================ Firestore I/O ============================
-_fs_client = None
-_fs_ready = None  # cache do estado (True = ok, False = indisponível)
+def _sanitize_payload(payload, existing=None):
+    """
+    Aceita payloads novos e antigos.
+    Mantém retrocompatibilidade, mas prioriza os novos campos *_text e status.
+    """
+    existing = existing or {}
+    tx = {}
 
-def _decode_b64_json(b64: str) -> Optional[dict]:
-    try:
-        raw = base64.b64decode(b64).decode("utf-8")
-        return json.loads(raw)
-    except Exception:
-        return None
+    tx["id"] = existing.get("id")
 
-def _get_firestore():
-    """Inicializa Firestore com FIREBASE_CREDENTIALS_B64 ou GOOGLE_APPLICATION_CREDENTIALS_JSON."""
-    global _fs_client, _fs_ready
+    # tipo
+    tx["type"] = _normalize_type(payload.get("type") or existing.get("type"))
 
-    if not _USE_FIRESTORE:
-        _fs_ready = False
-        return None
+    # data
+    date = payload.get("date") or existing.get("date")
+    if not _is_ymd(date):
+        raise ValueError("Data inválida. Use YYYY-MM-DD (sem timezone).")
+    tx["date"] = date[:10]
 
-    if _fs_ready is not None:
-        return _fs_client if _fs_ready else None
+    # valor
+    tx["amount"] = _coerce_float(payload.get("amount", existing.get("amount", 0)))
 
-    try:
-        from google.cloud import firestore  # type: ignore
-    except Exception as e:
-        log.warning("[finance] google-cloud-firestore não instalado: %s", e)
-        _fs_ready = False
-        return None
+    # categoria / notes
+    tx["category"] = (payload.get("category") or existing.get("category") or "").strip()
+    tx["notes"] = (payload.get("notes") or existing.get("notes") or "").strip()
 
-    try:
-        # 1) Preferir FIREBASE_CREDENTIALS_B64 (env que você já tem)
-        b64 = os.getenv("FIREBASE_CREDENTIALS_B64")
-        if b64:
-            from google.oauth2 import service_account  # type: ignore
-            info = _decode_b64_json(b64)
-            if not info:
-                raise RuntimeError("FIREBASE_CREDENTIALS_B64 inválido")
-            creds = service_account.Credentials.from_service_account_info(info)
-            project = info.get("project_id") or os.getenv("FIREBASE_PROJECT_ID")
-            _client = firestore.Client(credentials=creds, project=project)
-            log.info("[finance] Firestore inicializado via FIREBASE_CREDENTIALS_B64")
-            _fs_ready = True
-            _fs_client = _client
-            return _fs_client
+    # NOVOS (strings livres)
+    tx["action_text"] = (payload.get("action_text") or existing.get("action_text") or "").strip()
+    tx["client_text"] = (payload.get("client_text") or existing.get("client_text") or "").strip()
+    tx["material_text"] = (payload.get("material_text") or existing.get("material_text") or "").strip()
 
-        # 2) Alternativa: GOOGLE_APPLICATION_CREDENTIALS_JSON
-        gac_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-        if gac_json:
-            from google.oauth2 import service_account  # type: ignore
-            info = json.loads(gac_json)
-            creds = service_account.Credentials.from_service_account_info(info)
-            _client = firestore.Client(credentials=creds, project=info.get("project_id"))
-            log.info("[finance] Firestore inicializado via GOOGLE_APPLICATION_CREDENTIALS_JSON")
-            _fs_ready = True
-            _fs_client = _client
-            return _fs_client
+    # STATUS normalizado
+    tx["status"] = _normalize_status(payload.get("status") or existing.get("status"))
 
-        # 3) Por fim, tentar ADC padrão (se houver caminho no container)
-        _client = firestore.Client()
-        log.info("[finance] Firestore inicializado via ADC/GOOGLE_APPLICATION_CREDENTIALS")
-        _fs_ready = True
-        _fs_client = _client
-        return _fs_client
+    # LEGADO (mantidos só por compatibilidade; opcional)
+    tx["action_id"] = payload.get("action_id", existing.get("action_id"))
+    tx["client_id"] = payload.get("client_id", existing.get("client_id"))
+    tx["material_id"] = payload.get("material_id", existing.get("material_id"))
 
-    except Exception as e:
-        log.warning("[finance] Firestore indisponível: %s (usando fallback JSON)", e)
-        _fs_ready = False
-        _fs_client = None
-        return None
+    # Se vierem alias camelCase, aceita também (compat c/ front)
+    tx["action_id"] = payload.get("actionId", tx["action_id"])
+    tx["client_id"] = payload.get("clientId", tx["client_id"])
+    tx["material_id"] = payload.get("materialId", tx["material_id"])
+
+    return tx
 
 
-def _fs_list(ttype: str, action_id: str, month: str) -> List[Dict[str, Any]]:
-    """Lê documentos do Firestore e aplica filtros em Python (evita índices)."""
-    client = _get_firestore()
-    if not client:
-        return _json_load()
+# =========================
+#       ROTAS /transactions
+# =========================
 
-    try:
-        coll = client.collection(_COLL)
-        # Busca ampla e filtra localmente (bom o suficiente para volumes pequenos/médios)
-        docs = [d.to_dict() for d in coll.stream()]
-        items = []
-        for d in docs:
-            it = {
-                "id": d.get("id"),
-                "type": d.get("type"),
-                "date": d.get("date"),
-                "amount": _to_number(d.get("amount")),
-                "category": d.get("category") or "",
-                "notes": d.get("notes") or "",
-                "action_id": d.get("action_id"),
-                "created_by": d.get("created_by"),
-                "created_at": d.get("created_at"),
-            }
-            items.append(_doc_to_json(it))
-
-        # filtros
-        if ttype in _VALID_TYPES:
-            items = [x for x in items if (x.get("type") or "") == ttype]
-        if action_id:
-            items = [x for x in items if str(x.get("action_id") or "") == action_id]
-        if isinstance(month, str) and len(month) == 7:
-            rng = _month_bounds(month)
-            if rng:
-                start, end = rng
-                items = [x for x in items if start <= (x.get("date") or "") <= end]
-
-        items.sort(key=lambda x: (x.get("date") or "", x.get("id") or ""), reverse=True)
-        return items
-    except Exception as e:
-        log.exception("[finance][fs_list] falha: %s", e)
-        return _json_load()
-
-
-def _fs_create(doc: Dict[str, Any]) -> Dict[str, Any]:
-    client = _get_firestore()
-    if not client:
-        items = _json_load()
-        items.append(doc)
-        _json_save(items)
-        return doc
-
-    try:
-        client.collection(_COLL).document(doc["id"]).set(doc)
-        return doc
-    except Exception as e:
-        log.exception("[finance][fs_create] falha: %s", e)
-        items = _json_load()
-        items.append(doc)
-        _json_save(items)
-        return doc
-
-
-def _fs_update(txid: str, upd: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    client = _get_firestore()
-    if not client:
-        items = _json_load()
-        for i, it in enumerate(items):
-            if str(it.get("id")) == str(txid):
-                items[i].update(upd)
-                _json_save(items)
-                return _doc_to_json(items[i])
-        return None
-
-    try:
-        ref = client.collection(_COLL).document(txid)
-        snap = ref.get()
-        if not snap.exists:
-            return None
-        ref.update(upd)
-        data = snap.to_dict() or {}
-        data.update(upd)
-        return _doc_to_json(data)
-    except Exception as e:
-        log.exception("[finance][fs_update] falha: %s", e)
-        items = _json_load()
-        for i, it in enumerate(items):
-            if str(it.get("id")) == str(txid):
-                items[i].update(upd)
-                _json_save(items)
-                return _doc_to_json(items[i])
-        return None
-
-
-def _fs_delete(txid: str) -> bool:
-    client = _get_firestore()
-    if not client:
-        items = _json_load()
-        new_items = [x for x in items if str(x.get("id")) != str(txid)]
-        _json_save(new_items)
-        return True
-
-    try:
-        client.collection(_COLL).document(txid).delete()
-        return True
-    except Exception as e:
-        log.exception("[finance][fs_delete] falha: %s", e)
-        items = _json_load()
-        new_items = [x for x in items if str(x.get("id")) != str(txid)]
-        _json_save(new_items)
-        return True
-
-
-# ============================== CORS ===================================
-@finance_bp.after_request
-def _add_cors_headers(resp: Response):
-    # reflete a origem quando FRONTEND_URL está configurado
-    origin = request.headers.get("Origin")
-    allow = _DEFAULT_ALLOW_ORIGIN
-    if origin and _ALLOWED_ORIGINS:
-        if origin in _ALLOWED_ORIGINS:
-            allow = origin
-        else:
-            # se quiser, pode logar as origens negadas para depuração
-            log.debug("[finance][CORS] origem não permitida: %s", origin)
-
-    resp.headers["Access-Control-Allow-Origin"] = allow or "*"
-    resp.headers["Vary"] = "Origin"
-    resp.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
-    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    resp.headers["Access-Control-Expose-Headers"] = "Authorization, Content-Type"
-    return resp
-
-# Preflight (evita 404/405 no OPTIONS)
-@finance_bp.route("/finance/transactions", methods=["OPTIONS"])
-@finance_bp.route("/transactions", methods=["OPTIONS"])
-def _preflight_transactions():
-    return ("", 204)
-
-
-# =============================== Rotas ================================
-# LISTAR (?type, ?action_id, ?month=YYYY-MM)
-@finance_bp.route("/finance/transactions", methods=["GET"])
-@finance_bp.route("/transactions", methods=["GET"])
-@roles_allowed('admin')
+@finance_bp.get("/transactions")
 def list_transactions():
-    try:
-        ttype = (request.args.get("type") or "").strip().lower()
-        action_id = (request.args.get("action_id") or "").strip()
-        month = (request.args.get("month") or "").strip()  # YYYY-MM
-
-        items = _fs_list(ttype, action_id, month)
-        return jsonify(items), 200
-    except Exception as e:
-        log.exception("[finance][GET] falha: %s", e)
-        return jsonify({"message": "internal_error"}), 500
+    with _LOCK:
+        items = _read_all()
+    # Ordenar desc por data/id
+    items_sorted = sorted(items, key=_sort_key, reverse=True)
+    return jsonify(items_sorted), 200
 
 
-# CRIAR
-@finance_bp.route("/finance/transactions", methods=["POST"])
-@finance_bp.route("/transactions", methods=["POST"])
-@roles_allowed('admin')
+@finance_bp.get("/transactions/<int:tx_id>")
+def get_transaction(tx_id: int):
+    with _LOCK:
+        items = _read_all()
+        for it in items:
+            if int(it.get("id")) == tx_id:
+                return jsonify(it), 200
+    return jsonify({"error": "not_found"}), 404
+
+
+@finance_bp.post("/transactions")
 def create_transaction():
+    payload = request.get_json(silent=True) or {}
     try:
-        data = request.get_json(silent=True) or {}
-
-        ttype = str(data.get("type", "")).lower().strip()
-        if ttype not in _VALID_TYPES:
-            return jsonify({"message": "type inválido (entrada, saida, despesa)"}), 400
-
-        date = _iso_date_only(data.get("date"))
-        if not date:
-            return jsonify({"message": "date inválida (YYYY-MM-DD)"}), 400
-
-        doc = {
-            "id": str(uuid.uuid4()),
-            "type": ttype,
-            "date": date,
-            "amount": abs(_to_number(data.get("amount", 0))),
-            "category": (data.get("category") or "").strip(),
-            "notes": (data.get("notes") or "").strip(),
-            "action_id": (data.get("action_id") or "").strip() or None,
-            "created_by": get_jwt_identity(),
-            "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        }
-
-        saved = _fs_create(doc)
-        return jsonify(_doc_to_json(saved)), 201
+        with _LOCK:
+            items = _read_all()
+            tx = _sanitize_payload(payload)
+            tx["id"] = _next_id(items)
+            items.append(tx)
+            _write_all(items)
+        return jsonify(tx), 201
+    except ValueError as ve:
+        return jsonify({"error": "validation_error", "message": str(ve)}), 400
     except Exception as e:
-        log.exception("[finance][POST] falha: %s", e)
-        return jsonify({"message": "internal_error"}), 500
+        return jsonify({"error": "internal_error", "message": str(e)}), 500
 
 
-# ATUALIZAR
-@finance_bp.route("/finance/transactions/<txid>", methods=["PUT", "PATCH"])
-@finance_bp.route("/transactions/<txid>", methods=["PUT", "PATCH"])
-@roles_allowed('admin')
-def update_transaction(txid):
+@finance_bp.put("/transactions/<int:tx_id>")
+def update_transaction(tx_id: int):
+    payload = request.get_json(silent=True) or {}
     try:
-        data = request.get_json(silent=True) or {}
-        upd: Dict[str, Any] = {}
-
-        if "type" in data and str(data["type"]).lower() in _VALID_TYPES:
-            upd["type"] = str(data["type"]).lower()
-        if "date" in data:
-            d = _iso_date_only(data["date"])
-            if d:
-                upd["date"] = d
-        if "amount" in data:
-            upd["amount"] = abs(_to_number(data["amount"]))
-        for k in ("category", "notes", "action_id"):
-            if k in data:
-                v = data[k]
-                upd[k] = (v or "").strip() if isinstance(v, str) else v
-
-        if not upd:
-            return jsonify({"message": "Nada para atualizar"}), 400
-
-        out = _fs_update(txid, upd)
-        if not out:
-            return jsonify({"message": "não encontrado"}), 404
-        return jsonify(out), 200
+        with _LOCK:
+            items = _read_all()
+            for idx, it in enumerate(items):
+                if int(it.get("id")) == tx_id:
+                    new_obj = _sanitize_payload(payload, existing=it)
+                    new_obj["id"] = tx_id
+                    items[idx] = new_obj
+                    _write_all(items)
+                    return jsonify(new_obj), 200
+        return jsonify({"error": "not_found"}), 404
+    except ValueError as ve:
+        return jsonify({"error": "validation_error", "message": str(ve)}), 400
     except Exception as e:
-        log.exception("[finance][PUT] falha: %s", e)
-        return jsonify({"message": "internal_error"}), 500
+        return jsonify({"error": "internal_error", "message": str(e)}), 500
 
 
-# DELETAR
-@finance_bp.route("/finance/transactions/<txid>", methods=["DELETE"])
-@finance_bp.route("/transactions/<txid>", methods=["DELETE"])
-@roles_allowed('admin')
-def delete_transaction(txid):
+@finance_bp.patch("/transactions/<int:tx_id>")
+def patch_transaction(tx_id: int):
+    """
+    Permite atualizar parcialmente (ex.: apenas status).
+    """
+    payload = request.get_json(silent=True) or {}
     try:
-        ok = _fs_delete(txid)
-        if ok:
-            return ("", 204)
-        return jsonify({"message": "não encontrado"}), 404
+        with _LOCK:
+            items = _read_all()
+            for idx, it in enumerate(items):
+                if int(it.get("id")) == tx_id:
+                    # merge simples:
+                    merged = {**it, **payload}
+
+                    # normalizações pontuais:
+                    if "status" in payload:
+                        merged["status"] = _normalize_status(payload.get("status"))
+                    if "type" in payload:
+                        merged["type"] = _normalize_type(payload.get("type"))
+                    if "amount" in payload:
+                        merged["amount"] = _coerce_float(payload.get("amount"), it.get("amount", 0))
+                    if "date" in payload:
+                        if not _is_ymd(merged["date"]):
+                            return jsonify({"error": "validation_error", "message": "Data inválida (YYYY-MM-DD)."}), 400
+
+                    # garantir campos *_text existam:
+                    merged["action_text"] = (merged.get("action_text") or "").strip()
+                    merged["client_text"] = (merged.get("client_text") or "").strip()
+                    merged["material_text"] = (merged.get("material_text") or "").strip()
+
+                    items[idx] = merged
+                    _write_all(items)
+                    return jsonify(merged), 200
+        return jsonify({"error": "not_found"}), 404
     except Exception as e:
-        log.exception("[finance][DELETE] falha: %s", e)
-        return jsonify({"message": "internal_error"}), 500
+        return jsonify({"error": "internal_error", "message": str(e)}), 500
+
+
+@finance_bp.delete("/transactions/<int:tx_id>")
+def delete_transaction(tx_id: int):
+    with _LOCK:
+        items = _read_all()
+        new_items = [it for it in items if int(it.get("id", 0)) != tx_id]
+        if len(new_items) == len(items):
+            return jsonify({"error": "not_found"}), 404
+        _write_all(new_items)
+    return jsonify({"status": "deleted"}), 200

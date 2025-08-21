@@ -70,12 +70,18 @@ const brToISO = (br) => {
 
 const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
+/* ===== Novo formulário com strings e status ===== */
 const emptyForm = {
   type: 'entrada',
   dateBr: '',
   amount: '',
   category: '',
+  status: 'Pendente',            // Pago | Pendente | Cancelado
   notes: '',
+  action_text: '',               // agora string livre
+  client_text: '',               // agora string livre
+  material_text: '',             // agora string livre
+  // compat fallback (não usados mais, mas preservo para editar itens antigos sem quebrar)
   action_id: '',
   client_id: '',
   material_id: '',
@@ -85,7 +91,7 @@ const TX_PATH = '/transactions';
 
 const Finance = () => {
   const [transactions, setTransactions] = useState([]);
-  const [actions, setActions] = useState([]);
+  const [actions, setActions] = useState([]);     // ainda usado só para fallback de rotulagem em itens antigos
   const [clients, setClients] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -131,7 +137,7 @@ const Finance = () => {
     loadAll();
   }, []);
 
-  // Label resolvers
+  // Label resolvers (fallback p/ itens antigos)
   const actionLabelById = (id) => {
     const a = actions.find((x) => String(x.id) === String(id));
     return a ? (a.client_name || a.company_name || a.title || `Ação ${a.id}`) : '';
@@ -156,7 +162,18 @@ const Finance = () => {
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((t) =>
-        [t.category, t.notes, String(t.amount), actionLabelById(t.action_id), clientLabelById(t.client_id), materialLabelById(t.material_id)]
+        [
+          t.category,
+          t.notes,
+          String(t.amount),
+          // novos campos como string:
+          t.action_text, t.client_text, t.material_text,
+          // fallback antigos:
+          actionLabelById(t.action_id),
+          clientLabelById(t.client_id),
+          materialLabelById(t.material_id),
+          t.status,
+        ]
           .filter(Boolean)
           .some((field) => String(field).toLowerCase().includes(q))
       );
@@ -173,6 +190,8 @@ const Finance = () => {
 
     if (selectedActions.length > 0) {
       const actionSet = new Set(selectedActions);
+      // para itens novos, filtramos se o texto da ação está selecionado por ID? não há ID.
+      // Manteremos filtro apenas p/ itens antigos com action_id.
       list = list.filter((t) => actionSet.has(t.action_id));
     }
 
@@ -264,7 +283,13 @@ const Finance = () => {
       dateBr: isoToBR(String(tx.date || '').slice(0, 10)) || '',
       amount: String(tx.amount ?? ''),
       category: tx.category || '',
+      status: tx.status || 'Pendente',
       notes: tx.notes || '',
+      // prioriza strings novas
+      action_text: tx.action_text || '',
+      client_text: tx.client_text || '',
+      material_text: tx.material_text || '',
+      // mantém ids antigos para fallback (não serão salvos novamente)
       action_id: tx.action_id || '',
       client_id: tx.client_id || '',
       material_id: tx.material_id || '',
@@ -287,13 +312,18 @@ const Finance = () => {
         date: dateISO,
         amount: Number(form.amount || 0),
         category: form.category || '',
+        status: form.status || 'Pendente',                 // <- novo
         notes: form.notes || '',
-        action_id: form.action_id || null,
-        client_id: form.client_id || null,
-        material_id: form.material_id || null,
-        actionId: form.action_id || null,
-        clientId: form.client_id || null,
-        materialId: form.material_id || null,
+        action_text: form.action_text || '',               // <- novo (ajuste nome se seu backend for diferente)
+        client_text: form.client_text || '',               // <- novo
+        material_text: form.material_text || '',           // <- novo
+        // compatibilidade, se o backend ainda tolerar esses campos (não usados mais):
+        action_id: null,
+        client_id: null,
+        material_id: null,
+        actionId: null,
+        clientId: null,
+        materialId: null,
       };
 
       if (editing?.id) {
@@ -314,6 +344,23 @@ const Finance = () => {
     }
   };
 
+  // Mudar status rapidamente na tabela
+  const updateStatus = async (tx, newStatus) => {
+    try {
+      const body = { status: newStatus };
+      // tente PATCH; se seu backend usar PUT com objeto inteiro, ajuste aqui:
+      await api.patch?.(`${TX_PATH}/${tx.id}`, body).catch(async () => {
+        // fallback para PUT com merge mínimo:
+        await api.put(`${TX_PATH}/${tx.id}`, { ...tx, status: newStatus });
+      });
+      // atualiza local
+      setTransactions((prev) => prev.map((t) => (t.id === tx.id ? { ...t, status: newStatus } : t)));
+    } catch (err) {
+      console.error('Erro ao atualizar status:', err);
+      alert('Não foi possível atualizar o status.');
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!window.confirm('Tem certeza que deseja excluir este lançamento?')) return;
     try {
@@ -325,7 +372,7 @@ const Finance = () => {
     }
   };
 
-  // Actions selector (filtro)
+  // Actions selector (filtro) — mantém para itens antigos
   const [actionsOpen, setActionsOpen] = useState(false);
   const toggleAction = (id) =>
     setSelectedActions((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -334,7 +381,7 @@ const Finance = () => {
     <Popover open={actionsOpen} onOpenChange={setActionsOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-between">
-          {selectedActions.length === 0 ? 'Filtrar por ações' : <span className="truncate">{selectedActions.length} selecionada(s)</span>}
+          {selectedActions.length === 0 ? 'Filtrar por ações (itens antigos)' : <span className="truncate">{selectedActions.length} selecionada(s)</span>}
           <Layers className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
@@ -387,9 +434,10 @@ const Finance = () => {
       data: isoToBR(String(t.date || '').slice(0, 10)) || '',
       tipo: t.type || '',
       categoria: t.category || '',
-      acao: actionLabelById(t.action_id),
-      cliente: clientLabelById(t.client_id),
-      material: materialLabelById(t.material_id),
+      status: t.status || 'Pendente',
+      acao: t.action_text || actionLabelById(t.action_id) || '',
+      cliente: t.client_text || clientLabelById(t.client_id) || '',
+      material: t.material_text || materialLabelById(t.material_id) || '',
       valor: Number(t.amount || 0),
       observacoes: t.notes || '',
     }));
@@ -399,6 +447,7 @@ const Finance = () => {
     { key: 'data', header: 'Data' },
     { key: 'tipo', header: 'Tipo' },
     { key: 'categoria', header: 'Categoria' },
+    { key: 'status', header: 'Status' },
     { key: 'acao', header: 'Ação' },
     { key: 'cliente', header: 'Cliente' },
     { key: 'material', header: 'Material' },
@@ -414,21 +463,16 @@ const Finance = () => {
         search ? `Busca: "${search}"` : '',
         typeFilter !== 'todos' ? `Tipo: ${typeFilter}` : '',
         monthFilter !== 'todos' ? `Mês: ${monthOptions.find(m => m.value === monthFilter)?.label || monthFilter}` : '',
-        selectedActions.length > 0 ? `Ações: ${selectedActions.length} selecionada(s)` : '',
+        selectedActions.length > 0 ? `Ações (antigas): ${selectedActions.length} selecionada(s)` : '',
       ].filter(Boolean).join(' | ') || 'Nenhum filtro aplicado'
     }`,
     columnStyles: {
       0: { cellWidth: 22 }, 1: { cellWidth: 22 }, 2: { cellWidth: 38 },
-      3: { cellWidth: 46 }, 4: { cellWidth: 46 }, 5: { cellWidth: 60 },
-      6: { cellWidth: 26 }, 7: { cellWidth: 70 },
+      3: { cellWidth: 22 }, 4: { cellWidth: 46 }, 5: { cellWidth: 60 },
+      6: { cellWidth: 60 }, 7: { cellWidth: 26 }, 8: { cellWidth: 70 },
     },
     footerContent: `Totais do período: Entradas: ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`
   };
-
-  // Itens para selects do formulário
-  const actionItems = useMemo(() => actions.map(a => ({ id: a.id, label: actionLabelById(a.id) })), [actions]);
-  const clientItems = useMemo(() => clients.map(c => ({ id: c.id, label: clientLabelById(c.id) })), [clients]);
-  const materialItems = useMemo(() => materials.map(m => ({ id: m.id, label: materialLabelById(m.id) })), [materials]);
 
   return (
     <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
@@ -476,7 +520,7 @@ const Finance = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <Card>
           <CardHeader><CardTitle className="text-lg">Gastos por Categoria</CardTitle></CardHeader>
-          <CardContent>
+        <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie data={categoryChart} cx="50%" cy="50%" labelLine={false}
@@ -571,6 +615,7 @@ const Finance = () => {
                   <TableHead className="text-center">Data</TableHead>
                   <TableHead className="text-center">Tipo</TableHead>
                   <TableHead className="text-center">Categoria</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-center">Ação</TableHead>
                   <TableHead className="text-center">Cliente</TableHead>
                   <TableHead className="text-center">Material</TableHead>
@@ -581,24 +626,45 @@ const Finance = () => {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={9} className="text-center py-8">Carregando…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center py-8">Carregando…</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={9} className="text-center py-8">Nenhuma transação encontrada.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center py-8">Nenhuma transação encontrada.</TableCell></TableRow>
                 ) : (
                   filtered.map((t) => {
-                    const actionLabel = actionLabelById(t.action_id);
-                    const clientLabel = clientLabelById(t.client_id);
-                    const materialLabel = materialLabelById(t.material_id);
+                    const actionText = t.action_text || actionLabelById(t.action_id) || '—';
+                    const clientText = t.client_text || clientLabelById(t.client_id) || '—';
+                    const materialText = t.material_text || materialLabelById(t.material_id) || '—';
+
                     const typeColor = t.type === 'entrada' ? 'default' : t.type === 'saida' ? 'destructive' : 'secondary';
+                    const statusVariant =
+                      (t.status || 'Pendente') === 'Pago' ? 'default' :
+                      (t.status || 'Pendente') === 'Cancelado' ? 'destructive' : 'secondary';
 
                     return (
                       <TableRow key={t.id}>
                         <TableCell className="text-center">{isoToBR(String(t.date || '').slice(0, 10))}</TableCell>
                         <TableCell className="text-center"><Badge variant={typeColor} className="capitalize">{t.type}</Badge></TableCell>
                         <TableCell className="text-center">{t.category || '—'}</TableCell>
-                        <TableCell className="text-center">{actionLabel || '—'}</TableCell>
-                        <TableCell className="text-center">{clientLabel || '—'}</TableCell>
-                        <TableCell className="text-center">{materialLabel || '—'}</TableCell>
+
+                        {/* Status com seletor rápido */}
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Badge variant={statusVariant}>{t.status || 'Pendente'}</Badge>
+                            <select
+                              className="border rounded-md px-2 py-1 text-xs bg-background"
+                              value={t.status || 'Pendente'}
+                              onChange={(e) => updateStatus(t, e.target.value)}
+                            >
+                              <option>Pago</option>
+                              <option>Pendente</option>
+                              <option>Cancelado</option>
+                            </select>
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="text-center">{actionText}</TableCell>
+                        <TableCell className="text-center">{clientText}</TableCell>
+                        <TableCell className="text-center">{materialText}</TableCell>
                         <TableCell className="text-center font-medium">{BRL(t.amount)}</TableCell>
                         <TableCell className="text-center">{t.notes || '—'}</TableCell>
                         <TableCell className="text-center">
@@ -636,7 +702,7 @@ const Finance = () => {
               <DialogHeader className="pb-2">
                 <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
                 <DialogDescription>
-                  Registre ou atualize uma entrada, saída ou despesa. Você pode vincular (opcionalmente) a uma Ação, a um Cliente e a um Material.
+                  Registre ou atualize uma entrada, saída ou despesa. Agora você informa Ação, Cliente e Material como texto livre e define o Status.
                 </DialogDescription>
               </DialogHeader>
             </div>
@@ -668,33 +734,47 @@ const Finance = () => {
                   <Input name="category" value={form.category} onChange={onChange} placeholder="Ex.: Mídia, Produção..." />
                 </div>
 
-                {/* Vinculações opcionais */}
+                <div>
+                  <Label>Status</Label>
+                  <select
+                    name="status"
+                    value={form.status}
+                    onChange={onChange}
+                    className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                  >
+                    <option>Pago</option>
+                    <option>Pendente</option>
+                    <option>Cancelado</option>
+                  </select>
+                </div>
+
+                {/* Campos livres */}
                 <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <Label>Ação (opcional)</Label>
-                    <SearchSelect
-                      items={[{ id: '', label: '—' }, ...actionItems]}
-                      value={String(form.action_id || '')}
-                      onChange={(v) => setForm((f) => ({ ...f, action_id: v || '' }))}
-                      placeholder="Buscar ação..."
+                    <Label>Ação (texto livre)</Label>
+                    <Input
+                      name="action_text"
+                      value={form.action_text}
+                      onChange={onChange}
+                      placeholder="Ex.: Blitz Shopping, Campanha Setembro..."
                     />
                   </div>
                   <div>
-                    <Label>Cliente (opcional)</Label>
-                    <SearchSelect
-                      items={[{ id: '', label: '—' }, ...clientItems]}
-                      value={String(form.client_id || '')}
-                      onChange={(v) => setForm((f) => ({ ...f, client_id: v || '' }))}
-                      placeholder="Buscar cliente..."
+                    <Label>Cliente (texto livre)</Label>
+                    <Input
+                      name="client_text"
+                      value={form.client_text}
+                      onChange={onChange}
+                      placeholder="Ex.: Supermercado Rio Branco"
                     />
                   </div>
                   <div>
-                    <Label>Material (opcional)</Label>
-                    <SearchSelect
-                      items={[{ id: '', label: '—' }, ...materialItems]}
-                      value={String(form.material_id || '')}
-                      onChange={(v) => setForm((f) => ({ ...f, material_id: v || '' }))}
-                      placeholder="Buscar material..."
+                    <Label>Material (texto livre)</Label>
+                    <Input
+                      name="material_text"
+                      value={form.material_text}
+                      onChange={onChange}
+                      placeholder="Ex.: 3.000 panfletos"
                     />
                   </div>
                 </div>
@@ -728,7 +808,8 @@ const Finance = () => {
 };
 
 /* ------------------------- Componentes Auxiliares ------------------------- */
-
+/* Mantive o SearchSelect no arquivo caso você ainda use em outras telas.
+   Aqui não é mais utilizado para Ação/Cliente/Material. */
 const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => {
   const [open, setOpen] = useState(false);
   const selected = items.find((i) => String(i.id) === String(value));
@@ -742,7 +823,6 @@ const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => 
         </Button>
       </PopoverTrigger>
 
-      {/* Abrir embaixo, com limite de altura e scroll interno */}
       <PopoverContent
         side="bottom"
         align="center"
