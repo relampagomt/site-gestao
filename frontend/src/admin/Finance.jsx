@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
 
 // Abas (iguais no estilo/UX)
-import LancamentosDashboard from './financeTabs/LancamentosDashboard.jsx';
+import LancamentosTab from './financeTabs/LancamentosTab.jsx';
 import ContasPagarTab from './financeTabs/ContasPagarTab.jsx';
 import ContasReceberTab from './financeTabs/ContasReceberTab.jsx';
 
@@ -18,13 +18,13 @@ const Finance = () => {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="lancamentos">Visão Geral</TabsTrigger>
+          <TabsTrigger value="lancamentos">Lançamentos</TabsTrigger>
           <TabsTrigger value="contas-pagar">Contas a Pagar</TabsTrigger>
           <TabsTrigger value="contas-receber">Contas a Receber</TabsTrigger>
         </TabsList>
 
         <TabsContent value="lancamentos" className="mt-6">
-          <LancamentosDashboard />
+          <LancamentosTab />
         </TabsContent>
 
         <TabsContent value="contas-pagar" className="mt-6">
