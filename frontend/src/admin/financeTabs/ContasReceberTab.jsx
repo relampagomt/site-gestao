@@ -9,9 +9,10 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
 import { Search } from 'lucide-react';
+
 import { BRL, brToISO, isoToBR, maskDateBR, toNumberBR } from '@/lib/br.js';
 
-const path = '/contas-receber';
+const PATH = '/contas-receber';
 
 const emptyForm = {
   vencimentoBr: '',
@@ -26,15 +27,30 @@ const emptyForm = {
   status: 'Pendente',
 };
 
-const ContasReceberTab = () => {
+function decorate(row) {
+  const valor = Number(row?.valor || 0);
+  const taxas = Number(row?.taxasJuros || 0);
+
+  let liq = Number(row?.valorLiquidoRecebido || 0);
+  if (!row?.valorLiquidoRecebido && row?.status === 'Pago') {
+    // considera recebido líquido = valor - taxas
+    liq = Math.max(valor - taxas, 0);
+  }
+  if (row?.status === 'Cancelado') {
+    liq = 0;
+  }
+  const aberto = Math.max(valor - liq, 0);
+
+  return { ...row, _valor: valor, _taxas: taxas, _liq: liq, _aberto: aberto };
+}
+
+export default function ContasReceberTab() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // filtros
   const [search, setSearch] = useState('');
   const [month, setMonth] = useState('todos');
 
-  // modal
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -43,27 +59,26 @@ const ContasReceberTab = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get(path);
-      setRows(Array.isArray(data) ? data : []);
+      const { data } = await api.get(PATH);
+      const arr = Array.isArray(data) ? data : [];
+      setRows(arr.map(decorate));
     } catch (e) {
-      console.error('Erro ao carregar contas a receber', e);
+      console.error('Erro ao carregar receber', e);
       setRows([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   const monthOptions = useMemo(() => {
-    const set = new Set();
+    const s = new Set();
     rows.forEach(r => {
       const ym = String(r.vencimento || '').slice(0, 7);
-      if (/^\d{4}-\d{2}$/.test(ym)) set.add(ym);
+      if (/^\d{4}-\d{2}$/.test(ym)) s.add(ym);
     });
-    return Array.from(set).sort().reverse().map(ym => {
+    return Array.from(s).sort().reverse().map(ym => {
       const [y, m] = ym.split('-');
       return { value: ym, label: new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) };
     });
@@ -86,10 +101,10 @@ const ContasReceberTab = () => {
     return list;
   }, [rows, search, month]);
 
-  // KPIs
-  const totalValor = filtered.reduce((s, r) => s + Number(r.valor || 0), 0);
-  const totalRecebido = filtered.reduce((s, r) => s + Number(r.valorLiquidoRecebido || 0), 0);
-  const emAberto = Math.max(totalValor - totalRecebido, 0);
+  // KPIs (com campos derivados)
+  const totalValor    = filtered.reduce((s, r) => s + r._valor, 0);
+  const totalRecebido = filtered.reduce((s, r) => s + r._liq, 0);
+  const emAberto      = filtered.reduce((s, r) => s + r._aberto, 0);
 
   const openCreate = () => {
     setEditing(null);
@@ -104,11 +119,11 @@ const ContasReceberTab = () => {
       cliente: r.cliente || '',
       notaFiscal: r.notaFiscal || '',
       dataEmissaoBr: isoToBR(r.dataEmissao),
-      valorStr: r.valor != null ? String(r.valor).replace('.', ',') : '',
-      taxasJurosStr: r.taxasJuros != null ? String(r.taxasJuros).replace('.', ',') : '',
+      valorStr: r._valor ? String(r._valor).replace('.', ',') : '',
+      taxasJurosStr: r._taxas ? String(r._taxas).replace('.', ',') : '',
       docRecebimento: r.docRecebimento || '',
       dataBaixaBr: isoToBR(r.dataBaixa),
-      valorLiquidoStr: r.valorLiquidoRecebido != null ? String(r.valorLiquidoRecebido).replace('.', ',') : '',
+      valorLiquidoStr: r._liq ? String(r._liq).replace('.', ',') : '',
       status: r.status || 'Pendente',
     });
     setOpen(true);
@@ -118,28 +133,43 @@ const ContasReceberTab = () => {
     e.preventDefault();
     setSaving(true);
     try {
+      const valor = toNumberBR(form.valorStr);
+      const taxas = toNumberBR(form.taxasJurosStr);
+
+      let liq = toNumberBR(form.valorLiquidoStr);
+      if (!form.valorLiquidoStr.trim()) {
+        if (form.status === 'Pago') liq = Math.max(valor - taxas, 0);
+        else liq = 0;
+      }
+      if (form.status === 'Cancelado') liq = 0;
+
+      let vencISO = brToISO(form.vencimentoBr);
+      let emissISO = form.dataEmissaoBr ? brToISO(form.dataEmissaoBr) : null;
+      let baixaISO = form.dataBaixaBr ? brToISO(form.dataBaixaBr) : null;
+      if (!baixaISO && form.status === 'Pago') baixaISO = vencISO;
+
       const payload = {
-        vencimento: brToISO(form.vencimentoBr),
+        vencimento: vencISO,
         cliente: form.cliente || '',
         notaFiscal: form.notaFiscal || '',
-        dataEmissao: form.dataEmissaoBr ? brToISO(form.dataEmissaoBr) : null,
-        valor: toNumberBR(form.valorStr),
-        taxasJuros: toNumberBR(form.taxasJurosStr),
+        dataEmissao: emissISO,
+        valor,
+        taxasJuros: taxas,
         docRecebimento: form.docRecebimento || '',
-        dataBaixa: form.dataBaixaBr ? brToISO(form.dataBaixaBr) : null,
-        valorLiquidoRecebido: toNumberBR(form.valorLiquidoStr),
+        dataBaixa: baixaISO,
+        valorLiquidoRecebido: liq,
         status: form.status || 'Pendente',
       };
 
-      if (editing?.id) await api.put(`${path}/${editing.id}`, payload);
-      else await api.post(path, payload);
+      if (editing?.id) await api.put(`${PATH}/${editing.id}`, payload);
+      else await api.post(PATH, payload);
 
       setOpen(false);
       setEditing(null);
       setForm(emptyForm);
       load();
     } catch (err) {
-      console.error('Erro ao salvar conta a receber', err);
+      console.error('Salvar receber', err);
       alert('Não foi possível salvar. Verifique o backend.');
     } finally {
       setSaving(false);
@@ -149,10 +179,10 @@ const ContasReceberTab = () => {
   const destroyItem = async (id) => {
     if (!window.confirm('Confirma excluir esta conta?')) return;
     try {
-      await api.delete(`${path}/${id}`);
+      await api.delete(`${PATH}/${id}`);
       load();
     } catch (e) {
-      console.error('Erro ao excluir', e);
+      console.error('Excluir receber', e);
       alert('Não foi possível excluir.');
     }
   };
@@ -184,7 +214,7 @@ const ContasReceberTab = () => {
         </Card>
       </div>
 
-      {/* Filtros / ações */}
+      {/* Filtros */}
       <Card className="mb-2">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -200,11 +230,7 @@ const ContasReceberTab = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input className="pl-9" placeholder="Buscar contas..." value={search} onChange={(e)=>setSearch(e.target.value)} />
             </div>
-            <select
-              value={month}
-              onChange={(e)=>setMonth(e.target.value)}
-              className="w-56 border rounded-md px-3 py-2 text-sm bg-background"
-            >
+            <select value={month} onChange={(e)=>setMonth(e.target.value)} className="w-56 border rounded-md px-3 py-2 text-sm bg-background">
               <option value="todos">Todos os meses</option>
               {monthOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
@@ -246,11 +272,11 @@ const ContasReceberTab = () => {
                       <TableCell className="text-center">{r.cliente || '—'}</TableCell>
                       <TableCell className="text-center">{r.notaFiscal || '—'}</TableCell>
                       <TableCell className="text-center">{isoToBR(r.dataEmissao)}</TableCell>
-                      <TableCell className="text-center">{BRL(r.valor || 0)}</TableCell>
-                      <TableCell className="text-center">{BRL(r.taxasJuros || 0)}</TableCell>
+                      <TableCell className="text-center">{BRL(r._valor)}</TableCell>
+                      <TableCell className="text-center">{BRL(r._taxas)}</TableCell>
                       <TableCell className="text-center">{r.docRecebimento || '—'}</TableCell>
                       <TableCell className="text-center">{isoToBR(r.dataBaixa)}</TableCell>
-                      <TableCell className="text-center">{BRL(r.valorLiquidoRecebido || 0)}</TableCell>
+                      <TableCell className="text-center">{BRL(r._liq)}</TableCell>
                       <TableCell className="text-center">
                         <Badge className="capitalize" variant={r.status === 'Pago' ? 'default' : r.status === 'Cancelado' ? 'destructive' : 'secondary'}>
                           {r.status || 'Pendente'}
@@ -275,10 +301,7 @@ const ContasReceberTab = () => {
       </Card>
 
       {/* Modal */}
-      <Dialog
-        open={open}
-        onOpenChange={(v) => { if (!v) { setEditing(null); setForm(emptyForm); } setOpen(v); }}
-      >
+      <Dialog open={open} onOpenChange={(v)=>{ if(!v){ setEditing(null); setForm(emptyForm);} setOpen(v); }}>
         <DialogContent className="w-[95vw] sm:max-w-3xl p-0">
           <form onSubmit={submit} className="max-h-[80vh] flex flex-col">
             <div className="p-6 pb-2">
@@ -287,17 +310,11 @@ const ContasReceberTab = () => {
                 <DialogDescription>Registre/atualize uma conta a receber.</DialogDescription>
               </DialogHeader>
             </div>
-
             <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <Label>Vencimento *</Label>
-                  <Input
-                    placeholder="DD/MM/AAAA"
-                    value={form.vencimentoBr}
-                    onChange={(e)=>setForm(f=>({...f, vencimentoBr: maskDateBR(e.target.value)}))}
-                    required
-                  />
+                  <Input placeholder="DD/MM/AAAA" value={form.vencimentoBr} onChange={(e)=>setForm(f=>({...f, vencimentoBr: maskDateBR(e.target.value)}))} required />
                 </div>
                 <div>
                   <Label>Cliente</Label>
@@ -310,28 +327,15 @@ const ContasReceberTab = () => {
 
                 <div>
                   <Label>Data Emissão</Label>
-                  <Input
-                    placeholder="DD/MM/AAAA"
-                    value={form.dataEmissaoBr}
-                    onChange={(e)=>setForm(f=>({...f, dataEmissaoBr: maskDateBR(e.target.value)}))}
-                  />
+                  <Input placeholder="DD/MM/AAAA" value={form.dataEmissaoBr} onChange={(e)=>setForm(f=>({...f, dataEmissaoBr: maskDateBR(e.target.value)}))} />
                 </div>
                 <div>
                   <Label>Valor *</Label>
-                  <Input
-                    placeholder="0,00"
-                    value={form.valorStr}
-                    onChange={(e)=>setForm(f=>({...f, valorStr: e.target.value}))}
-                    required
-                  />
+                  <Input placeholder="0,00" value={form.valorStr} onChange={(e)=>setForm(f=>({...f, valorStr: e.target.value}))} required />
                 </div>
                 <div>
                   <Label>Taxas/Juros</Label>
-                  <Input
-                    placeholder="0,00"
-                    value={form.taxasJurosStr}
-                    onChange={(e)=>setForm(f=>({...f, taxasJurosStr: e.target.value}))}
-                  />
+                  <Input placeholder="0,00" value={form.taxasJurosStr} onChange={(e)=>setForm(f=>({...f, taxasJurosStr: e.target.value}))} />
                 </div>
 
                 <div>
@@ -340,28 +344,16 @@ const ContasReceberTab = () => {
                 </div>
                 <div>
                   <Label>Data Baixa</Label>
-                  <Input
-                    placeholder="DD/MM/AAAA"
-                    value={form.dataBaixaBr}
-                    onChange={(e)=>setForm(f=>({...f, dataBaixaBr: maskDateBR(e.target.value)}))}
-                  />
+                  <Input placeholder="DD/MM/AAAA" value={form.dataBaixaBr} onChange={(e)=>setForm(f=>({...f, dataBaixaBr: maskDateBR(e.target.value)}))} />
                 </div>
                 <div>
-                  <Label>Valor Líquido Recebido</Label>
-                  <Input
-                    placeholder="0,00"
-                    value={form.valorLiquidoStr}
-                    onChange={(e)=>setForm(f=>({...f, valorLiquidoStr: e.target.value}))}
-                  />
+                  <Label>Valor Líquido Recebido (opcional)</Label>
+                  <Input placeholder="0,00" value={form.valorLiquidoStr} onChange={(e)=>setForm(f=>({...f, valorLiquidoStr: e.target.value}))} />
                 </div>
 
                 <div>
                   <Label>Status</Label>
-                  <select
-                    className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                    value={form.status}
-                    onChange={(e)=>setForm(f=>({...f, status: e.target.value}))}
-                  >
+                  <select className="w-full border rounded-md px-3 py-2 text-sm bg-background" value={form.status} onChange={(e)=>setForm(f=>({...f, status: e.target.value}))}>
                     <option>Pago</option>
                     <option>Pendente</option>
                     <option>Cancelado</option>
@@ -369,7 +361,6 @@ const ContasReceberTab = () => {
                 </div>
               </div>
             </div>
-
             <div className="border-t bg-background px-6 py-3 flex justify-end gap-2">
               <Button type="button" variant="outline" size="sm" onClick={()=>{ setOpen(false); setEditing(null); setForm(emptyForm); }}>Cancelar</Button>
               <Button type="submit" size="sm" disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
@@ -379,6 +370,4 @@ const ContasReceberTab = () => {
       </Dialog>
     </div>
   );
-};
-
-export default ContasReceberTab;
+}
