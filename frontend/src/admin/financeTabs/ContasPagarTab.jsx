@@ -24,31 +24,17 @@ const emptyForm = {
   observacoes: '',
 };
 
-/** Normaliza e mapeia status vindos do backend para 'Pago' | 'Pendente' | 'Cancelado' */
 function normalizeStatus(any) {
-  const raw =
-    (any ??
-      '').toString().trim().toLowerCase();
-
-  if (raw === 'pago' || raw === 'paid' || raw === 'quitado' || raw === 'settled' || raw === '1' || raw === 'true') {
-    return 'Pago';
-  }
-  if (
-    raw === 'pendente' || raw === 'pending' || raw === '' || raw === '0' || raw === 'false' || raw === 'em aberto'
-  ) {
-    return 'Pendente';
-  }
-  if (raw === 'cancelado' || raw === 'canceled' || raw === 'cancelled' || raw === 'estornado') {
-    return 'Cancelado';
-  }
-  // fallback: devolve capitalizado do valor original se não reconhecido
+  const raw = (any ?? '').toString().trim().toLowerCase();
+  if (['pago','paid','quitado','settled','1','true'].includes(raw)) return 'Pago';
+  if (['cancelado','canceled','cancelled','estornado'].includes(raw)) return 'Cancelado';
+  if (['pendente','pending','','0','false','em aberto'].includes(raw)) return 'Pendente';
   return any ? String(any) : 'Pendente';
 }
-
 function StatusBadge({ value }) {
   const v = normalizeStatus(value);
-  if (v === 'Pago')      return <Badge className="bg-green-600">Pago</Badge>;
-  if (v === 'Pendente')  return <Badge className="bg-amber-600">Pendente</Badge>;
+  if (v === 'Pago') return <Badge className="bg-green-600">Pago</Badge>;
+  if (v === 'Pendente') return <Badge className="bg-amber-600">Pendente</Badge>;
   if (v === 'Cancelado') return <Badge className="bg-gray-500">Cancelado</Badge>;
   return <Badge className="bg-gray-500">{v}</Badge>;
 }
@@ -57,11 +43,8 @@ function decorate(row) {
   const valor = Number(row?.valor ?? row?.amount ?? 0);
   let pago = Number(row?.valorPago ?? 0);
   const status = normalizeStatus(row?.status ?? row?.situacao ?? row?.paymentStatus);
-
-  // Deriva pagamento quando backend não populou:
   if ((!row?.valorPago || isNaN(pago)) && status === 'Pago') pago = valor;
   if (status === 'Cancelado') pago = 0;
-
   const aberto = Math.max(valor - pago, 0);
   return { ...row, status, _valor: valor, _pago: pago, _aberto: aberto };
 }
@@ -90,7 +73,6 @@ export default function ContasPagarTab() {
       setLoading(false);
     }
   };
-
   useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
@@ -120,12 +102,7 @@ export default function ContasPagarTab() {
     return { total, pago, emAberto, atrasados };
   }, [rows]);
 
-  const openNew = () => {
-    setEditing(null);
-    setForm(emptyForm);
-    setOpen(true);
-  };
-
+  const openNew = () => { setEditing(null); setForm(emptyForm); setOpen(true); };
   const openEdit = (row) => {
     setEditing(row);
     setForm({
@@ -139,15 +116,9 @@ export default function ContasPagarTab() {
     });
     setOpen(true);
   };
-
   const remove = async (id) => {
     if (!confirm('Remover este lançamento?')) return;
-    try {
-      await api.delete(`${PATH}/${id}`);
-      await load();
-    } catch (e) {
-      console.error('Erro ao remover conta a pagar', e);
-    }
+    try { await api.delete(`${PATH}/${id}`); await load(); } catch (e) { console.error(e); }
   };
 
   const submit = async (e) => {
@@ -161,36 +132,29 @@ export default function ContasPagarTab() {
 
       if (status === 'Pago') {
         valorPago = valor;
-        if (!dataPagamento) dataPagamento = form.vencimento; // default = vencimento
+        if (!dataPagamento) dataPagamento = form.vencimento;
       } else {
-        valorPago = 0; // Pendente/Cancelado
+        valorPago = 0;
       }
 
       const payload = {
-        vencimento: form.vencimento,       // YYYY-MM-DD
+        vencimento: form.vencimento,
         documento: form.documento || null,
         descricao: form.descricao || '',
-        valor,                              // number
+        valor,
         dataPagamento: dataPagamento || null,
-        valorPago,                          // derivado
-        status,                             // já normalizado
+        valorPago,
+        status,
         observacoes: form.observacoes || '',
       };
 
-      if (editing?.id) {
-        await api.put(`${PATH}/${editing.id}`, payload);
-      } else {
-        await api.post(PATH, payload);
-      }
-      setOpen(false);
-      setEditing(null);
-      setForm(emptyForm);
-      await load();
+      if (editing?.id) await api.put(`${PATH}/${editing.id}`, payload);
+      else await api.post(PATH, payload);
+
+      setOpen(false); setEditing(null); setForm(emptyForm); await load();
     } catch (e) {
       console.error('Erro ao salvar conta a pagar', e);
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   return (
@@ -313,7 +277,7 @@ export default function ContasPagarTab() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Vencimento</Label>
-                  <Input type="date" value={form.vencimento} onChange={(e)=>setForm(f=>({...f, vencimento: e.target.value}))} />
+                  <Input lang="pt-BR" type="date" value={form.vencimento} onChange={(e)=>setForm(f=>({...f, vencimento: e.target.value}))} />
                 </div>
                 <div>
                   <Label>Documento</Label>
@@ -325,23 +289,15 @@ export default function ContasPagarTab() {
                 </div>
                 <div>
                   <Label>Valor</Label>
-                  <Input
-                    placeholder="0,00"
-                    value={form.valorStr}
-                    onChange={(e)=>setForm(f=>({...f, valorStr: e.target.value}))}
-                  />
+                  <Input placeholder="0,00" value={form.valorStr} onChange={(e)=>setForm(f=>({...f, valorStr: e.target.value}))} />
                 </div>
                 <div>
                   <Label>Data Pagamento (se pago)</Label>
-                  <Input type="date" value={form.dataPagamento} onChange={(e)=>setForm(f=>({...f, dataPagamento: e.target.value}))} />
+                  <Input lang="pt-BR" type="date" value={form.dataPagamento} onChange={(e)=>setForm(f=>({...f, dataPagamento: e.target.value}))} />
                 </div>
                 <div>
                   <Label>Status</Label>
-                  <select
-                    className="w-full border rounded-md px-3 py-2"
-                    value={form.status}
-                    onChange={(e)=>setForm(f=>({...f, status: e.target.value}))}
-                  >
+                  <select className="w-full border rounded-md px-3 py-2" value={form.status} onChange={(e)=>setForm(f=>({...f, status: e.target.value}))}>
                     <option>Pago</option>
                     <option>Pendente</option>
                     <option>Cancelado</option>

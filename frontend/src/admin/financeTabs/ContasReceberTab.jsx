@@ -15,36 +15,29 @@ import { BRL, isoToBR, toNumberBR } from '@/lib/br.js';
 const PATH = '/contas-receber';
 
 const emptyForm = {
-  vencimento: '',          // YYYY-MM-DD
-  dataEmissao: '',         // YYYY-MM-DD
-  dataBaixa: '',           // YYYY-MM-DD (opcional)
+  vencimento: '',      // YYYY-MM-DD
+  dataEmissao: '',     // YYYY-MM-DD
+  dataBaixa: '',       // YYYY-MM-DD
   cliente: '',
   notaFiscal: '',
   valorStr: '',
   taxasStr: '',
   docRecebimento: '',
-  valorLiquidoStr: '',     // pode ficar vazio; se Pago, vamos derivar
+  valorLiquidoStr: '',
   status: 'Pendente',
 };
 
 function normalizeStatus(any) {
   const raw = (any ?? '').toString().trim().toLowerCase();
-  if (raw === 'pago' || raw === 'paid' || raw === 'quitado' || raw === 'settled' || raw === '1' || raw === 'true') {
-    return 'Pago';
-  }
-  if (raw === 'cancelado' || raw === 'canceled' || raw === 'cancelled' || raw === 'estornado') {
-    return 'Cancelado';
-  }
-  if (raw === 'pendente' || raw === 'pending' || raw === '' || raw === '0' || raw === 'false' || raw === 'em aberto') {
-    return 'Pendente';
-  }
+  if (['pago','paid','quitado','settled','1','true'].includes(raw)) return 'Pago';
+  if (['cancelado','canceled','cancelled','estornado'].includes(raw)) return 'Cancelado';
+  if (['pendente','pending','','0','false','em aberto'].includes(raw)) return 'Pendente';
   return any ? String(any) : 'Pendente';
 }
-
 function StatusBadge({ value }) {
   const v = normalizeStatus(value);
-  if (v === 'Pago')      return <Badge className="bg-green-600">Pago</Badge>;
-  if (v === 'Pendente')  return <Badge className="bg-amber-600">Pendente</Badge>;
+  if (v === 'Pago') return <Badge className="bg-green-600">Pago</Badge>;
+  if (v === 'Pendente') return <Badge className="bg-amber-600">Pendente</Badge>;
   if (v === 'Cancelado') return <Badge className="bg-gray-500">Cancelado</Badge>;
   return <Badge className="bg-gray-500">{v}</Badge>;
 }
@@ -54,15 +47,11 @@ function decorate(row) {
   const taxas = Number(row?.taxasJuros ?? 0);
   let liq = Number(row?.valorLiqRecebido ?? row?.valorLiquidoRecebido ?? 0);
   const status = normalizeStatus(row?.status ?? row?.situacao ?? row?.paymentStatus);
-
-  if (status === 'Pago') {
-    if ((!row?.valorLiqRecebido && !row?.valorLiquidoRecebido) || isNaN(liq)) {
-      liq = Math.max(valor - taxas, 0);
-    }
-  } else {
+  if ((isNaN(liq) || (!row?.valorLiqRecebido && !row?.valorLiquidoRecebido)) && status === 'Pago') {
+    liq = Math.max(valor - taxas, 0);
+  } else if (status !== 'Pago') {
     liq = 0;
   }
-
   const aberto = Math.max(valor - liq, 0);
   return { ...row, status, _valor: valor, _liq: liq, _aberto: aberto, _taxas: taxas };
 }
@@ -91,7 +80,6 @@ export default function ContasReceberTab() {
       setLoading(false);
     }
   };
-
   useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
@@ -121,12 +109,7 @@ export default function ContasReceberTab() {
     return { total, recebido, emAberto, atrasados };
   }, [rows]);
 
-  const openNew = () => {
-    setEditing(null);
-    setForm(emptyForm);
-    setOpen(true);
-  };
-
+  const openNew = () => { setEditing(null); setForm(emptyForm); setOpen(true); };
   const openEdit = (row) => {
     setEditing(row);
     setForm({
@@ -138,22 +121,14 @@ export default function ContasReceberTab() {
       valorStr: (row.valor ?? row.amount ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
       taxasStr: (row.taxasJuros ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
       docRecebimento: row.documentoRecebimento || row.docRecebimento || '',
-      valorLiquidoStr: (row.valorLiqRecebido ?? row.valorLiquidoRecebido ?? '')
-        .toString()
-        .replace('.', ','),
+      valorLiquidoStr: (row.valorLiqRecebido ?? row.valorLiquidoRecebido ?? '').toString().replace('.', ','),
       status: normalizeStatus(row.status || 'Pendente'),
     });
     setOpen(true);
   };
-
   const remove = async (id) => {
     if (!confirm('Remover este lançamento?')) return;
-    try {
-      await api.delete(`${PATH}/${id}`);
-      await load();
-    } catch (e) {
-      console.error('Erro ao remover conta a receber', e);
-    }
+    try { await api.delete(`${PATH}/${id}`); await load(); } catch (e) { console.error(e); }
   };
 
   const submit = async (e) => {
@@ -169,38 +144,31 @@ export default function ContasReceberTab() {
 
       if (status === 'Pago') {
         if (!valorLiquido) valorLiquido = Math.max(valor - taxas, 0);
-        if (!dataBaixa) dataBaixa = form.vencimento; // default = vencimento
+        if (!dataBaixa) dataBaixa = form.vencimento;
       } else {
         valorLiquido = 0;
       }
 
       const payload = {
-        vencimento: form.vencimento,           // YYYY-MM-DD
-        dataEmissao: form.dataEmissao || null, // YYYY-MM-DD | null
-        dataBaixa: dataBaixa || null,          // YYYY-MM-DD | null
+        vencimento: form.vencimento,
+        dataEmissao: form.dataEmissao || null,
+        dataBaixa: dataBaixa || null,
         cliente: form.cliente || null,
         notaFiscal: form.notaFiscal || null,
-        valor,                                  // number
-        taxasJuros: taxas,                      // number
+        valor,
+        taxasJuros: taxas,
         documentoRecebimento: form.docRecebimento || null,
-        valorLiqRecebido: valorLiquido,         // derivado
-        status,                                 // já normalizado
+        valorLiqRecebido: valorLiquido,
+        status,
       };
 
-      if (editing?.id) {
-        await api.put(`${PATH}/${editing.id}`, payload);
-      } else {
-        await api.post(PATH, payload);
-      }
-      setOpen(false);
-      setEditing(null);
-      setForm(emptyForm);
-      await load();
+      if (editing?.id) await api.put(`${PATH}/${editing.id}`, payload);
+      else await api.post(PATH, payload);
+
+      setOpen(false); setEditing(null); setForm(emptyForm); await load();
     } catch (e) {
       console.error('Erro ao salvar conta a receber', e);
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   return (
@@ -327,15 +295,15 @@ export default function ContasReceberTab() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <Label>Vencimento</Label>
-                  <Input type="date" value={form.vencimento} onChange={(e)=>setForm(f=>({...f, vencimento: e.target.value}))} />
+                  <Input lang="pt-BR" type="date" value={form.vencimento} onChange={(e)=>setForm(f=>({...f, vencimento: e.target.value}))} />
                 </div>
                 <div>
                   <Label>Emissão</Label>
-                  <Input type="date" value={form.dataEmissao} onChange={(e)=>setForm(f=>({...f, dataEmissao: e.target.value}))} />
+                  <Input lang="pt-BR" type="date" value={form.dataEmissao} onChange={(e)=>setForm(f=>({...f, dataEmissao: e.target.value}))} />
                 </div>
                 <div>
                   <Label>Baixa (se pago)</Label>
-                  <Input type="date" value={form.dataBaixa} onChange={(e)=>setForm(f=>({...f, dataBaixa: e.target.value}))} />
+                  <Input lang="pt-BR" type="date" value={form.dataBaixa} onChange={(e)=>setForm(f=>({...f, dataBaixa: e.target.value}))} />
                 </div>
 
                 <div className="sm:col-span-2">
@@ -349,27 +317,15 @@ export default function ContasReceberTab() {
 
                 <div>
                   <Label>Valor</Label>
-                  <Input
-                    placeholder="0,00"
-                    value={form.valorStr}
-                    onChange={(e)=>setForm(f=>({...f, valorStr: e.target.value}))}
-                  />
+                  <Input placeholder="0,00" value={form.valorStr} onChange={(e)=>setForm(f=>({...f, valorStr: e.target.value}))} />
                 </div>
                 <div>
                   <Label>Taxas/Juros</Label>
-                  <Input
-                    placeholder="0,00"
-                    value={form.taxasStr}
-                    onChange={(e)=>setForm(f=>({...f, taxasStr: e.target.value}))}
-                  />
+                  <Input placeholder="0,00" value={form.taxasStr} onChange={(e)=>setForm(f=>({...f, taxasStr: e.target.value}))} />
                 </div>
                 <div>
                   <Label>Líquido Recebido (opcional)</Label>
-                  <Input
-                    placeholder="0,00"
-                    value={form.valorLiquidoStr}
-                    onChange={(e)=>setForm(f=>({...f, valorLiquidoStr: e.target.value}))}
-                  />
+                  <Input placeholder="0,00" value={form.valorLiquidoStr} onChange={(e)=>setForm(f=>({...f, valorLiquidoStr: e.target.value}))} />
                 </div>
 
                 <div className="sm:col-span-2">
@@ -379,11 +335,7 @@ export default function ContasReceberTab() {
 
                 <div>
                   <Label>Status</Label>
-                  <select
-                    className="w-full border rounded-md px-3 py-2"
-                    value={form.status}
-                    onChange={(e)=>setForm(f=>({...f, status: e.target.value}))}
-                  >
+                  <select className="w-full border rounded-md px-3 py-2" value={form.status} onChange={(e)=>setForm(f=>({...f, status: e.target.value}))}>
                     <option>Pago</option>
                     <option>Pendente</option>
                     <option>Cancelado</option>
