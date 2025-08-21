@@ -1,99 +1,56 @@
 # backend/src/main.py
-import os
-import sys
-import logging
+import os, sys, logging
 from dotenv import load_dotenv
-
 load_dotenv()
 
-# -----------------------
-# Import path (garante "src" importável)
-# -----------------------
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.join(backend_dir, "src")
 for p in (backend_dir, src_dir):
-    if p not in sys.path:
-        sys.path.insert(0, p)
+    if p not in sys.path: sys.path.insert(0, p)
 
 from flask import Flask, jsonify, redirect, request
+from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from werkzeug.exceptions import RequestEntityTooLarge
 
-
 def create_app():
     app = Flask(__name__)
-
-    # -----------------------
-    # Configs
-    # -----------------------
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "asdf#FGSgvasgf$5$WGT")
     app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "jwt-secret-string-change-in-production")
-    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = False  # token sem expirar
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = False
     app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 25 * 1024 * 1024))
     app.config["JSON_SORT_KEYS"] = False
     app.config["PROPAGATE_EXCEPTIONS"] = True
 
-    # Logging
     logging.basicConfig(
         level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     log = logging.getLogger(__name__)
 
-    JWTManager(app)
-
-    # -----------------------
-    # CORS Global (sem depender de extensão)
-    # -----------------------
-    default_origins = [
+    # CORS (como no teu projeto antigo)
+    allowed_origins = [
+        "*",
         "https://www.panfletagemrelampago.com.br",
         "https://panfletagemrelampago.com.br",
         "https://site-gestao.onrender.com",
         "https://site-gestao-mu.vercel.app",
         "http://localhost:5173",
         "http://localhost:3000",
-        "http://localhost",
     ]
-    env_origins = [o.strip() for o in os.getenv("ORIGINS", "").split(",") if o.strip()]
-    ALLOWED_ORIGINS = set(env_origins or default_origins)
+    CORS(
+        app,
+        resources={r"/api/*": {"origins": allowed_origins}},
+        supports_credentials=False,
+        methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+        allow_headers=["Content-Type","Authorization"],
+        expose_headers=["Content-Type","Authorization"],
+        max_age=86400,
+    )
 
-    def _pick_allow_origin(req_origin: str | None) -> str | None:
-        if not req_origin:
-            return None
-        if req_origin in ALLOWED_ORIGINS:
-            return req_origin
-        if req_origin.endswith(".panfletagemrelampago.com.br"):
-            return req_origin
-        return None
+    JWTManager(app)
 
-    @app.after_request
-    def _force_cors_headers(resp):
-        origin = request.headers.get("Origin")
-        allow = _pick_allow_origin(origin)
-        if allow:
-            resp.headers["Access-Control-Allow-Origin"] = allow
-            resp.headers["Vary"] = "Origin"
-            resp.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-            resp.headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type"
-            resp.headers["Access-Control-Max-Age"] = "86400"
-        return resp
-
-    @app.route("/api/<path:any_path>", methods=["OPTIONS"])
-    def api_preflight(any_path):
-        origin = request.headers.get("Origin")
-        allow = _pick_allow_origin(origin)
-        resp = jsonify({"ok": True})
-        if allow:
-            resp.headers["Access-Control-Allow-Origin"] = allow
-            resp.headers["Vary"] = "Origin"
-            resp.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-            resp.headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type"
-            resp.headers["Access-Control-Max-Age"] = "86400"
-        return resp, 204
-
-    # -----------------------
-    # Imports tardios
-    # -----------------------
+    # blueprints (iguais ao antigo)
     from src.routes.auth import auth_bp
     from src.routes.client import client_bp
     from src.routes.material import material_bp
@@ -105,9 +62,6 @@ def create_app():
     from src.routes.finance import finance_bp
     from src.services.user_service import ensure_admin_seed
 
-    # -----------------------
-    # Blueprints
-    # -----------------------
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(client_bp, url_prefix="/api")
     app.register_blueprint(material_bp, url_prefix="/api")
@@ -116,57 +70,36 @@ def create_app():
     app.register_blueprint(metrics_bp, url_prefix="/api/metrics")
     app.register_blueprint(upload_bp, url_prefix="/api")
     app.register_blueprint(user_bp, url_prefix="/api")
-    app.register_blueprint(finance_bp, url_prefix="/api")  # /api/transactions e /api/contas-*
+    app.register_blueprint(finance_bp, url_prefix="/api")  # /api/transactions + aliases
 
-    # -----------------------
-    # Healthcheck
-    # -----------------------
     @app.get("/healthcheck")
-    def healthcheck_root():
-        return jsonify({"status": "ok"}), 200
+    def healthcheck_root(): return jsonify({"status":"ok"}), 200
 
-    @app.route("/api/healthcheck", methods=["GET", "HEAD", "OPTIONS"])
-    def healthcheck_api():
-        return jsonify({"status": "ok"}), 200
+    @app.route("/api/healthcheck", methods=["GET","HEAD","OPTIONS"])
+    def healthcheck_api(): return jsonify({"status":"ok"}), 200
 
-    # -----------------------
-    # Aliases de métricas
-    # -----------------------
-    @app.route("/api/monthly-campaigns", methods=["GET", "POST", "OPTIONS", "HEAD"])
-    def alias_monthly_campaigns():
-        return redirect("/api/metrics/monthly-campaigns", code=307)
+    @app.route("/api/monthly-campaigns", methods=["GET","POST","OPTIONS","HEAD"])
+    def alias_monthly_campaigns(): return redirect("/api/metrics/monthly-campaigns", code=307)
 
-    @app.route("/api/service-distribution", methods=["GET", "OPTIONS", "HEAD"])
-    def alias_service_distribution():
-        return redirect("/api/metrics/service-distribution", code=307)
+    @app.route("/api/service-distribution", methods=["GET","OPTIONS","HEAD"])
+    def alias_service_distribution(): return redirect("/api/metrics/service-distribution", code=307)
 
-    # -----------------------
-    # Error Handlers
-    # -----------------------
     @app.errorhandler(404)
-    def handle_404(e):
-        return jsonify(error="not_found"), 404
+    def handle_404(e): return jsonify(error="not_found"), 404
 
     @app.errorhandler(RequestEntityTooLarge)
-    def handle_file_too_large(e):
-        return jsonify(error="file_too_large", max_bytes=app.config["MAX_CONTENT_LENGTH"]), 413
+    def handle_413(e): return jsonify(error="file_too_large", max_bytes=app.config["MAX_CONTENT_LENGTH"]), 413
 
     @app.errorhandler(500)
     def handle_500(e):
-        log.exception("Internal server error on %s %s", request.method, request.path)
+        log.exception("internal error on %s %s", request.method, request.path)
         return jsonify(error="internal_server_error"), 500
 
-    # -----------------------
-    # Seed admin
-    # -----------------------
     with app.app_context():
-        try:
-            ensure_admin_seed()
-        except Exception as se:
-            log.exception("ensure_admin_seed failed: %s", se)
+        try: ensure_admin_seed()
+        except Exception as se: log.exception("ensure_admin_seed failed: %s", se)
 
     return app
-
 
 app = create_app()
 
