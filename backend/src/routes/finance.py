@@ -1,161 +1,429 @@
 # backend/src/routes/finance.py
-from __future__ import annotations
+import os
+import json
+import base64
+import uuid
+import logging
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
-import math
-from datetime import datetime, date
-from typing import Any, Dict, List, Optional, Tuple
+from flask import Blueprint, request, jsonify, Response
+from flask_jwt_extended import get_jwt_identity
+from src.middleware.auth_middleware import roles_allowed
 
-from flask import Blueprint, jsonify, request
-
-# ------------------------------------------------------------
-# Firestore
-# ------------------------------------------------------------
-# Usa o mesmo wrapper de Firestore do seu projeto (ex.: clients, materials)
-# Certifique-se de que src/services/firebase.py expõe "db" (google.cloud.firestore.Client)
-try:
-    from src.services.firebase import db  # type: ignore
-except Exception as e:
-    raise RuntimeError(
-        "Não foi possível importar Firestore. "
-        "Verifique se src/services/firebase.py expõe 'db' (instância do firestore.Client)."
-    ) from e
-
-
+log = logging.getLogger(__name__)
 finance_bp = Blueprint("finance", __name__)
 
-COLLECTION = "transactions"  # coleção única para entradas (receber) e saídas (pagar)
+# ============================ Constantes ============================
+_VALID_TYPES = {"entrada", "saida", "despesa"}
+_COLL = os.getenv("FINANCE_COLL", "finance_transactions")
+
+# Fallback JSON (volátil no plano grátis da Render)
+_JSON_PATH = os.getenv("FINANCE_JSON_PATH") or "/tmp/finance_transactions.json"
+
+# Firestore toggle
+_USE_FIRESTORE = (os.getenv("USE_FIRESTORE", "true").lower() in ("1", "true", "yes"))
+
+# CORS: FRONTEND_URL pode ter várias origens separadas por vírgula
+_ALLOWED_ORIGINS = set(
+    [o.strip() for o in (os.getenv("FRONTEND_URL") or "").split(",") if o.strip()]
+)
+_DEFAULT_ALLOW_ORIGIN = "*" if not _ALLOWED_ORIGINS else None
 
 
-# ------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------
-def _now_iso() -> str:
-    return datetime.utcnow().isoformat(timespec="seconds") + "Z"
-
-
-def _iso_date_only(d: Any) -> Optional[str]:
-    """
-    Converte diversos formatos para 'YYYY-MM-DD'.
-    Aceita: 'YYYY-MM-DD', 'DD/MM/YYYY', datetime/date, ISO com 'T'.
-    """
-    if not d:
-        return None
-    if isinstance(d, date):
+# ============================ Utils gerais =============================
+def _iso_date_only(val) -> str:
+    """Normaliza para YYYY-MM-DD; retorna '' se inválida."""
+    s = str(val or "")[:10]
+    try:
+        d = datetime.strptime(s, "%Y-%m-%d")
         return d.strftime("%Y-%m-%d")
-
-    s = str(d).strip()
-    # Tentativas em ordem
-    fmts = ("%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%fZ")
-    for fmt in fmts:
+    except Exception:
+        # tenta DD/MM/AAAA
         try:
-            # se vier com T, corta para 19 chars p/ o formato com segundos
-            dt = datetime.strptime(s[:19], fmt) if "T" in s else datetime.strptime(s, fmt)
-            return dt.strftime("%Y-%m-%d")
+            d = datetime.strptime(str(val or ""), "%d/%m/%Y")
+            return d.strftime("%Y-%m-%d")
         except Exception:
-            continue
-    return None
+            return ""
 
 
-def _to_number(v: Any) -> float:
+def _to_number(v):
     if v is None or v == "":
         return 0.0
     if isinstance(v, (int, float)):
         return float(v)
     s = str(v).strip()
-    # trata números no formato brasileiro
+    # BR -> EN
     s = s.replace(".", "").replace(",", ".")
     try:
         return float(s)
     except Exception:
-        # fallback bruto
         try:
             return float(v)
         except Exception:
             return 0.0
 
 
-def _doc_to_dict(doc) -> Dict[str, Any]:
-    data = doc.to_dict() or {}
-    data["id"] = doc.id
-    # normaliza date para 'YYYY-MM-DD' (se armazenado de outro jeito)
-    if "date" in data:
-        data["date"] = _iso_date_only(data.get("date")) or data.get("date")
-    # normaliza amount para float
-    if "amount" in data and not isinstance(data["amount"], (int, float)):
-        data["amount"] = _to_number(data["amount"])
-    return data
+def _month_range(ym: str) -> Optional[tuple[str, str]]:
+    """Recebe YYYY-MM e retorna (YYYY-MM-01, YYYY-MM-último)"""
+    if not ym or len(ym) != 7 or "-" not in ym:
+        return None
+    y, m = ym.split("-")
+    try:
+        y, m = int(y), int(m)
+        start = datetime(y, m, 1)
+        if m == 12:
+            end = datetime(y + 1, 1, 1) - timedelta(days=1)
+        else:
+            end = datetime(y, m + 1, 1) - timedelta(days=1)
+        return (start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+    except Exception:
+        return None
 
 
-def _apply_text_search(items: List[Dict[str, Any]], term: str) -> List[Dict[str, Any]]:
-    if not term:
-        return items
-    term_low = term.lower()
-    out = []
-    for it in items:
-        notes = str(it.get("notes") or "").lower()
-        category = str(it.get("category") or "").lower()
-        if term_low in notes or term_low in category:
-            out.append(it)
+def _decode_b64_json(b64) -> Optional[dict]:
+    try:
+        raw = base64.b64decode(b64).decode("utf-8")
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+# ============================ Firestore I/O ============================
+_fs_client = None
+_fs_ready: Optional[bool] = None
+
+def _get_firestore():
+    """Inicializa Firestore com FIREBASE_CREDENTIALS_B64 ou GOOGLE_APPLICATION_CREDENTIALS_JSON."""
+    global _fs_client, _fs_ready
+
+    if not _USE_FIRESTORE:
+        _fs_ready = False
+        return None
+
+    if _fs_ready is not None:
+        return _fs_client if _fs_ready else None
+
+    try:
+        from google.cloud import firestore  # type: ignore
+    except Exception as e:
+        log.warning("[finance] google-cloud-firestore não instalado: %s", e)
+        _fs_ready = False
+        return None
+
+    try:
+        b64 = os.getenv("FIREBASE_CREDENTIALS_B64")
+        if b64:
+            from google.oauth2 import service_account  # type: ignore
+            info = _decode_b64_json(b64)
+            if not info:
+                raise RuntimeError("FIREBASE_CREDENTIALS_B64 inválido")
+            creds = service_account.Credentials.from_service_account_info(info)
+            project = info.get("project_id") or os.getenv("FIREBASE_PROJECT_ID")
+            _client = firestore.Client(credentials=creds, project=project)
+            _fs_ready = True
+            _fs_client = _client
+            return _fs_client
+
+        gac_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+        if gac_json:
+            from google.oauth2 import service_account  # type: ignore
+            info = json.loads(gac_json)
+            creds = service_account.Credentials.from_service_account_info(info)
+            _client = firestore.Client(credentials=creds, project=info.get("project_id"))
+            _fs_ready = True
+            _fs_client = _client
+            return _fs_client
+
+        _client = firestore.Client()
+        _fs_ready = True
+        _fs_client = _client
+        return _fs_client
+
+    except Exception as e:
+        log.warning("[finance] Firestore indisponível: %s (usando fallback JSON)", e)
+        _fs_ready = False
+        _fs_client = None
+        return None
+
+
+# ========================== Fallback JSON I/O ====================
+def _json_load() -> List[Dict[str, Any]]:
+    try:
+        if not os.path.exists(_JSON_PATH):
+            return []
+        with open(_JSON_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        log.exception("[finance] erro lendo JSON: %s", e)
+        return []
+
+
+def _json_save(items: List[Dict[str, Any]]) -> None:
+    try:
+        with open(_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False)
+    except Exception as e:
+        log.exception("[finance] erro salvando JSON: %s", e)
+
+
+# ============================ FS helpers ============================
+def _doc_to_json(d: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(d)
+    out["amount"] = _to_number(out.get("amount"))
+    if out.get("date"):
+        out["date"] = _iso_date_only(out["date"]) or out["date"]
     return out
 
 
-def _apply_date_range(items: List[Dict[str, Any]], date_from: Optional[str], date_to: Optional[str]) -> List[Dict[str, Any]]:
-    if not date_from and not date_to:
-        return items
+def _fs_list(ttype: str, action_id: str, month: str) -> List[Dict[str, Any]]:
+    client = _get_firestore()
+    if not client:
+        return _json_load()
 
-    def _in_range(dstr: Optional[str]) -> bool:
-        if not dstr:
-            return False
-        if date_from and dstr < date_from:
-            return False
-        if date_to and dstr > date_to:
-            return False
+    try:
+        coll = client.collection(_COLL)
+        docs = [d.to_dict() for d in coll.stream()]
+        items = []
+        for d in docs:
+            it = {
+                "id": d.get("id") or d.get("doc_id") or d.get("uuid"),
+                "type": d.get("type"),
+                "date": d.get("date"),
+                "amount": _to_number(d.get("amount")),
+                "category": d.get("category") or "",
+                "notes": d.get("notes") or "",
+                "action_id": d.get("action_id"),
+                "created_by": d.get("created_by"),
+                "created_at": d.get("created_at"),
+            }
+            items.append(_doc_to_json(it))
+
+        if ttype in _VALID_TYPES:
+            items = [x for x in items if (x.get("type") or "") == ttype]
+        if action_id:
+            items = [x for x in items if str(x.get("action_id") or "") == action_id]
+        if month:
+            r = _month_range(month)
+            if r:
+                a, b = r
+                items = [x for x in items if a <= (x.get("date") or "") <= b]
+
+        # ordena por date desc, created_at desc
+        items.sort(key=lambda x: ((x.get("date") or ""), (x.get("created_at") or "")), reverse=True)
+        return items
+    except Exception as e:
+        log.exception("[finance][fs_list] falha: %s", e)
+        return _json_load()
+
+
+def _fs_create(doc: Dict[str, Any]) -> Dict[str, Any]:
+    client = _get_firestore()
+    if not client:
+        items = _json_load()
+        items.append(doc)
+        _json_save(items)
+        return doc
+
+    try:
+        client.collection(_COLL).document(doc["id"]).set(doc)
+        return doc
+    except Exception as e:
+        log.exception("[finance][fs_create] falha: %s", e)
+        items = _json_load()
+        items.append(doc)
+        _json_save(items)
+        return doc
+
+
+def _fs_update(txid: str, upd: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    client = _get_firestore()
+    if not client:
+        items = _json_load()
+        for i, it in enumerate(items):
+            if str(it.get("id")) == str(txid):
+                items[i].update(upd)
+                _json_save(items)
+                return items[i]
+        return None
+
+    try:
+        ref = client.collection(_COLL).document(txid)
+        if not ref.get().exists:
+            return None
+        ref.update(upd)
+        return ref.get().to_dict()
+    except Exception as e:
+        log.exception("[finance][fs_update] falha: %s", e)
+        return None
+
+
+def _fs_delete(txid: str) -> bool:
+    client = _get_firestore()
+    if not client:
+        items = _json_load()
+        new_items = [x for x in items if str(x.get("id")) != str(txid)]
+        _json_save(new_items)
         return True
 
-    return [it for it in items if _in_range(_iso_date_only(it.get("date")))]
+    try:
+        ref = client.collection(_COLL).document(txid)
+        if not ref.get().exists:
+            return True
+        ref.delete()
+        return True
+    except Exception as e:
+        log.exception("[finance][fs_delete] falha: %s", e)
+        items = _json_load()
+        new_items = [x for x in items if str(x.get("id")) != str(txid)]
+        _json_save(new_items)
+        return True
 
 
-def _sort_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    # Ordena por date desc + created_at desc (se houver)
-    def _key(it):
-        d = _iso_date_only(it.get("date")) or ""
-        ca = str(it.get("created_at") or "")
-        return (d, ca)
+# ============================== CORS ===================================
+@finance_bp.after_request
+def _add_cors_headers(resp: Response):
+    origin = request.headers.get("Origin")
+    allow = _DEFAULT_ALLOW_ORIGIN
+    if origin and _ALLOWED_ORIGINS:
+        if origin in _ALLOWED_ORIGINS:
+            allow = origin
+        else:
+            log.debug("[finance][CORS] origem não permitida: %s", origin)
 
-    return sorted(items, key=_key, reverse=True)
+    if allow:
+        resp.headers["Access-Control-Allow-Origin"] = allow
+        resp.headers["Vary"] = "Origin"
+        resp.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type"
+        resp.headers["Access-Control-Max-Age"] = "86400"
+    return resp
 
 
-# ----------------- Mapeamentos de payload (front → Firestore) -----------------
-def _map_payable_to_tx_payload(data: dict) -> dict:
+# ============================ Rotas genéricas ============================
+@finance_bp.route("/finance/transactions", methods=["GET"])
+@finance_bp.route("/transactions", methods=["GET"])
+@roles_allowed('admin')
+def list_transactions():
     """
-    Contas a Pagar → documento em COLLECTION (type='saida').
-    Front envia (geralmente): vencimento, valor, descricao, categoria, action_id
+    Query params:
+      - type: entrada|saida|despesa
+      - action_id: string
+      - month: YYYY-MM (opcional, atalho de range)
     """
-    date_norm = _iso_date_only(
-        data.get("vencimento") or data.get("date") or data.get("data")
-    ) or _iso_date_only(datetime.utcnow().date())
-    amount = abs(_to_number(data.get("valor") if data.get("valor") is not None else data.get("amount")))
+    try:
+        ttype = (request.args.get("type") or "").strip().lower()
+        action_id = (request.args.get("action_id") or "").strip()
+        month = (request.args.get("month") or "").strip()
+
+        items = _fs_list(ttype, action_id, month)
+        return jsonify(items), 200
+    except Exception as e:
+        log.exception("[finance][GET] falha: %s", e)
+        return jsonify({"message": "internal_error"}), 500
+
+
+@finance_bp.route("/finance/transactions", methods=["POST"])
+@finance_bp.route("/transactions", methods=["POST"])
+@roles_allowed('admin')
+def create_transaction():
+    try:
+        data = request.get_json(silent=True) or {}
+
+        # permite que alias injete json mapeado
+        if hasattr(request, "_cached_json") and isinstance(request._cached_json, dict):
+            data = request._cached_json
+
+        ttype = str(data.get("type", "")).lower().strip()
+        if ttype not in _VALID_TYPES:
+            return jsonify({"message": "type inválido (entrada, saida, despesa)"}), 400
+
+        date = _iso_date_only(data.get("date"))
+        if not date:
+            return jsonify({"message": "date inválida (YYYY-MM-DD)"}), 400
+
+        doc = {
+            "id": str(uuid.uuid4()),
+            "type": ttype,
+            "date": date,
+            "amount": abs(_to_number(data.get("amount"))),
+            "category": (data.get("category") or "").strip(),
+            "notes": (data.get("notes") or "").strip(),
+            "action_id": (data.get("action_id") or "").strip() or None,
+            "created_by": get_jwt_identity(),
+            "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+
+        saved = _fs_create(doc)
+        return jsonify(_doc_to_json(saved)), 201
+    except Exception as e:
+        log.exception("[finance][POST] falha: %s", e)
+        return jsonify({"message": "internal_error"}), 500
+
+
+@finance_bp.route("/finance/transactions/<txid>", methods=["PUT", "PATCH"])
+@finance_bp.route("/transactions/<txid>", methods=["PUT", "PATCH"])
+@roles_allowed('admin')
+def update_transaction(txid: str):
+    try:
+        data = request.get_json(silent=True) or {}
+        upd: Dict[str, Any] = {}
+
+        if "type" in data:
+            t = str(data["type"]).lower()
+            if t in _VALID_TYPES:
+                upd["type"] = t
+        if "date" in data:
+            d = _iso_date_only(data["date"])
+            if d:
+                upd["date"] = d
+        if "amount" in data:
+            upd["amount"] = abs(_to_number(data["amount"]))
+        for k in ("category", "notes", "action_id"):
+            if k in data:
+                v = data[k]
+                upd[k] = (v or "").strip() if isinstance(v, str) else v
+
+        if not upd:
+            return jsonify({"message": "Nada para atualizar"}), 400
+
+        out = _fs_update(txid, upd)
+        if not out:
+            return jsonify({"message": "Transação não encontrada"}), 404
+        return jsonify(_doc_to_json(out)), 200
+    except Exception as e:
+        log.exception("[finance][PUT] falha: %s", e)
+        return jsonify({"message": "internal_error"}), 500
+
+
+@finance_bp.route("/finance/transactions/<txid>", methods=["DELETE"])
+@finance_bp.route("/transactions/<txid>", methods=["DELETE"])
+@roles_allowed('admin')
+def delete_transaction(txid: str):
+    try:
+        _fs_delete(txid)
+        return ("", 204)
+    except Exception as e:
+        log.exception("[finance][DELETE] falha: %s", e)
+        return jsonify({"message": "internal_error"}), 500
+
+
+# ============================ Aliases (Pagar/Receber) ============================
+def _map_payable_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Mapeia payload do front → /transactions para Contas a Pagar (type='saida')."""
     return {
         "type": "saida",
-        "date": date_norm,
-        "amount": amount,
-        "category": (data.get("categoria") or data.get("category") or "conta_pagar"),
+        "date": _iso_date_only(data.get("vencimento") or data.get("date") or data.get("data")),
+        "amount": abs(_to_number(data.get("valor") if data.get("valor") is not None else data.get("amount"))),
+        "category": (data.get("categoria") or data.get("category") or "conta_pagar").strip(),
         "notes": (data.get("descricao") or data.get("notes") or "").strip(),
-        "action_id": (data.get("action_id") or None),
-        "created_at": _now_iso(),
-        "updated_at": _now_iso(),
+        "action_id": (data.get("action_id") or "").strip() or None,
     }
 
 
-def _map_receivable_to_tx_payload(data: dict) -> dict:
-    """
-    Contas a Receber → documento em COLLECTION (type='entrada').
-    Front envia (geralmente): vencimento, valor, descricao/cliente/notaFiscal, categoria, action_id
-    """
-    date_norm = _iso_date_only(
-        data.get("vencimento") or data.get("dataEmissao") or data.get("date") or data.get("data")
-    ) or _iso_date_only(datetime.utcnow().date())
-    amount = abs(_to_number(data.get("valor") if data.get("valor") is not None else data.get("amount")))
+def _map_receivable_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Mapeia payload do front → /transactions para Contas a Receber (type='entrada')."""
     notes = (
         data.get("descricao")
         or data.get("cliente")
@@ -165,203 +433,19 @@ def _map_receivable_to_tx_payload(data: dict) -> dict:
     )
     return {
         "type": "entrada",
-        "date": date_norm,
-        "amount": amount,
-        "category": (data.get("categoria") or data.get("category") or "conta_receber"),
+        "date": _iso_date_only(data.get("vencimento") or data.get("dataEmissao") or data.get("date") or data.get("data")),
+        "amount": abs(_to_number(data.get("valor") if data.get("valor") is not None else data.get("amount"))),
+        "category": (data.get("categoria") or data.get("category") or "conta_receber").strip(),
         "notes": notes.strip(),
-        "action_id": (data.get("action_id") or None),
-        "created_at": _now_iso(),
-        "updated_at": _now_iso(),
+        "action_id": (data.get("action_id") or "").strip() or None,
     }
 
 
-def _partial_update_from_alias(data: dict, force_type: Optional[str] = None) -> dict:
-    """
-    Atualização parcial vinda dos aliases. Converte campos comuns do front.
-    """
-    upd: Dict[str, Any] = {}
-    if any(k in data for k in ("vencimento", "date", "data", "dataEmissao")):
-        d = _iso_date_only(
-            data.get("vencimento") or data.get("dataEmissao") or data.get("date") or data.get("data")
-        )
-        if d:
-            upd["date"] = d
-    if any(k in data for k in ("valor", "amount")):
-        upd["amount"] = abs(_to_number(data.get("valor") if data.get("valor") is not None else data.get("amount")))
-    if any(k in data for k in ("descricao", "cliente", "notaFiscal", "notes")):
-        upd["notes"] = (
-            data.get("descricao")
-            or data.get("cliente")
-            or data.get("notaFiscal")
-            or data.get("notes")
-            or ""
-        ).strip()
-    if any(k in data for k in ("categoria", "category")):
-        upd["category"] = (data.get("categoria") or data.get("category") or "").strip()
-    if "action_id" in data:
-        upd["action_id"] = data.get("action_id") or None
-
-    if force_type in ("entrada", "saida"):
-        upd["type"] = force_type
-
-    if upd:
-        upd["updated_at"] = _now_iso()
-    return upd
-
-
-def _validate_tx_payload(payload: dict) -> Optional[Tuple[str, int]]:
-    """
-    Checagens simples de payload.
-    Retorna (mensagem, status) se inválido; caso contrário, None.
-    """
-    if payload.get("type") not in ("entrada", "saida"):
-        return ("type inválido (use 'entrada' ou 'saida')", 400)
-    if not _iso_date_only(payload.get("date")):
-        return ("date inválido (use YYYY-MM-DD)", 400)
-    if _to_number(payload.get("amount")) <= 0:
-        return ("amount deve ser maior que zero", 400)
-    return None
-
-
-# ------------------------------------------------------------
-# Rotas genéricas: /transactions
-# ------------------------------------------------------------
-@finance_bp.route("/transactions", methods=["GET"])
-def list_transactions():
-    """
-    Filtros via querystring:
-      - type: 'entrada' | 'saida'
-      - date_from, date_to: YYYY-MM-DD
-      - category: str
-      - q: busca textual (notes/category)
-      - limit (opcional, default 500)
-    """
-    qs = request.args or {}
-    typ = qs.get("type")
-    date_from = _iso_date_only(qs.get("date_from"))
-    date_to = _iso_date_only(qs.get("date_to"))
-    category = qs.get("category")
-    term = (qs.get("q") or "").strip()
-    limit = int(qs.get("limit") or 500)
-    limit = max(1, min(limit, 2000))  # saneamento
-
-    # Firestore: preferimos compor por igualdades e filtrar range em memória (para flexibilidade)
-    col = db.collection(COLLECTION)
-    query = col
-    if typ in ("entrada", "saida"):
-        query = query.where("type", "==", typ)
-    if category:
-        query = query.where("category", "==", category)
-
-    docs = list(query.stream())
-    items = [_doc_to_dict(d) for d in docs]
-
-    # Filtros complementares em memória
-    items = _apply_date_range(items, date_from, date_to)
-    if term:
-        items = _apply_text_search(items, term)
-
-    items = _sort_items(items)
-    if limit:
-        items = items[:limit]
-
-    return jsonify({"items": items, "count": len(items)}), 200
-
-
-@finance_bp.route("/transactions", methods=["POST"])
-def create_transaction():
-    """
-    body esperado:
-      - type: 'entrada' | 'saida'  (obrigatório)
-      - date: 'YYYY-MM-DD'         (obrigatório)
-      - amount: number             (obrigatório > 0)
-      - category, notes, action_id (opcional)
-    """
-    data = (request.get_json(silent=True) or {})
-    payload = {
-        "type": (data.get("type") or "").strip(),
-        "date": _iso_date_only(data.get("date")) or _iso_date_only(datetime.utcnow().date()),
-        "amount": abs(_to_number(data.get("amount"))),
-        "category": (data.get("category") or None),
-        "notes": (data.get("notes") or None),
-        "action_id": (data.get("action_id") or None),
-        "created_at": _now_iso(),
-        "updated_at": _now_iso(),
-    }
-    invalid = _validate_tx_payload(payload)
-    if invalid:
-        msg, code = invalid
-        return jsonify({"message": msg}), code
-
-    ref = db.collection(COLLECTION).add(payload)
-    # ref = (update_time, doc_ref)
-    doc_id = ref[1].id
-    return jsonify({"id": doc_id, **payload}), 201
-
-
-@finance_bp.route("/transactions/<string:txid>", methods=["PUT", 'PATCH'])
-def update_transaction(txid: str):
-    data = (request.get_json(silent=True) or {})
-    upd: Dict[str, Any] = {}
-
-    # mapeia campos já no formato "genérico"
-    if "type" in data and (data.get("type") in ("entrada", "saida")):
-        upd["type"] = data.get("type")
-
-    if "date" in data or "vencimento" in data or "data" in data or "dataEmissao" in data:
-        d = _iso_date_only(data.get("date") or data.get("vencimento") or data.get("data") or data.get("dataEmissao"))
-        if d:
-            upd["date"] = d
-
-    if "amount" in data or "valor" in data:
-        upd["amount"] = abs(_to_number(data.get("amount") if "amount" in data else data.get("valor")))
-
-    for k_src, k_dst in (("category", "category"), ("categoria", "category")):
-        if k_src in data:
-            upd[k_dst] = (data.get(k_src) or "").strip() or None
-
-    if any(k in data for k in ("notes", "descricao", "cliente", "notaFiscal")):
-        upd["notes"] = (
-            data.get("notes")
-            or data.get("descricao")
-            or data.get("cliente")
-            or data.get("notaFiscal")
-            or ""
-        ).strip() or None
-
-    if "action_id" in data:
-        upd["action_id"] = data.get("action_id") or None
-
-    if not upd:
-        return jsonify({"message": "Nada para atualizar"}), 400
-
-    upd["updated_at"] = _now_iso()
-
-    doc_ref = db.collection(COLLECTION).document(txid)
-    if not doc_ref.get().exists:
-        return jsonify({"message": "Transação não encontrada"}), 404
-
-    doc_ref.update(upd)
-    new_doc = doc_ref.get()
-    return jsonify(_doc_to_dict(new_doc)), 200
-
-
-@finance_bp.route("/transactions/<string:txid>", methods=["DELETE"])
-def delete_transaction(txid: str):
-    doc_ref = db.collection(COLLECTION).document(txid)
-    if not doc_ref.get().exists:
-        return jsonify({"message": "Transação não encontrada"}), 404
-    doc_ref.delete()
-    return ("", 204)
-
-
-# ------------------------------------------------------------
-# Aliases: /contas-pagar (type='saida') e /contas-receber (type='entrada')
-# ------------------------------------------------------------
-# LISTAR
+# ------ LISTAR ------
 @finance_bp.route("/contas-pagar", methods=["GET"])
+@roles_allowed('admin')
 def listar_contas_pagar():
-    # Reaproveita listagem genérica com type=saida
+    # Reusa a listagem genérica com type=saida
     args = request.args.to_dict(flat=True)
     args["type"] = "saida"
     with finance_bp.test_request_context(query_string=args):
@@ -369,6 +453,7 @@ def listar_contas_pagar():
 
 
 @finance_bp.route("/contas-receber", methods=["GET"])
+@roles_allowed('admin')
 def listar_contas_receber():
     args = request.args.to_dict(flat=True)
     args["type"] = "entrada"
@@ -376,72 +461,70 @@ def listar_contas_receber():
         return list_transactions()
 
 
-# CRIAR
+# ------ CRIAR ------
 @finance_bp.route("/contas-pagar", methods=["POST"])
+@roles_allowed('admin')
 def criar_conta_pagar():
     data = request.get_json(silent=True) or {}
-    payload = _map_payable_to_tx_payload(data)
-    invalid = _validate_tx_payload(payload)
-    if invalid:
-        msg, code = invalid
-        return jsonify({"message": msg}), code
-    ref = db.collection(COLLECTION).add(payload)
-    return jsonify({"id": ref[1].id, **payload}), 201
+    mapped = _map_payable_payload(data)
+    if not mapped.get("date"):
+        return jsonify({"message": "vencimento/date inválido (YYYY-MM-DD)"}), 400
+    request._cached_json = mapped
+    return create_transaction()
 
 
 @finance_bp.route("/contas-receber", methods=["POST"])
+@roles_allowed('admin')
 def criar_conta_receber():
     data = request.get_json(silent=True) or {}
-    payload = _map_receivable_to_tx_payload(data)
-    invalid = _validate_tx_payload(payload)
-    if invalid:
-        msg, code = invalid
-        return jsonify({"message": msg}), code
-    ref = db.collection(COLLECTION).add(payload)
-    return jsonify({"id": ref[1].id, **payload}), 201
+    mapped = _map_receivable_payload(data)
+    if not mapped.get("date"):
+        return jsonify({"message": "vencimento/date inválido (YYYY-MM-DD)"}), 400
+    request._cached_json = mapped
+    return create_transaction()
 
 
-# ATUALIZAR
-@finance_bp.route("/contas-pagar/<string:txid>", methods=["PUT", "PATCH"])
+# ------ ATUALIZAR ------
+@finance_bp.route("/contas-pagar/<txid>", methods=["PUT", "PATCH"])
+@roles_allowed('admin')
 def atualizar_conta_pagar(txid: str):
     data = request.get_json(silent=True) or {}
-    upd = _partial_update_from_alias(data, force_type="saida")
+    # monta update parcial
+    upd = _map_payable_payload(data)
+    # remove campos não enviados
+    upd = {k: v for k, v in upd.items() if k in data or k in ("type",)}
     if not upd:
         return jsonify({"message": "Nada para atualizar"}), 400
-    doc_ref = db.collection(COLLECTION).document(txid)
-    if not doc_ref.get().exists:
+    out = _fs_update(txid, {**upd, "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")})
+    if not out:
         return jsonify({"message": "Transação não encontrada"}), 404
-    doc_ref.update(upd)
-    return jsonify(_doc_to_dict(doc_ref.get())), 200
+    return jsonify(_doc_to_json(out)), 200
 
 
-@finance_bp.route("/contas-receber/<string:txid>", methods=["PUT", "PATCH"])
+@finance_bp.route("/contas-receber/<txid>", methods=["PUT", "PATCH"])
+@roles_allowed('admin')
 def atualizar_conta_receber(txid: str):
     data = request.get_json(silent=True) or {}
-    upd = _partial_update_from_alias(data, force_type="entrada")
+    upd = _map_receivable_payload(data)
+    upd = {k: v for k, v in upd.items() if k in data or k in ("type",)}
     if not upd:
         return jsonify({"message": "Nada para atualizar"}), 400
-    doc_ref = db.collection(COLLECTION).document(txid)
-    if not doc_ref.get().exists:
+    out = _fs_update(txid, {**upd, "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")})
+    if not out:
         return jsonify({"message": "Transação não encontrada"}), 404
-    doc_ref.update(upd)
-    return jsonify(_doc_to_dict(doc_ref.get())), 200
+    return jsonify(_doc_to_json(out)), 200
 
 
-# DELETAR
-@finance_bp.route("/contas-pagar/<string:txid>", methods=["DELETE"])
+# ------ DELETAR ------
+@finance_bp.route("/contas-pagar/<txid>", methods=["DELETE"])
+@roles_allowed('admin')
 def deletar_conta_pagar(txid: str):
-    doc_ref = db.collection(COLLECTION).document(txid)
-    if not doc_ref.get().exists:
-        return jsonify({"message": "Transação não encontrada"}), 404
-    doc_ref.delete()
+    _fs_delete(txid)
     return ("", 204)
 
 
-@finance_bp.route("/contas-receber/<string:txid>", methods=["DELETE"])
+@finance_bp.route("/contas-receber/<txid>", methods=["DELETE"])
+@roles_allowed('admin')
 def deletar_conta_receber(txid: str):
-    doc_ref = db.collection(COLLECTION).document(txid)
-    if not doc_ref.get().exists:
-        return jsonify({"message": "Transação não encontrada"}), 404
-    doc_ref.delete()
+    _fs_delete(txid)
     return ("", 204)
