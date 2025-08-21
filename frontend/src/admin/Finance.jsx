@@ -1,7 +1,12 @@
 // frontend/src/admin/Finance.jsx
+// Drop-in: substitui seu arquivo atual.
+// Implementa o novo modelo de campos, máscaras de data, export CSV/PDF embutido,
+// tabela, gráficos e PATCH de status.
+
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '@/services/api';
 
+// shadcn/ui – use os que você já tem no projeto
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
@@ -10,18 +15,8 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command.jsx';
 
-import {
-  TrendingUp,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-} from 'lucide-react';
+import { TrendingUp, ArrowDownCircle, ArrowUpCircle, Plus, Search, Edit, Trash2, Download } from 'lucide-react';
 
 import {
   ResponsiveContainer,
@@ -37,7 +32,8 @@ import {
   Legend,
 } from 'recharts';
 
-import ExportMenu from '@/components/export/ExportMenu';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 /* =================== Helpers =================== */
 const BRL = (n) =>
@@ -55,7 +51,7 @@ const BRL_COMPACT = (n) =>
   }).format(Number(n || 0));
 
 const maskBR = (v) => {
-  let clean = v.replace(/\D/g, '');
+  let clean = String(v || '').replace(/\D/g, '');
   if (clean.length >= 3) clean = clean.slice(0, 2) + '/' + clean.slice(2);
   if (clean.length >= 6) clean = clean.slice(0, 5) + '/' + clean.slice(5, 9);
   return clean;
@@ -73,19 +69,24 @@ const brToISO = (br) => {
   return `${y}-${m}-${d}`;
 };
 
-const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '').slice(0, 10));
 
 const emptyForm = {
   type: 'entrada',
-  dateBr: '',
+  // NOVOS CAMPOS no front
+  dueDateBr: '',     // Data de Vencimento (DD/MM/AAAA)
+  payDateBr: '',     // Data de Pagamento (DD/MM/AAAA) - opcional
+  paymentMethod: '', // Meio de Pagamento -> client_text
+  interestRate: '',  // Taxa de Juros -> material_text (string)
+  // comuns
   amount: '',
   category: '',
   status: 'Pendente', // Pago | Pendente | Cancelado
   notes: '',
+  // retrocompat/exibição
   action_text: '',
   client_text: '',
   material_text: '',
-  // compat (itens antigos)
   action_id: '',
   client_id: '',
   material_id: '',
@@ -94,11 +95,7 @@ const emptyForm = {
 const TX_PATH = '/transactions';
 
 // Cores
-const COLORS = {
-  entrada: '#16a34a',
-  saida: '#dc2626',
-  despesa: '#f59e0b',
-};
+const COLORS = { entrada: '#16a34a', saida: '#dc2626', despesa: '#f59e0b' };
 
 // paleta fixa por categoria (pie)
 const CATEGORY_PALETTE = [
@@ -108,17 +105,14 @@ const CATEGORY_PALETTE = [
 ];
 const hashStr = (s) => {
   let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < String(s).length; i++) h = (h * 31 + String(s).charCodeAt(i)) >>> 0;
   return h;
 };
-const colorForCategory = (name='') => CATEGORY_PALETTE[ hashStr(name.toLowerCase()) % CATEGORY_PALETTE.length ];
+const colorForCategory = (name='') => CATEGORY_PALETTE[ hashStr(String(name).toLowerCase()) % CATEGORY_PALETTE.length ];
 
 /* =================== Componente =================== */
 const Finance = () => {
   const [transactions, setTransactions] = useState([]);
-  const [actions, setActions] = useState([]);     // só para rotular itens antigos (action_id)
-  const [clients, setClients] = useState([]);
-  const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Modal
@@ -136,37 +130,15 @@ const Finance = () => {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [txRes, actRes, cliRes, matRes] = await Promise.all([
-        api.get(TX_PATH).catch(() => ({ data: [] })),
-        api.get('/actions').catch(() => ({ data: [] })),
-        api.get('/clients').catch(() => ({ data: [] })),
-        api.get('/materials').catch(() => ({ data: [] })),
-      ]);
-      setTransactions(Array.isArray(txRes.data) ? txRes.data : []);
-      setActions(Array.isArray(actRes.data) ? actRes.data : []);
-      setClients(Array.isArray(cliRes.data) ? cliRes.data : (cliRes.data?.items || []));
-      setMaterials(Array.isArray(matRes.data) ? matRes.data : (matRes.data?.items || []));
+      const { data } = await api.get(TX_PATH);
+      setTransactions(Array.isArray(data) ? data : []);
+    } catch {
+      setTransactions([]);
     } finally { setLoading(false); }
   };
-
   useEffect(() => { loadAll(); }, []);
 
-  // Resolvers para itens antigos
-  const actionLabelById = (id) => actions.find((x) => String(x.id) === String(id))?.title || '';
-  const clientLabelById = (id) => {
-    const c = clients.find((x) => String(x.id) === String(id));
-    return c ? (c.name || c.full_name || c.company_name || c.client_name) : '';
-  };
-  const materialLabelById = (id) => {
-    const m = materials.find((x) => String(x.id) === String(id));
-    if (!m) return '';
-    const date = isoToBR(String(m.date || '').slice(0, 10));
-    const client = m.client_name || m.client || '';
-    const qty = (m.quantity ?? '') !== '' ? ` • Qtd: ${m.quantity}` : '';
-    return [client, date].filter(Boolean).join(' — ') + qty;
-  };
-
-  // Filtrados
+  // Filtrados + ordenação
   const filtered = useMemo(() => {
     let list = [...transactions];
 
@@ -175,9 +147,7 @@ const Finance = () => {
       list = list.filter((t) =>
         [
           t.category, t.notes, String(t.amount),
-          t.action_text, t.client_text, t.material_text,
-          actionLabelById(t.action_id), clientLabelById(t.client_id), materialLabelById(t.material_id),
-          t.status,
+          t.action_text, t.client_text, t.material_text, t.status, t.type
         ].filter(Boolean).some((f) => String(f).toLowerCase().includes(q))
       );
     }
@@ -189,8 +159,14 @@ const Finance = () => {
       list = list.filter((t) => String(t.date || '').slice(0, 7) === `${y}-${m}`);
     }
 
-    return list.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
-  }, [transactions, search, typeFilter, monthFilter, actions, clients, materials]);
+    // sort por date desc, id desc
+    return list.sort((a, b) => {
+      const da = String(a.date || '');
+      const db = String(b.date || '');
+      if (db !== da) return db.localeCompare(da);
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    });
+  }, [transactions, search, typeFilter, monthFilter]);
 
   // Opções de mês
   const monthOptions = useMemo(() => {
@@ -210,7 +186,7 @@ const Finance = () => {
   const categoryChart = useMemo(() => {
     const map = {};
     filtered.forEach((t) => {
-      if (t.type === 'entrada') return;           // ignora entradas
+      if (t.type === 'entrada') return; // ignorar entradas
       const cat = t.category || 'Sem categoria';
       map[cat] = (map[cat] || 0) + Number(t.amount || 0);
     });
@@ -238,62 +214,95 @@ const Finance = () => {
   const saldo = totalEntrada - totalSaida;
 
   // Export
-  const exportData = useMemo(() => filtered.map((t) => ({
-    data: isoToBR(String(t.date || '').slice(0, 10)) || '',
-    tipo: t.type || '',
-    categoria: t.category || '',
-    status: t.status || 'Pendente',
-    acao: t.action_text || actionLabelById(t.action_id) || '',
-    cliente: t.client_text || clientLabelById(t.client_id) || '',
-    material: t.material_text || materialLabelById(t.material_id) || '',
-    valor: Number(t.amount || 0),
-    observacoes: t.notes || '',
-  })), [filtered, actions, clients, materials]);
+  const exportRows = useMemo(() => filtered.map((t) => {
+    const venc = isoToBR(String(t.date || '').slice(0, 10)) || '';
+    const rawPag = String(t.action_text || '');
+    const pagamento = isYMD(rawPag) ? isoToBR(rawPag.slice(0, 10)) : (rawPag || '');
+    return {
+      vencimento: venc,
+      pagamento,
+      tipo: t.type || '',
+      categoria: t.category || '',
+      status: t.status || 'Pendente',
+      meio_pagamento: t.client_text || '',
+      juros: t.material_text || '',
+      valor: Number(t.amount || 0),
+      observacoes: t.notes || '',
+    };
+  }), [filtered]);
 
-  const exportColumns = [
-    { key: 'data', header: 'Data' },
-    { key: 'tipo', header: 'Tipo' },
-    { key: 'categoria', header: 'Categoria' },
-    { key: 'status', header: 'Status' },
-    { key: 'acao', header: 'Ação' },
-    { key: 'cliente', header: 'Cliente' },
-    { key: 'material', header: 'Material' },
-    { key: 'valor', header: 'Valor' },
-    { key: 'observacoes', header: 'Observações' },
-  ];
+  const exportCSV = () => {
+    const headers = ['Vencimento','Pagamento','Tipo','Categoria','Status','Meio de Pagamento','Juros','Valor','Observações'];
+    const body = exportRows.map(r => [
+      r.vencimento, r.pagamento, r.tipo, r.categoria, r.status, r.meio_pagamento, r.juros, String(r.valor).replace('.', ','), r.observacoes
+    ]);
+    const csv = [headers, ...body].map(row =>
+      row.map(v => {
+        let s = v == null ? '' : String(v);
+        const needsQuotes = /[",;\n]/.test(s);
+        s = s.replace(/"/g, '""');
+        return needsQuotes ? `"${s}"` : s;
+      }).join(';')
+    ).join('\n');
 
-  const pdfOptions = {
-    title: 'Relatório Financeiro',
-    orientation: 'l',
-    filtersSummary: `Filtros aplicados: ${
-      [
-        search ? `Busca: "${search}"` : '',
-        typeFilter !== 'todos' ? `Tipo: ${typeFilter}` : '',
-        monthFilter !== 'todos' ? `Mês: ${monthOptions.find(m => m.value === monthFilter)?.label || monthFilter}` : '',
-      ].filter(Boolean).join(' | ') || 'Nenhum filtro aplicado'
-    }`,
-    columnStyles: {
-      0: { cellWidth: 22 }, 1: { cellWidth: 22 }, 2: { cellWidth: 38 },
-      3: { cellWidth: 22 }, 4: { cellWidth: 46 }, 5: { cellWidth: 60 },
-      6: { cellWidth: 60 }, 7: { cellWidth: 26 }, 8: { cellWidth: 70 },
-    },
-    footerContent: `Totais do período: Entradas: ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `financas.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  };
+
+  const exportPDF = () => {
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt' });
+    doc.setFontSize(14);
+    doc.text('Relatório Financeiro', 40, 40);
+
+    const totalLine = `Entradas: ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`;
+    doc.setFontSize(10);
+    doc.text(totalLine, 40, 60);
+
+    const head = [['Vencimento','Pagamento','Tipo','Categoria','Status','Meio de Pagamento','Juros','Valor','Observações']];
+    const body = exportRows.map(r => [r.vencimento, r.pagamento, r.tipo, r.categoria, r.status, r.meio_pagamento, r.juros, BRL(r.valor), r.observacoes]);
+
+    // @ts-ignore
+    doc.autoTable({
+      head, body,
+      startY: 80,
+      styles: { fontSize: 9, cellPadding: 6 },
+      headStyles: { fillColor: [33, 33, 33] },
+      columnStyles: {
+        0: { cellWidth: 70 }, 1: { cellWidth: 70 }, 2: { cellWidth: 60 },
+        3: { cellWidth: 110 }, 4: { cellWidth: 70 }, 5: { cellWidth: 110 },
+        6: { cellWidth: 70 }, 7: { cellWidth: 70 }, 8: { cellWidth: 180 },
+      }
+    });
+
+    doc.save('financas.pdf');
   };
 
   // Handlers form
   const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
-  const onDateBRChange = (e) => setForm((f) => ({ ...f, dateBr: maskBR(e.target.value) }));
+  const onDueDateChange = (e) => setForm((f) => ({ ...f, dueDateBr: maskBR(e.target.value) }));
+  const onPayDateChange = (e) => setForm((f) => ({ ...f, payDateBr: maskBR(e.target.value) }));
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setOpen(true); };
   const openEdit = (tx) => {
+    // preenche novos campos a partir do registro existente
+    const dueDateBr = isoToBR(String(tx.date || '').slice(0, 10)) || '';
+    const action = String(tx.action_text || '');
+    const payDateBr = isYMD(action) ? isoToBR(action.slice(0,10)) : '';
     setEditing(tx);
     setForm({
       type: tx.type || 'entrada',
-      dateBr: isoToBR(String(tx.date || '').slice(0, 10)) || '',
+      dueDateBr,
+      payDateBr,
+      paymentMethod: tx.client_text || '',
+      interestRate: tx.material_text || '',
       amount: String(tx.amount ?? ''),
       category: tx.category || '',
       status: tx.status || 'Pendente',
       notes: tx.notes || '',
+      // retrocompat somente para exibição
       action_text: tx.action_text || '',
       client_text: tx.client_text || '',
       material_text: tx.material_text || '',
@@ -307,45 +316,44 @@ const Finance = () => {
   const submit = async (e) => {
     e.preventDefault(); setSaving(true);
     try {
-      const dateISO = brToISO(form.dateBr);
-      if (!isYMD(dateISO)) { alert('Data inválida. Use o formato DD/MM/AAAA.'); setSaving(false); return; }
+      const dateISO = brToISO(form.dueDateBr);
+      if (!isYMD(dateISO)) { alert('Data de Vencimento inválida. Use DD/MM/AAAA.'); setSaving(false); return; }
+
+      const payISO = brToISO(form.payDateBr);
       const payload = {
         type: form.type,
-        date: dateISO,
+        date: dateISO, // vencimento
+        action_text: isYMD(payISO) ? payISO : '', // pagamento opcional (ISO)
+        client_text: form.paymentMethod || '',     // meio de pagamento
+        material_text: form.interestRate || '',    // juros (string)
         amount: Number(form.amount || 0),
         category: form.category || '',
         status: form.status || 'Pendente',
         notes: form.notes || '',
-        action_text: form.action_text || '',
-        client_text: form.client_text || '',
-        material_text: form.material_text || '',
-        // IDs antigos descontinuados
+        // manter *_id nulos no novo front
         action_id: null, client_id: null, material_id: null,
-        actionId: null, clientId: null, materialId: null,
       };
+
       if (editing?.id) await api.put(`${TX_PATH}/${editing.id}`, payload);
       else await api.post(TX_PATH, payload);
+
       setOpen(false); setEditing(null); setForm(emptyForm); loadAll();
     } catch {
-      alert('Não foi possível salvar. Verifique o backend de transações.');
+      alert('Não foi possível salvar. Verifique o backend.');
     } finally { setSaving(false); }
   };
 
   const updateStatus = async (tx, newStatus) => {
     try {
-      await api.patch?.(`${TX_PATH}/${tx.id}`, { status: newStatus }).catch(async () => {
-        await api.put(`${TX_PATH}/${tx.id}`, { ...tx, status: newStatus });
-      });
+      await api.patch(`${TX_PATH}/${tx.id}`, { status: newStatus });
       setTransactions((prev) => prev.map((t) => (t.id === tx.id ? { ...t, status: newStatus } : t)));
-    } catch {
-      alert('Não foi possível atualizar o status.');
-    }
+    } catch { alert('Não foi possível atualizar o status.'); }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Tem certeza que deseja excluir este lançamento?')) return;
     try { await api.delete(`${TX_PATH}/${id}`); loadAll(); }
-    catch { alert('Não foi possível excluir. Verifique o backend.'); }
+    catch { alert('Não foi possível excluir.'); }
   };
 
   /* =================== UI =================== */
@@ -353,6 +361,15 @@ const Finance = () => {
     <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-semibold">Finanças</h1>
+
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" onClick={exportCSV}>
+            <Download className="size-4" /> Exportar CSV
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={exportPDF}>
+            <Download className="size-4" /> Exportar PDF
+          </Button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -422,16 +439,11 @@ const Finance = () => {
           <CardHeader><CardTitle className="text-lg">Fluxo Mensal</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart
-                data={monthlyChart}
-                margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
-                barCategoryGap="20%"
-                barGap={6}
-              >
+              <BarChart data={monthlyChart} margin={{ top: 10, right: 10, left: 0, bottom: 20 }} barCategoryGap="20%" barGap={6}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis
-                  tickFormatter={BRL_COMPACT}
+                  tickFormatter={(v) => (v === 0 ? 'R$ 0' : BRL_COMPACT(v))}
                   domain={[0, (dataMax) => (dataMax || 0) * 1.15 + 1]}
                   allowDecimals={false}
                 />
@@ -446,7 +458,7 @@ const Finance = () => {
         </Card>
       </div>
 
-      {/* Filtros e Ações (search em cima) */}
+      {/* Filtros */}
       <Card className="mb-4">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between gap-3">
@@ -454,32 +466,17 @@ const Finance = () => {
               <CardTitle className="text-lg md:text-xl font-semibold">Transações</CardTitle>
               <CardDescription>Gerencie entradas, saídas e despesas</CardDescription>
             </div>
-            <div className="ml-auto">
-              <ExportMenu data={exportData} columns={exportColumns} filename="financas" pdfOptions={pdfOptions} />
+            <div className="relative w-80 max-w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input className="pl-10 pr-3" placeholder="Buscar transações..." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-3">
-          {/* Linha 1: Search */}
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-            <Input
-              className="pl-10 pr-3"
-              placeholder="Buscar transações..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          {/* Linha 2: filtros e ações (sem filtro por ações antigas) */}
           <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 items-center">
             <div className="w-full">
-              <select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-              >
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                 <option value="todos">Todos os tipos</option>
                 <option value="entrada">Entrada</option>
                 <option value="saida">Saída</option>
@@ -488,32 +485,21 @@ const Finance = () => {
             </div>
 
             <div className="w-full">
-              <select
-                value={monthFilter}
-                onChange={(e) => setMonthFilter(e.target.value)}
-                className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-              >
+              <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                 <option value="todos">Todos os meses</option>
-                {monthOptions.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
+                {monthOptions.map((m) => (<option key={m.value} value={m.value}>{m.label}</option>))}
               </select>
             </div>
 
             <div className="w-full">
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => { setSearch(''); setTypeFilter('todos'); setMonthFilter('todos'); }}
-              >
+              <Button variant="outline" className="w-full" onClick={() => { setSearch(''); setTypeFilter('todos'); setMonthFilter('todos'); }}>
                 Limpar Filtros
               </Button>
             </div>
 
             <div className="w-full">
               <Button className="w-full gap-2" onClick={openCreate}>
-                <Plus className="size-4" />
-                Novo Lançamento
+                <Plus className="size-4" /> Novo Lançamento
               </Button>
             </div>
           </div>
@@ -527,13 +513,13 @@ const Finance = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-center">Data</TableHead>
+                  <TableHead className="text-center">Vencimento</TableHead>
+                  <TableHead className="text-center">Pagamento</TableHead>
                   <TableHead className="text-center">Tipo</TableHead>
                   <TableHead className="text-center">Categoria</TableHead>
                   <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-center">Ação</TableHead>
-                  <TableHead className="text-center">Cliente</TableHead>
-                  <TableHead className="text-center">Material</TableHead>
+                  <TableHead className="text-center">Meio de Pagamento</TableHead>
+                  <TableHead className="text-center">Juros</TableHead>
                   <TableHead className="text-center">Valor</TableHead>
                   <TableHead className="text-center">Obs.</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
@@ -546,18 +532,20 @@ const Finance = () => {
                   <TableRow><TableCell colSpan={10} className="text-center py-8">Nenhuma transação encontrada.</TableCell></TableRow>
                 ) : (
                   filtered.map((t) => {
-                    const actionText = t.action_text || actionLabelById(t.action_id) || '—';
-                    const clientText = t.client_text || clientLabelById(t.client_id) || '—';
-                    const materialText = t.material_text || materialLabelById(t.material_id) || '—';
-                    const typeColor = t.type === 'entrada' ? 'default' : t.type === 'saida' ? 'destructive' : 'secondary';
+                    const payRaw = String(t.action_text || '');
+                    const pagamento = isYMD(payRaw) ? isoToBR(payRaw.slice(0,10)) : (payRaw || '—');
                     const statusVariant =
                       (t.status || 'Pendente') === 'Pago' ? 'default' :
                       (t.status || 'Pendente') === 'Cancelado' ? 'destructive' : 'secondary';
+                    const typeColor = t.type === 'entrada' ? 'default' : t.type === 'saida' ? 'destructive' : 'secondary';
 
                     return (
                       <TableRow key={t.id}>
                         <TableCell className="text-center">{isoToBR(String(t.date || '').slice(0, 10))}</TableCell>
-                        <TableCell className="text-center"><Badge variant={typeColor} className="capitalize">{t.type}</Badge></TableCell>
+                        <TableCell className="text-center">{pagamento}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={typeColor} className="capitalize">{t.type}</Badge>
+                        </TableCell>
                         <TableCell className="text-center">{t.category || '—'}</TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -573,9 +561,8 @@ const Finance = () => {
                             </select>
                           </div>
                         </TableCell>
-                        <TableCell className="text-center">{actionText}</TableCell>
-                        <TableCell className="text-center">{clientText}</TableCell>
-                        <TableCell className="text-center">{materialText}</TableCell>
+                        <TableCell className="text-center">{t.client_text || '—'}</TableCell>
+                        <TableCell className="text-center">{t.material_text || '—'}</TableCell>
                         <TableCell className="text-center font-medium">{BRL(t.amount)}</TableCell>
                         <TableCell className="text-center">{t.notes || '—'}</TableCell>
                         <TableCell className="text-center">
@@ -592,7 +579,7 @@ const Finance = () => {
             </Table>
           </div>
           <p className="text-xs text-muted-foreground mt-3 px-6 pb-6">
-            Total: <strong>{filtered.length}</strong> transação(ões) | Entradas: <strong>{BRL(totalEntrada)}</strong> | Saídas: <strong>{BRL(totalSaida)}</strong> | Saldo: <strong className={saldo >= 0 ? 'text-green-600' : 'text-red-600'}>{BRL(saldo)}</strong>
+            Total: <strong>{filtered.length}</strong> | Entradas: <strong>{BRL(totalEntrada)}</strong> | Saídas: <strong>{BRL(totalSaida)}</strong> | Saldo: <strong className={saldo >= 0 ? 'text-green-600' : 'text-red-600'}>{BRL(saldo)}</strong>
           </p>
         </CardContent>
       </Card>
@@ -607,7 +594,9 @@ const Finance = () => {
             <div className="p-6 pb-2">
               <DialogHeader className="pb-2">
                 <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
-                <DialogDescription>Registre uma entrada, saída ou despesa. Ação, Cliente e Material são texto livre; defina também o Status.</DialogDescription>
+                <DialogDescription>
+                  Datas no formato DD/MM/AAAA. Pagamento é opcional.
+                </DialogDescription>
               </DialogHeader>
             </div>
 
@@ -621,10 +610,19 @@ const Finance = () => {
                     <option value="despesa">Despesa</option>
                   </select>
                 </div>
-                <div>
-                  <Label>Data</Label>
-                  <Input name="dateBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.dateBr} onChange={onDateBRChange} required />
+
+                {/* Datas lado a lado em md+ */}
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Data de Vencimento</Label>
+                    <Input name="dueDateBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.dueDateBr} onChange={onDueDateChange} required />
+                  </div>
+                  <div>
+                    <Label>Data de Pagamento</Label>
+                    <Input name="payDateBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.payDateBr} onChange={onPayDateChange} />
+                  </div>
                 </div>
+
                 <div>
                   <Label>Valor</Label>
                   <Input type="number" step="0.01" name="amount" value={form.amount} onChange={onChange} required />
@@ -633,6 +631,7 @@ const Finance = () => {
                   <Label>Categoria</Label>
                   <Input name="category" value={form.category} onChange={onChange} placeholder="Ex.: Mídia, Produção..." />
                 </div>
+
                 <div>
                   <Label>Status</Label>
                   <select name="status" value={form.status} onChange={onChange} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
@@ -642,19 +641,23 @@ const Finance = () => {
                   </select>
                 </div>
 
-                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label>Ação (texto livre)</Label>
-                    <Input name="action_text" value={form.action_text} onChange={onChange} placeholder="Ex.: Blitz Shopping, Campanha Setembro..." />
+                    <Label>Meio de Pagamento</Label>
+                    <Input name="paymentMethod" value={form.paymentMethod} onChange={onChange} placeholder="Ex.: PIX, Boleto, Cartão..." />
                   </div>
                   <div>
-                    <Label>Cliente (texto livre)</Label>
-                    <Input name="client_text" value={form.client_text} onChange={onChange} placeholder="Ex.: Supermercado Rio Branco" />
+                    <Label>Taxa de Juros</Label>
+                    <Input name="interestRate" value={form.interestRate} onChange={onChange} placeholder="Ex.: 2.5" />
                   </div>
-                  <div>
-                    <Label>Material (texto livre)</Label>
-                    <Input name="material_text" value={form.material_text} onChange={onChange} placeholder="Ex.: 3.000 panfletos" />
-                  </div>
+
+                  {/* se registro antigo tiver action_text não-ISO, mostrar referência */}
+                  {editing && form.action_text && !isYMD(String(form.action_text)) && (
+                    <div className="md:col-span-2">
+                      <Label>Pagamento (texto antigo)</Label>
+                      <Input value={form.action_text} readOnly className="bg-muted" />
+                    </div>
+                  )}
                 </div>
 
                 <div className="md:col-span-2">

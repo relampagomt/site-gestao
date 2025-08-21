@@ -1,238 +1,239 @@
 # backend/src/routes/finance.py
-import os
-import json
-import threading
-from datetime import datetime
+# Drop-in: substitui seu arquivo atual.
+# Implementa aliases, normalizações, validações e exporta finance_bp (compat Render).
+
 from flask import Blueprint, request, jsonify
+from datetime import datetime
+import json
+import os
 
-finance_bp = Blueprint("finance", __name__)
+bp = Blueprint("finance", __name__)
+finance_bp = bp  # alias para compatibilidade com `from src.routes.finance import finance_bp`
+__all__ = ["finance_bp"]
 
-# -----------------------------
-# Armazenamento em arquivo JSON
-# -----------------------------
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # .../backend/src
-DATA_DIR = os.path.join(BASE_DIR, "data")
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
-TX_FILE = os.path.join(DATA_DIR, "transactions.json")
-_LOCK = threading.Lock()
+TX_PATH = os.path.join(DATA_DIR, "transactions.json")
 
+ALLOWED_TYPES = {"entrada", "saida", "despesa"}
+ALLOWED_STATUS = {"Pago", "Pendente", "Cancelado"}
 
-def _read_all():
-    if not os.path.exists(TX_FILE):
+def _load_all():
+    if not os.path.exists(TX_PATH):
         return []
     try:
-        with open(TX_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, list):
-                return data
-            return []
+        with open(TX_PATH, "r", encoding="utf-8") as f:
+            return json.load(f) or []
     except Exception:
         return []
 
-
-def _write_all(items):
-    tmp = TX_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
+def _save_all(items):
+    with open(TX_PATH, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, TX_FILE)
 
-
-def _next_id(items):
-    return (max([int(x.get("id", 0)) for x in items] + [0]) + 1)
-
-
-def _is_ymd(s):
+def _parse_date_any(v):
+    """Aceita DD/MM/AAAA ou YYYY-MM-DD e retorna YYYY-MM-DD; caso inválido, retorna ''."""
+    if not v:
+        return ""
+    s = str(v).strip()
+    # ISO
     try:
-        if not isinstance(s, str) or len(s) < 10:
-            return False
-        datetime.strptime(s[:10], "%Y-%m-%d")
-        return True
+        if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+            dt = datetime.strptime(s[:10], "%Y-%m-%d")
+            return dt.strftime("%Y-%m-%d")
     except Exception:
-        return False
+        pass
+    # BR
+    try:
+        if len(s) >= 10 and s[2] == "/" and s[5] == "/":
+            dt = datetime.strptime(s[:10], "%d/%m/%Y")
+            return dt.strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    return ""
 
-
-def _normalize_status(s):
-    if not s:
-        return "Pendente"
-    s = str(s).strip().lower()
-    if "pago" in s:
-        return "Pago"
-    if "cancel" in s:
-        return "Cancelado"
+def _norm_status(v):
+    s = (v or "").strip().lower()
+    if s == "pago": return "Pago"
+    if s == "pendente": return "Pendente"
+    if s == "cancelado": return "Cancelado"
     return "Pendente"
 
+def _norm_type(v):
+    s = (v or "").strip().lower()
+    return s if s in ALLOWED_TYPES else "entrada"
 
-def _normalize_type(t):
-    t = (t or "").lower()
-    if t in ("entrada", "saida", "despesa"):
-        return t
-    return "entrada"
-
-
-def _coerce_float(v, default=0.0):
+def _to_float(v, default=0.0):
     try:
+        if isinstance(v, str):
+            vv = v.replace(".", "").replace(",", ".")
+            return float(vv)
         return float(v)
     except Exception:
         return float(default)
 
+def _next_id(items):
+    mx = 0
+    for it in items:
+        try:
+            mx = max(mx, int(str(it.get("id", 0)).split("-")[0]))
+        except Exception:
+            pass
+    return str(mx + 1)
 
-def _sort_key(tx):
-    # Ordena por data desc e id desc
-    date = str(tx.get("date") or "0000-01-01")[:10]
-    return (date, int(tx.get("id", 0)))
-
-
-def _sanitize_payload(payload, existing=None):
+def _apply_aliases(payload):
     """
-    Aceita payloads novos e antigos.
-    Mantém retrocompatibilidade, mas prioriza os novos campos *_text e status.
+    Mapeia aliases do front para os campos internos.
+    - date <= date | due_date | dueDate (BR ou ISO)
+    - action_text <= action_text | pay_date | payDate (BR ou ISO; opcional)
+    - client_text <= client_text | payment_method | paymentMethod
+    - material_text <= material_text | interest_rate | interestRate
     """
-    existing = existing or {}
-    tx = {}
+    # vencimento
+    date_raw = payload.get("date") or payload.get("due_date") or payload.get("dueDate")
+    date_iso = _parse_date_any(date_raw)
 
-    tx["id"] = existing.get("id")
+    # pagamento (opcional)
+    action_raw = payload.get("action_text") or payload.get("pay_date") or payload.get("payDate")
+    action_iso = _parse_date_any(action_raw)
+    action_value = action_iso if action_iso else (payload.get("action_text") or action_raw or "")
 
-    # tipo
-    tx["type"] = _normalize_type(payload.get("type") or existing.get("type"))
+    # meio de pagamento
+    client_value = payload.get("client_text") or payload.get("payment_method") or payload.get("paymentMethod") or ""
 
-    # data
-    date = payload.get("date") or existing.get("date")
-    if not _is_ymd(date):
-        raise ValueError("Data inválida. Use YYYY-MM-DD (sem timezone).")
-    tx["date"] = date[:10]
+    # juros (string) + auxiliar numérico
+    material_value = payload.get("material_text") or payload.get("interest_rate") or payload.get("interestRate") or ""
+    interest_rate_num = None
+    try:
+        iv = str(material_value).replace(".", "").replace(",", ".")
+        interest_rate_num = float(iv)
+    except Exception:
+        try:
+            ir = payload.get("interest_rate") or payload.get("interestRate")
+            if ir is not None:
+                interest_rate_num = _to_float(ir)
+        except Exception:
+            interest_rate_num = None
 
-    # valor
-    tx["amount"] = _coerce_float(payload.get("amount", existing.get("amount", 0)))
+    data = {
+        "date": date_iso,
+        "action_text": action_value,             # ISO (se válido) ou texto antigo
+        "client_text": str(client_value),
+        "material_text": str(material_value),
+        "type": _norm_type(payload.get("type")),
+        "status": _norm_status(payload.get("status")),
+        "amount": _to_float(payload.get("amount", 0)),
+        "category": (payload.get("category") or "").strip(),
+        "notes": (payload.get("notes") or "").strip(),
+        # retrocompat - manter *_id se vierem
+        "action_id": payload.get("action_id") or payload.get("actionId"),
+        "client_id": payload.get("client_id") or payload.get("clientId"),
+        "material_id": payload.get("material_id") or payload.get("materialId"),
+    }
 
-    # categoria / notes
-    tx["category"] = (payload.get("category") or existing.get("category") or "").strip()
-    tx["notes"] = (payload.get("notes") or existing.get("notes") or "").strip()
+    if interest_rate_num is not None and not isinstance(interest_rate_num, bool):
+        data["interest_rate"] = float(interest_rate_num)
 
-    # NOVOS (strings livres)
-    tx["action_text"] = (payload.get("action_text") or existing.get("action_text") or "").strip()
-    tx["client_text"] = (payload.get("client_text") or existing.get("client_text") or "").strip()
-    tx["material_text"] = (payload.get("material_text") or existing.get("material_text") or "").strip()
+    return data
 
-    # STATUS normalizado
-    tx["status"] = _normalize_status(payload.get("status") or existing.get("status"))
+def _validate_required_date(data):
+    if not data.get("date"):
+        return False, "Campo 'date' (vencimento) é obrigatório e deve ser DD/MM/AAAA ou YYYY-MM-DD."
+    return True, ""
 
-    # LEGADO (mantidos só por compatibilidade; opcional)
-    tx["action_id"] = payload.get("action_id", existing.get("action_id"))
-    tx["client_id"] = payload.get("client_id", existing.get("client_id"))
-    tx["material_id"] = payload.get("material_id", existing.get("material_id"))
+def _sort_default(items):
+    # ordenar por date desc, depois id desc
+    def keyf(x):
+        return (str(x.get("date") or ""), str(x.get("id") or ""))
+    return sorted(items, key=lambda x: (keyf(x)[0], keyf(x)[1]), reverse=True)
 
-    # Se vierem alias camelCase, aceita também (compat c/ front)
-    tx["action_id"] = payload.get("actionId", tx["action_id"])
-    tx["client_id"] = payload.get("clientId", tx["client_id"])
-    tx["material_id"] = payload.get("materialId", tx["material_id"])
-
-    return tx
-
-
-# =========================
-#       ROTAS /transactions
-# =========================
-
-@finance_bp.get("/transactions")
+@bp.route("/transactions", methods=["GET"])
 def list_transactions():
-    with _LOCK:
-        items = _read_all()
-    # Ordenar desc por data/id
-    items_sorted = sorted(items, key=_sort_key, reverse=True)
-    return jsonify(items_sorted), 200
+    items = _load_all()
+    items = _sort_default(items)
+    return jsonify(items), 200
 
-
-@finance_bp.get("/transactions/<int:tx_id>")
-def get_transaction(tx_id: int):
-    with _LOCK:
-        items = _read_all()
-        for it in items:
-            if int(it.get("id")) == tx_id:
-                return jsonify(it), 200
-    return jsonify({"error": "not_found"}), 404
-
-
-@finance_bp.post("/transactions")
+@bp.route("/transactions", methods=["POST"])
 def create_transaction():
-    payload = request.get_json(silent=True) or {}
-    try:
-        with _LOCK:
-            items = _read_all()
-            tx = _sanitize_payload(payload)
-            tx["id"] = _next_id(items)
-            items.append(tx)
-            _write_all(items)
-        return jsonify(tx), 201
-    except ValueError as ve:
-        return jsonify({"error": "validation_error", "message": str(ve)}), 400
-    except Exception as e:
-        return jsonify({"error": "internal_error", "message": str(e)}), 500
+    payload = request.get_json(force=True, silent=True) or {}
+    data = _apply_aliases(payload)
+    ok, msg = _validate_required_date(data)
+    if not ok:
+        return jsonify({"error": msg}), 400
 
+    items = _load_all()
+    data["id"] = _next_id(items)
+    items.append(data)
+    items = _sort_default(items)
+    _save_all(items)
+    return jsonify(data), 201
 
-@finance_bp.put("/transactions/<int:tx_id>")
-def update_transaction(tx_id: int):
-    payload = request.get_json(silent=True) or {}
-    try:
-        with _LOCK:
-            items = _read_all()
-            for idx, it in enumerate(items):
-                if int(it.get("id")) == tx_id:
-                    new_obj = _sanitize_payload(payload, existing=it)
-                    new_obj["id"] = tx_id
-                    items[idx] = new_obj
-                    _write_all(items)
-                    return jsonify(new_obj), 200
-        return jsonify({"error": "not_found"}), 404
-    except ValueError as ve:
-        return jsonify({"error": "validation_error", "message": str(ve)}), 400
-    except Exception as e:
-        return jsonify({"error": "internal_error", "message": str(e)}), 500
+@bp.route("/transactions/<id>", methods=["PUT"])
+def update_transaction(id):
+    payload = request.get_json(force=True, silent=True) or {}
+    data = _apply_aliases(payload)
+    ok, msg = _validate_required_date(data)
+    if not ok:
+        return jsonify({"error": msg}), 400
 
+    items = _load_all()
+    found = None
+    for i, it in enumerate(items):
+        if str(it.get("id")) == str(id):
+            found = i
+            break
+    if found is None:
+        return jsonify({"error": "Registro não encontrado"}), 404
 
-@finance_bp.patch("/transactions/<int:tx_id>")
-def patch_transaction(tx_id: int):
-    """
-    Permite atualizar parcialmente (ex.: apenas status).
-    """
-    payload = request.get_json(silent=True) or {}
-    try:
-        with _LOCK:
-            items = _read_all()
-            for idx, it in enumerate(items):
-                if int(it.get("id")) == tx_id:
-                    # merge simples:
-                    merged = {**it, **payload}
+    data["id"] = items[found].get("id")
+    items[found] = {**items[found], **data}
+    items = _sort_default(items)
+    _save_all(items)
+    return jsonify(items[found]), 200
 
-                    # normalizações pontuais:
-                    if "status" in payload:
-                        merged["status"] = _normalize_status(payload.get("status"))
-                    if "type" in payload:
-                        merged["type"] = _normalize_type(payload.get("type"))
-                    if "amount" in payload:
-                        merged["amount"] = _coerce_float(payload.get("amount"), it.get("amount", 0))
-                    if "date" in payload:
-                        if not _is_ymd(merged["date"]):
-                            return jsonify({"error": "validation_error", "message": "Data inválida (YYYY-MM-DD)."}), 400
+@bp.route("/transactions/<id>", methods=["PATCH"])
+def patch_transaction(id):
+    payload = request.get_json(force=True, silent=True) or {}
+    items = _load_all()
+    idx = None
+    for i, it in enumerate(items):
+        if str(it.get("id")) == str(id):
+            idx = i
+            break
+    if idx is None:
+        return jsonify({"error": "Registro não encontrado"}), 404
 
-                    # garantir campos *_text existam:
-                    merged["action_text"] = (merged.get("action_text") or "").strip()
-                    merged["client_text"] = (merged.get("client_text") or "").strip()
-                    merged["material_text"] = (merged.get("material_text") or "").strip()
+    current = items[idx]
+    partial = _apply_aliases(payload)
 
-                    items[idx] = merged
-                    _write_all(items)
-                    return jsonify(merged), 200
-        return jsonify({"error": "not_found"}), 404
-    except Exception as e:
-        return jsonify({"error": "internal_error", "message": str(e)}), 500
+    # Se não veio date no PATCH, mantemos o atual
+    if not (payload.get("date") or payload.get("due_date") or payload.get("dueDate")):
+      partial["date"] = current.get("date")
 
+    # Merge
+    merged = { **current, **{k: v for k, v in partial.items() if v is not None} }
+    merged["type"] = _norm_type(merged.get("type"))
+    merged["status"] = _norm_status(merged.get("status"))
+    merged["amount"] = _to_float(merged.get("amount", current.get("amount", 0)))
 
-@finance_bp.delete("/transactions/<int:tx_id>")
-def delete_transaction(tx_id: int):
-    with _LOCK:
-        items = _read_all()
-        new_items = [it for it in items if int(it.get("id", 0)) != tx_id]
-        if len(new_items) == len(items):
-            return jsonify({"error": "not_found"}), 404
-        _write_all(new_items)
-    return jsonify({"status": "deleted"}), 200
+    items[idx] = merged
+    items = _sort_default(items)
+    _save_all(items)
+    return jsonify(items[idx]), 200
+
+@bp.route("/transactions/<id>", methods=["GET"])
+def get_transaction(id):
+    items = _load_all()
+    for it in items:
+        if str(it.get("id")) == str(id):
+            return jsonify(it), 200
+    return jsonify({"error": "Registro não encontrado"}), 404
+
+@bp.route("/transactions/<id>", methods=["DELETE"])
+def delete_transaction(id):
+    items = _load_all()
+    new_items = [it for it in items if str(it.get("id")) != str(id)]
+    if len(new_items) == len(items):
+        return jsonify({"error": "Registro não encontrado"}), 404
+    _save_all(new_items)
+    return jsonify({"ok": True}), 200
