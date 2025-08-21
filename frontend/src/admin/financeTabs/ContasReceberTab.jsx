@@ -1,430 +1,451 @@
-import React from "react";
-import api from "@/lib/api";
-import { toISO, toBR } from "@/utils/dateBR";
+// frontend/src/admin/financeTabs/ContasReceberTab.jsx
+import React, { useEffect, useMemo, useState } from 'react';
+import api from '@/services/api';
 
-const n = (v) => Number(v || 0);
-const money = (v) =>
-  n(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
+import { Button } from '@/components/ui/button.jsx';
+import { Input } from '@/components/ui/input.jsx';
+import { Label } from '@/components/ui/label.jsx';
+import { Badge } from '@/components/ui/badge.jsx';
+import { Textarea } from '@/components/ui/textarea.jsx';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
+import { Search, Edit, Trash2, ArrowUpCircle, TrendingUp } from 'lucide-react';
+import ExportMenu from '@/components/export/ExportMenu';
 
-// CSV
-const toCSV = (rows) => {
-  if (!rows?.length) return "";
-  const esc = (v) => `"${String(v ?? "").replaceAll('"', '""')}"`;
-  const head = Object.keys(rows[0]);
-  return [head.join(","), ...rows.map((r) => head.map((k) => esc(r[k])).join(","))].join("\n");
+/** helpers iguais */
+const BRL = (n) =>
+  `R$ ${Number(n || 0)
+    .toFixed(2)
+    .replace('.', ',')
+    .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+
+const maskBR = (v) => {
+  let clean = v.replace(/\D/g, '');
+  if (clean.length >= 3) clean = clean.slice(0, 2) + '/' + clean.slice(2);
+  if (clean.length >= 6) clean = clean.slice(0, 5) + '/' + clean.slice(5, 9);
+  return clean;
 };
-const downloadCSV = (name, rows) => {
-  const blob = new Blob([toCSV(rows)], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(a.href);
+const isoToBR = (iso) => {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return `${d}/${m}/${y}`;
 };
+const brToISO = (br) => {
+  if (!br || !/^\d{2}\/\d{2}\/\d{4}/.test(br)) return '';
+  const [d, m, y] = br.split('/');
+  return `${y}-${m}-${d}`;
+};
+const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 const emptyForm = {
-  id: null,
-  vencimento: "",
-  cliente: "",
-  notaFiscal: "",
-  dataEmissao: "",
-  valor: "",
-  taxasJuros: "",
-  documentoRecebimento: "",
-  dataBaixa: "",
-  valorLiqRecebido: "",
+  vencimentoBr: '',
+  cliente: '',
+  notaFiscal: '',
+  dataEmissaoBr: '',
+  valor: '',
+  taxasJuros: '',
+  docRecebimento: '',
+  dataBaixaBr: '',
+  valorLiquidoRecebido: '',
+  observacoes: '',
 };
 
-function ImportXlsx({ onDone }) {
-  const inp = React.useRef(null);
-  const onFile = async (file) => {
-    if (!file) return;
-    const fd = new FormData();
-    fd.append("file", file);
-    await api.post("/contas-receber/import", fd, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-    onDone?.();
-  };
-  return (
-    <>
-      <input
-        ref={inp}
-        type="file"
-        accept=".xlsx"
-        className="hidden"
-        onChange={(e) => onFile(e.target.files?.[0])}
-      />
-      <button type="button" className="btn btn-ghost" onClick={() => inp.current?.click()}>
-        Importar
-      </button>
-    </>
-  );
-}
+const ENDPOINT = '/contas-receber';
 
 export default function ContasReceberTab() {
-  const [list, setList] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [q, setQ] = React.useState("");
-  const [month, setMonth] = React.useState("");
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [open, setOpen] = React.useState(false);
-  const [form, setForm] = React.useState(emptyForm);
+  // modal
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
 
-  const reload = React.useCallback(async () => {
+  // filtros
+  const [search, setSearch] = useState('');
+  const [monthFilter, setMonthFilter] = useState('todos');
+
+  const load = async () => {
     setLoading(true);
-    const qs = month ? `?month=${encodeURIComponent(month)}` : "";
-    const { data } = await api.get(`/contas-receber${qs}`);
-    setList(Array.isArray(data) ? data : []);
-    setLoading(false);
-  }, [month]);
+    try {
+      const { data } = await api.get(ENDPOINT);
+      setRows(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('Erro ao carregar contas a receber:', e);
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  React.useEffect(() => void reload(), [reload]);
+  useEffect(() => { load(); }, []);
 
-  const filtered = React.useMemo(() => {
-    const t = q.trim().toLowerCase();
-    if (!t) return list;
-    return list.filter((it) =>
-      [it.cliente, it.notaFiscal, it.notes, it.vencimento, it.dataEmissao, it.dataBaixa]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(t)
-    );
-  }, [list, q]);
-
-  const totals = React.useMemo(() => {
-    let valor = 0,
-      liq = 0;
-    filtered.forEach((it) => {
-      valor += n(it.valor ?? it.amount);
-      liq += n(it.valorLiqRecebido);
+  const monthOptions = useMemo(() => {
+    const s = new Set();
+    rows.forEach((r) => {
+      const key = String(r.vencimento || '').slice(0, 7);
+      if (/^\d{4}-\d{2}$/.test(key)) s.add(key);
     });
-    return { valor, liq, saldo: valor - liq };
-  }, [filtered]);
+    return [...s]
+      .sort()
+      .reverse()
+      .map((ym) => {
+        const [y, m] = ym.split('-');
+        const label = new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        return { value: ym, label };
+      });
+  }, [rows]);
 
-  const openNew = () => {
+  const filtered = useMemo(() => {
+    let list = [...rows];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((r) =>
+        [r.cliente, r.notaFiscal, r.docRecebimento, r.observacoes, r.valor, r.valorLiquidoRecebido]
+          .filter(Boolean)
+          .some((f) => String(f).toLowerCase().includes(q))
+      );
+    }
+    if (monthFilter !== 'todos') {
+      list = list.filter((r) => String(r.vencimento || '').slice(0, 7) === monthFilter);
+    }
+    list.sort((a, b) => String(b.vencimento || '').localeCompare(String(a.vencimento || '')));
+    return list;
+  }, [rows, search, monthFilter]);
+
+  const totalReceber = filtered.reduce((s, r) => s + Number(r.valor || 0), 0);
+  const totalRecebidoLiq = filtered.reduce((s, r) => s + Number(r.valorLiquidoRecebido || 0), 0);
+  const emAberto = totalReceber - totalRecebidoLiq;
+
+  // Export
+  const exportData = filtered.map((r) => ({
+    vencimento: isoToBR(String(r.vencimento || '').slice(0, 10)) || '',
+    cliente: r.cliente || '',
+    nota_fiscal: r.notaFiscal || '',
+    data_emissao: isoToBR(String(r.dataEmissao || '').slice(0, 10)) || '',
+    valor: Number(r.valor || 0),
+    taxas_juros: Number(r.taxasJuros || 0),
+    doc_recebimento: r.docRecebimento || '',
+    data_baixa: isoToBR(String(r.dataBaixa || '').slice(0, 10)) || '',
+    valor_liquido_recebido: Number(r.valorLiquidoRecebido || 0),
+    status: (Number(r.valorLiquidoRecebido || 0) >= Number(r.valor || 0)) ? 'Recebido' : 'Em aberto',
+    observacoes: r.observacoes || '',
+  }));
+  const exportColumns = [
+    { key: 'vencimento', header: 'Vencimento' },
+    { key: 'cliente', header: 'Cliente' },
+    { key: 'nota_fiscal', header: 'Nota Fiscal' },
+    { key: 'data_emissao', header: 'Data Emissão' },
+    { key: 'valor', header: 'Valor' },
+    { key: 'taxas_juros', header: 'Taxas/Juros' },
+    { key: 'doc_recebimento', header: 'Doc. Receb.' },
+    { key: 'data_baixa', header: 'Data Baixa' },
+    { key: 'valor_liquido_recebido', header: 'Valor Líq. Recebido' },
+    { key: 'status', header: 'Status' },
+    { key: 'observacoes', header: 'Observações' },
+  ];
+  const pdfOptions = {
+    title: 'Contas a Receber',
+    orientation: 'l',
+    filtersSummary:
+      `Mês: ${monthFilter === 'todos'
+        ? 'Todos'
+        : (monthOptions.find(m => m.value === monthFilter)?.label || monthFilter)
+      } | Busca: ${search || '—'}`,
+    footerContent:
+      `Totais do período — Entradas (a receber): ${BRL(totalReceber)} | Recebido Líquido: ${BRL(totalRecebidoLiq)} | Em aberto: ${BRL(emAberto)}`
+  };
+
+  // modal
+  const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+  const onDateBR = (name) => (e) => setForm((f) => ({ ...f, [name]: maskBR(e.target.value) }));
+
+  const openCreate = () => {
+    setEditing(null);
     setForm(emptyForm);
     setOpen(true);
   };
-  const openEdit = (it) => {
+  const openEdit = (r) => {
+    setEditing(r);
     setForm({
-      id: it.id,
-      vencimento: toISO(it.vencimento || it.date),
-      cliente: it.cliente || "",
-      notaFiscal: it.notaFiscal || "",
-      dataEmissao: toISO(it.dataEmissao),
-      valor: it.valor ?? it.amount ?? "",
-      taxasJuros: it.taxasJuros ?? "",
-      documentoRecebimento: it.documentoRecebimento || "",
-      dataBaixa: toISO(it.dataBaixa),
-      valorLiqRecebido: it.valorLiqRecebido ?? "",
+      vencimentoBr: isoToBR(String(r.vencimento || '').slice(0, 10)) || '',
+      cliente: r.cliente || '',
+      notaFiscal: r.notaFiscal || '',
+      dataEmissaoBr: isoToBR(String(r.dataEmissao || '').slice(0, 10)) || '',
+      valor: String(r.valor ?? ''),
+      taxasJuros: String(r.taxasJuros ?? ''),
+      docRecebimento: r.docRecebimento || '',
+      dataBaixaBr: isoToBR(String(r.dataBaixa || '').slice(0, 10)) || '',
+      valorLiquidoRecebido: String(r.valorLiquidoRecebido ?? ''),
+      observacoes: r.observacoes || '',
     });
     setOpen(true);
   };
 
-  const save = async () => {
+  const submit = async (e) => {
+    e.preventDefault();
+    const vencISO = brToISO(form.vencimentoBr);
+    if (!isYMD(vencISO)) return alert('Vencimento inválido');
+
     const payload = {
-      vencimento: toISO(form.vencimento),
-      cliente: form.cliente || "",
-      notaFiscal: form.notaFiscal || null,
-      dataEmissao: toISO(form.dataEmissao) || null,
-      valor: n(form.valor),
-      taxasJuros: n(form.taxasJuros),
-      documentoRecebimento: form.documentoRecebimento || null,
-      dataBaixa: toISO(form.dataBaixa) || null,
-      valorLiqRecebido: n(form.valorLiqRecebido),
+      vencimento: vencISO,
+      cliente: form.cliente || '',
+      notaFiscal: form.notaFiscal || '',
+      dataEmissao: form.dataEmissaoBr ? brToISO(form.dataEmissaoBr) : null,
+      valor: Number(form.valor || 0),
+      taxasJuros: Number(form.taxasJuros || 0),
+      docRecebimento: form.docRecebimento || '',
+      dataBaixa: form.dataBaixaBr ? brToISO(form.dataBaixaBr) : null,
+      valorLiquidoRecebido: Number(form.valorLiquidoRecebido || 0),
+      observacoes: form.observacoes || '',
     };
-    if (!payload.vencimento) return alert("Vencimento inválido");
-    if (!payload.valor) return alert("Valor inválido");
 
-    if (form.id) await api.patch(`/contas-receber/${form.id}`, payload);
-    else await api.post(`/contas-receber`, payload);
-
-    setOpen(false);
-    await reload();
+    setSaving(true);
+    try {
+      if (editing?.id) await api.put(`${ENDPOINT}/${editing.id}`, payload);
+      else await api.post(ENDPOINT, payload);
+      setOpen(false);
+      setEditing(null);
+      setForm(emptyForm);
+      load();
+    } catch (err) {
+      console.error('Erro ao salvar conta a receber:', err);
+      alert('Não foi possível salvar. Verifique o backend de contas a receber.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const del = async (it) => {
-    if (!confirm("Excluir conta?")) return;
-    await api.delete(`/contas-receber/${it.id}`);
-    await reload();
-  };
-
-  const exportar = () => {
-    const rows = filtered.map((it) => {
-      const valor = n(it.valor ?? it.amount);
-      const liq = n(it.valorLiqRecebido);
-      return {
-        id: it.id,
-        vencimento: toBR(it.vencimento || it.date),
-        cliente: it.cliente || "",
-        nota_fiscal: it.notaFiscal || "",
-        data_emissao: toBR(it.dataEmissao),
-        valor,
-        taxas_juros: n(it.taxasJuros),
-        doc_recebimento: it.documentoRecebimento || "",
-        data_baixa: toBR(it.dataBaixa),
-        valor_liq_recebido: liq,
-        status: liq >= valor ? "Recebido" : "Pendente",
-      };
-    });
-    downloadCSV("contas_receber.csv", rows);
+  const handleDelete = async (id) => {
+    if (!window.confirm('Confirmar exclusão?')) return;
+    try {
+      await api.delete(`${ENDPOINT}/${id}`);
+      load();
+    } catch (e) {
+      console.error('Erro ao excluir:', e);
+      alert('Não foi possível excluir.');
+    }
   };
 
   return (
-    <section className="card bg-base-100 shadow-sm">
-      <div className="card-body">
-        {/* ====== BARRA DE AÇÕES (igual lançamentos) ====== */}
-        <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center mb-4">
-          <input
-            className="input input-bordered w-full md:flex-1"
-            placeholder="Buscar contas..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-
-          <select
-            className="select select-bordered w-full md:w-48"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-          >
-            <option value="">Todos os meses</option>
-            {Array.from({ length: 18 }).map((_, i) => {
-              const d = new Date();
-              d.setMonth(d.getMonth() - i);
-              const ym = d.toISOString().slice(0, 7);
-              return (
-                <option key={ym} value={ym}>
-                  {ym}
-                </option>
-              );
-            })}
-          </select>
-
-          <button className="btn btn-ghost" disabled aria-disabled>
-            Filtrar por ações
-          </button>
-
-          <button className="btn" onClick={() => setMonth("")}>
-            Limpar Filtros
-          </button>
-
-          <button className="btn btn-ghost" onClick={exportar}>
-            Exportar
-          </button>
-
-          <ImportXlsx onDone={reload} />
-
-          <button className="btn btn-primary" onClick={openNew}>
-            Nova Conta
-          </button>
-        </div>
-
-        {/* ====== TABELA (igual lançamentos) ====== */}
-        <div className="overflow-x-auto">
-          <table className="table w-full">
-            <thead>
-              <tr>
-                <th>Vencimento</th>
-                <th>Cliente</th>
-                <th>Nota Fiscal</th>
-                <th>Data Emissão</th>
-                <th className="text-right">Valor</th>
-                <th className="text-right">Taxas/Juros</th>
-                <th>Doc. Receb.</th>
-                <th>Data Baixa</th>
-                <th className="text-right">Valor Líq. Recebido</th>
-                <th>Status</th>
-                <th className="text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={11} className="text-center py-8">
-                    Carregando...
-                  </td>
-                </tr>
-              )}
-              {!loading &&
-                filtered.map((it) => {
-                  const valor = n(it.valor ?? it.amount);
-                  const liq = n(it.valorLiqRecebido);
-                  const status = liq >= valor ? "Recebido" : "Pendente";
-                  return (
-                    <tr key={it.id}>
-                      <td>{toBR(it.vencimento || it.date)}</td>
-                      <td>{it.cliente || "-"}</td>
-                      <td>{it.notaFiscal || "-"}</td>
-                      <td>{toBR(it.dataEmissao)}</td>
-                      <td className="text-right">{money(valor)}</td>
-                      <td className="text-right">{money(n(it.taxasJuros))}</td>
-                      <td>{it.documentoRecebimento || "-"}</td>
-                      <td>{toBR(it.dataBaixa)}</td>
-                      <td className="text-right">{money(liq)}</td>
-                      <td>
-                        <span
-                          className={`badge ${
-                            status === "Recebido" ? "badge-success" : "badge-warning"
-                          }`}
-                        >
-                          {status}
-                        </span>
-                      </td>
-                      <td className="text-right space-x-2">
-                        <button className="btn btn-sm" onClick={() => openEdit(it)}>
-                          Editar
-                        </button>
-                        <button className="btn btn-sm btn-error" onClick={() => del(it)}>
-                          Excluir
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              {!loading && filtered.length === 0 && (
-                <tr>
-                  <td colSpan={11} className="text-center py-8">
-                    Nenhuma conta encontrada.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={4} className="text-right font-medium">
-                  Total:
-                </td>
-                <td className="text-right font-medium">{money(totals.valor)}</td>
-                <td colSpan={3} className="text-right font-medium">
-                  Saldo:
-                </td>
-                <td className="text-right font-medium">{money(totals.saldo)}</td>
-                <td colSpan={2}></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        <div className="pt-2 text-xs text-gray-500">
-          Total: {filtered.length} conta(s) | A Receber: {money(totals.valor)} | Recebido
-          Líq.: {money(totals.liq)} | Em Aberto: {money(totals.saldo)}
-        </div>
+    <>
+      {/* KPIs (MESMO layout) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Entradas (a Receber)</CardTitle>
+            <ArrowUpCircle className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl sm:text-2xl font-bold">{BRL(totalReceber)}</div>
+            <p className="text-xs text-muted-foreground">Receitas registradas</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Recebido Líquido</CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl sm:text-2xl font-bold">{BRL(totalRecebidoLiq)}</div>
+            <p className="text-xs text-muted-foreground">Valor já recebido</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Em Aberto</CardTitle>
+            <TrendingUp className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl sm:text-2xl font-bold">{BRL(emAberto)}</div>
+            <p className="text-xs text-muted-foreground">recebimento(s) vencido(s)</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* ====== MODAL ====== */}
-      {open && (
-        <div className="modal modal-open">
-          <div className="modal-box max-w-5xl">
-            <h3 className="font-bold text-lg">{form.id ? "Editar" : "Nova"} Conta a Receber</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
-              <div>
-                <label className="label">Vencimento *</label>
-                <input
-                  className="input input-bordered w-full"
-                  placeholder="DD/MM/AAAA"
-                  value={toBR(form.vencimento)}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, vencimento: toISO(e.target.value) }))
-                  }
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="label">Cliente *</label>
-                <input
-                  className="input input-bordered w-full"
-                  value={form.cliente}
-                  onChange={(e) => setForm((s) => ({ ...s, cliente: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Nota Fiscal</label>
-                <input
-                  className="input input-bordered w-full"
-                  value={form.notaFiscal}
-                  onChange={(e) => setForm((s) => ({ ...s, notaFiscal: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Data Emissão</label>
-                <input
-                  className="input input-bordered w-full"
-                  placeholder="DD/MM/AAAA"
-                  value={toBR(form.dataEmissao)}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, dataEmissao: toISO(e.target.value) }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="label">Valor *</label>
-                <input
-                  className="input input-bordered w-full"
-                  type="number"
-                  step="0.01"
-                  value={form.valor}
-                  onChange={(e) => setForm((s) => ({ ...s, valor: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Taxas/Juros</label>
-                <input
-                  className="input input-bordered w-full"
-                  type="number"
-                  step="0.01"
-                  value={form.taxasJuros}
-                  onChange={(e) => setForm((s) => ({ ...s, taxasJuros: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Doc. Recebimento</label>
-                <input
-                  className="input input-bordered w-full"
-                  value={form.documentoRecebimento}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, documentoRecebimento: e.target.value }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="label">Data Baixa</label>
-                <input
-                  className="input input-bordered w-full"
-                  placeholder="DD/MM/AAAA"
-                  value={toBR(form.dataBaixa)}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, dataBaixa: toISO(e.target.value) }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="label">Valor Líq. Recebido</label>
-                <input
-                  className="input input-bordered w-full"
-                  type="number"
-                  step="0.01"
-                  value={form.valorLiqRecebido}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, valorLiqRecebido: e.target.value }))
-                  }
-                />
-              </div>
+      {/* Filtros/ações IGUAIS */}
+      <Card className="mb-4">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg md:text-xl font-semibold">Contas a Receber</CardTitle>
+              <CardDescription>Gerencie suas contas a receber</CardDescription>
             </div>
-
-            <div className="modal-action">
-              <button className="btn" onClick={() => setOpen(false)}>
-                Cancelar
-              </button>
-              <button className="btn btn-primary" onClick={save}>
-                Salvar
-              </button>
+            <div className="ml-auto">
+              <ExportMenu data={exportData} columns={exportColumns} filename="contas-a-receber" pdfOptions={pdfOptions} />
             </div>
           </div>
-          <div className="modal-backdrop" onClick={() => setOpen(false)} />
-        </div>
-      )}
-    </section>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
+            <div className="relative flex-1 w-full md:w-[320px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input className="pl-9" placeholder="Buscar contas..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+
+            <div className="w-full sm:w-auto">
+              <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="w-56 md:w-64 max-w-full border rounded-md px-3 py-2 text-sm bg-background">
+                <option value="todos">Todos os meses</option>
+                {monthOptions.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setSearch(''); setMonthFilter('todos'); }}
+            >
+              Limpar Filtros
+            </Button>
+
+            <Button size="sm" className="gap-2" onClick={openCreate}>
+              + Nova Conta
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* TABELA idêntica */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto rounded-xl border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-center">Vencimento</TableHead>
+                  <TableHead className="text-center">Cliente</TableHead>
+                  <TableHead className="text-center">Nota Fiscal</TableHead>
+                  <TableHead className="text-center">Data Emissão</TableHead>
+                  <TableHead className="text-center">Valor</TableHead>
+                  <TableHead className="text-center">Taxas/Juros</TableHead>
+                  <TableHead className="text-center">Doc. Receb.</TableHead>
+                  <TableHead className="text-center">Data Baixa</TableHead>
+                  <TableHead className="text-center">Valor Líq. Recebido</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow><TableCell colSpan={11} className="text-center py-8">Carregando…</TableCell></TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow><TableCell colSpan={11} className="text-center py-8">Nenhuma conta encontrada.</TableCell></TableRow>
+                ) : (
+                  filtered.map((r) => {
+                    const recebido = Number(r.valorLiquidoRecebido || 0) >= Number(r.valor || 0);
+                    return (
+                      <TableRow key={r.id}>
+                        <TableCell className="text-center">{isoToBR(String(r.vencimento || '').slice(0, 10))}</TableCell>
+                        <TableCell className="text-center">{r.cliente || '—'}</TableCell>
+                        <TableCell className="text-center">{r.notaFiscal || '—'}</TableCell>
+                        <TableCell className="text-center">{isoToBR(String(r.dataEmissao || '').slice(0, 10)) || '—'}</TableCell>
+                        <TableCell className="text-center font-medium">{BRL(r.valor)}</TableCell>
+                        <TableCell className="text-center">{BRL(r.taxasJuros || 0)}</TableCell>
+                        <TableCell className="text-center">{r.docRecebimento || '—'}</TableCell>
+                        <TableCell className="text-center">{isoToBR(String(r.dataBaixa || '').slice(0, 10)) || '—'}</TableCell>
+                        <TableCell className="text-center">{BRL(r.valorLiquidoRecebido || 0)}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={recebido ? 'default' : 'secondary'}>{recebido ? 'Recebido' : 'Em aberto'}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex justify-center gap-2">
+                            <Button variant="outline" size="sm" className="gap-2" onClick={() => openEdit(r)}><Edit className="size-4" />Editar</Button>
+                            <Button variant="destructive" size="sm" className="gap-2" onClick={() => handleDelete(r.id)}><Trash2 className="size-4" />Excluir</Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3 px-6 pb-6">
+            Total: <strong>{filtered.length}</strong> conta(s) | A Receber: <strong>{BRL(totalReceber)}</strong> | Recebido Líq.: <strong>{BRL(totalRecebidoLiq)}</strong> | Em Aberto: <strong>{BRL(emAberto)}</strong>
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* MODAL padronizado */}
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) { setEditing(null); setForm(emptyForm); }
+          setOpen(v);
+        }}
+      >
+        <DialogContent className="w-[95vw] sm:max-w-3xl p-0">
+          <form onSubmit={submit} className="max-h-[80vh] flex flex-col">
+            <div className="p-6 pb-2">
+              <DialogHeader className="pb-2">
+                <DialogTitle>{editing ? 'Editar Conta a Receber' : 'Nova Conta a Receber'}</DialogTitle>
+                <DialogDescription>Registre uma nova conta a receber ou atualize uma existente.</DialogDescription>
+              </DialogHeader>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label>Vencimento *</Label>
+                  <Input name="vencimentoBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.vencimentoBr} onChange={onDateBR('vencimentoBr')} required />
+                </div>
+                <div>
+                  <Label>Cliente *</Label>
+                  <Input name="cliente" value={form.cliente} onChange={onChange} required />
+                </div>
+
+                <div>
+                  <Label>Nota Fiscal</Label>
+                  <Input name="notaFiscal" value={form.notaFiscal} onChange={onChange} />
+                </div>
+                <div>
+                  <Label>Data Emissão</Label>
+                  <Input name="dataEmissaoBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.dataEmissaoBr} onChange={onDateBR('dataEmissaoBr')} />
+                </div>
+
+                <div>
+                  <Label>Valor *</Label>
+                  <Input type="number" step="0.01" name="valor" value={form.valor} onChange={onChange} required />
+                </div>
+                <div>
+                  <Label>Taxas/Juros</Label>
+                  <Input type="number" step="0.01" name="taxasJuros" value={form.taxasJuros} onChange={onChange} />
+                </div>
+
+                <div>
+                  <Label>Documento Recebimento</Label>
+                  <Input name="docRecebimento" value={form.docRecebimento} onChange={onChange} />
+                </div>
+                <div>
+                  <Label>Data Baixa</Label>
+                  <Input name="dataBaixaBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.dataBaixaBr} onChange={onDateBR('dataBaixaBr')} />
+                </div>
+
+                <div>
+                  <Label>Valor Líq. Recebido</Label>
+                  <Input type="number" step="0.01" name="valorLiquidoRecebido" value={form.valorLiquidoRecebido} onChange={onChange} />
+                </div>
+
+                <div className="md:col-span-2">
+                  <Label>Observações</Label>
+                  <Textarea name="observacoes" rows={3} value={form.observacoes} onChange={onChange} />
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t bg-background px-6 py-3 flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm); }}>
+                Cancelar
+              </Button>
+              <Button type="submit" size="sm" disabled={saving}>
+                {saving ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

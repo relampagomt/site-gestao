@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
 
-// Abas
+// Abas (iguais no estilo/UX)
 import LancamentosTab from './financeTabs/LancamentosTab.jsx';
 import ContasPagarTab from './financeTabs/ContasPagarTab.jsx';
 import ContasReceberTab from './financeTabs/ContasReceberTab.jsx';
