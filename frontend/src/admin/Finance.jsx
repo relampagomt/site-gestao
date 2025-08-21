@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command.jsx';
 
 import {
   TrendingUp,
@@ -53,7 +55,7 @@ const BRL_COMPACT = (n) =>
   }).format(Number(n || 0));
 
 const maskBR = (v) => {
-  let clean = String(v || '').replace(/\D/g, '');
+  let clean = v.replace(/\D/g, '');
   if (clean.length >= 3) clean = clean.slice(0, 2) + '/' + clean.slice(2);
   if (clean.length >= 6) clean = clean.slice(0, 5) + '/' + clean.slice(5, 9);
   return clean;
@@ -75,20 +77,15 @@ const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 const emptyForm = {
   type: 'entrada',
-  // novo modelo
-  dueDateBr: '',        // Data de Vencimento (DD/MM/AAAA)
-  payDateBr: '',        // Data de Pagamento (DD/MM/AAAA, opcional)
+  dateBr: '',
   amount: '',
   category: '',
   status: 'Pendente', // Pago | Pendente | Cancelado
   notes: '',
-  // novos textos
-  paymentMethod: '',    // (vai em client_text)
-  interestRate: '',     // (vai em material_text)
-  // retrocompat / antigos
-  action_text: '',      // exibiremos na tabela se vier texto antigo
+  action_text: '',
   client_text: '',
   material_text: '',
+  // compat (itens antigos)
   action_id: '',
   client_id: '',
   material_id: '',
@@ -114,12 +111,12 @@ const hashStr = (s) => {
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return h;
 };
-const colorForCategory = (name='') => CATEGORY_PALETTE[ hashStr(String(name).toLowerCase()) % CATEGORY_PALETTE.length ];
+const colorForCategory = (name='') => CATEGORY_PALETTE[ hashStr(name.toLowerCase()) % CATEGORY_PALETTE.length ];
 
 /* =================== Componente =================== */
 const Finance = () => {
   const [transactions, setTransactions] = useState([]);
-  const [actions, setActions] = useState([]);     // apenas para rotular itens antigos (action_id)
+  const [actions, setActions] = useState([]);     // só para rotular itens antigos (action_id)
   const [clients, setClients] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -192,13 +189,7 @@ const Finance = () => {
       list = list.filter((t) => String(t.date || '').slice(0, 7) === `${y}-${m}`);
     }
 
-    // sort primário por date desc, secundário por id desc
-    return list.sort((a, b) => {
-      const da = String(a.date || '');
-      const db = String(b.date || '');
-      if (db !== da) return db.localeCompare(da);
-      return String(b.id || '').localeCompare(String(a.id || ''));
-    });
+    return list.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
   }, [transactions, search, typeFilter, monthFilter, actions, clients, materials]);
 
   // Opções de mês
@@ -219,7 +210,7 @@ const Finance = () => {
   const categoryChart = useMemo(() => {
     const map = {};
     filtered.forEach((t) => {
-      if (t.type === 'entrada') return;           // ignora entradas (requisito)
+      if (t.type === 'entrada') return;           // ignora entradas
       const cat = t.category || 'Sem categoria';
       map[cat] = (map[cat] || 0) + Number(t.amount || 0);
     });
@@ -247,33 +238,26 @@ const Finance = () => {
   const saldo = totalEntrada - totalSaida;
 
   // Export
-  const exportData = useMemo(() => filtered.map((t) => {
-    const venc = isoToBR(String(t.date || '').slice(0, 10)) || '';
-    // Pagamento: se ISO => converter, senão manter texto antigo
-    const pag = isYMD(String(t.action_text || '').slice(0,10))
-      ? isoToBR(String(t.action_text).slice(0, 10))
-      : (t.action_text || '');
-    return {
-      vencimento: venc,
-      pagamento: pag,
-      tipo: t.type || '',
-      categoria: t.category || '',
-      status: t.status || 'Pendente',
-      meio_pagamento: t.client_text || clientLabelById(t.client_id) || '',
-      juros: t.material_text || materialLabelById(t.material_id) || '',
-      valor: Number(t.amount || 0),
-      observacoes: t.notes || '',
-    };
-  }), [filtered, actions, clients, materials]);
+  const exportData = useMemo(() => filtered.map((t) => ({
+    data: isoToBR(String(t.date || '').slice(0, 10)) || '',
+    tipo: t.type || '',
+    categoria: t.category || '',
+    status: t.status || 'Pendente',
+    acao: t.action_text || actionLabelById(t.action_id) || '',
+    cliente: t.client_text || clientLabelById(t.client_id) || '',
+    material: t.material_text || materialLabelById(t.material_id) || '',
+    valor: Number(t.amount || 0),
+    observacoes: t.notes || '',
+  })), [filtered, actions, clients, materials]);
 
   const exportColumns = [
-    { key: 'vencimento', header: 'Vencimento' },
-    { key: 'pagamento', header: 'Pagamento' },
+    { key: 'data', header: 'Data' },
     { key: 'tipo', header: 'Tipo' },
     { key: 'categoria', header: 'Categoria' },
     { key: 'status', header: 'Status' },
-    { key: 'meio_pagamento', header: 'Meio de Pagamento' },
-    { key: 'juros', header: 'Juros' },
+    { key: 'acao', header: 'Ação' },
+    { key: 'cliente', header: 'Cliente' },
+    { key: 'material', header: 'Material' },
     { key: 'valor', header: 'Valor' },
     { key: 'observacoes', header: 'Observações' },
   ];
@@ -289,36 +273,27 @@ const Finance = () => {
       ].filter(Boolean).join(' | ') || 'Nenhum filtro aplicado'
     }`,
     columnStyles: {
-      0: { cellWidth: 26 }, 1: { cellWidth: 26 }, 2: { cellWidth: 22 },
-      3: { cellWidth: 38 }, 4: { cellWidth: 22 }, 5: { cellWidth: 42 },
-      6: { cellWidth: 26 }, 7: { cellWidth: 26 }, 8: { cellWidth: 70 },
+      0: { cellWidth: 22 }, 1: { cellWidth: 22 }, 2: { cellWidth: 38 },
+      3: { cellWidth: 22 }, 4: { cellWidth: 46 }, 5: { cellWidth: 60 },
+      6: { cellWidth: 60 }, 7: { cellWidth: 26 }, 8: { cellWidth: 70 },
     },
     footerContent: `Totais do período: Entradas: ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`
   };
 
   // Handlers form
   const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
-  const onDueDateChange = (e) => setForm((f) => ({ ...f, dueDateBr: maskBR(e.target.value) }));
-  const onPayDateChange = (e) => setForm((f) => ({ ...f, payDateBr: maskBR(e.target.value) }));
+  const onDateBRChange = (e) => setForm((f) => ({ ...f, dateBr: maskBR(e.target.value) }));
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setOpen(true); };
   const openEdit = (tx) => {
-    // preenche novos campos a partir do registro existente
-    const dueDateBr = isoToBR(String(tx.date || '').slice(0, 10)) || '';
-    const action = String(tx.action_text || '');
-    const payDateBr = isYMD(action.slice(0,10)) ? isoToBR(action.slice(0,10)) : '';
     setEditing(tx);
     setForm({
       type: tx.type || 'entrada',
-      dueDateBr,
-      payDateBr,
+      dateBr: isoToBR(String(tx.date || '').slice(0, 10)) || '',
       amount: String(tx.amount ?? ''),
       category: tx.category || '',
       status: tx.status || 'Pendente',
       notes: tx.notes || '',
-      paymentMethod: tx.client_text || '',
-      interestRate: tx.material_text || '',
-      // retrocompat (somente exibição/export)
       action_text: tx.action_text || '',
       client_text: tx.client_text || '',
       material_text: tx.material_text || '',
@@ -332,29 +307,24 @@ const Finance = () => {
   const submit = async (e) => {
     e.preventDefault(); setSaving(true);
     try {
-      const dateISO = brToISO(form.dueDateBr);
-      if (!isYMD(dateISO)) { alert('Data de Vencimento inválida. Use o formato DD/MM/AAAA.'); setSaving(false); return; }
-
-      const payISO = brToISO(form.payDateBr);
+      const dateISO = brToISO(form.dateBr);
+      if (!isYMD(dateISO)) { alert('Data inválida. Use o formato DD/MM/AAAA.'); setSaving(false); return; }
       const payload = {
         type: form.type,
-        date: dateISO, // vencimento
+        date: dateISO,
         amount: Number(form.amount || 0),
         category: form.category || '',
         status: form.status || 'Pendente',
         notes: form.notes || '',
-        // novos mapeamentos
-        action_text: isYMD(payISO) ? payISO : '',                 // pagamento opcional
-        client_text: form.paymentMethod || '',                    // meio de pagamento
-        material_text: form.interestRate || '',                   // juros (string)
-        // IDs antigos descontinuados (mantidos como null para não conflitar)
+        action_text: form.action_text || '',
+        client_text: form.client_text || '',
+        material_text: form.material_text || '',
+        // IDs antigos descontinuados
         action_id: null, client_id: null, material_id: null,
         actionId: null, clientId: null, materialId: null,
       };
-
       if (editing?.id) await api.put(`${TX_PATH}/${editing.id}`, payload);
       else await api.post(TX_PATH, payload);
-
       setOpen(false); setEditing(null); setForm(emptyForm); loadAll();
     } catch {
       alert('Não foi possível salvar. Verifique o backend de transações.');
@@ -461,7 +431,7 @@ const Finance = () => {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis
-                  tickFormatter={(v) => (v === 0 ? 'R$ 0' : BRL_COMPACT(v))}
+                  tickFormatter={BRL_COMPACT}
                   domain={[0, (dataMax) => (dataMax || 0) * 1.15 + 1]}
                   allowDecimals={false}
                 />
@@ -476,7 +446,7 @@ const Finance = () => {
         </Card>
       </div>
 
-      {/* Filtros e Ações */}
+      {/* Filtros e Ações (search em cima) */}
       <Card className="mb-4">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between gap-3">
@@ -502,7 +472,7 @@ const Finance = () => {
             />
           </div>
 
-          {/* Linha 2: filtros e ações */}
+          {/* Linha 2: filtros e ações (sem filtro por ações antigas) */}
           <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 items-center">
             <div className="w-full">
               <select
@@ -557,13 +527,13 @@ const Finance = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-center">Vencimento</TableHead>
-                  <TableHead className="text-center">Pagamento</TableHead>
+                  <TableHead className="text-center">Data</TableHead>
                   <TableHead className="text-center">Tipo</TableHead>
                   <TableHead className="text-center">Categoria</TableHead>
                   <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-center">Meio de Pagamento</TableHead>
-                  <TableHead className="text-center">Juros</TableHead>
+                  <TableHead className="text-center">Ação</TableHead>
+                  <TableHead className="text-center">Cliente</TableHead>
+                  <TableHead className="text-center">Material</TableHead>
                   <TableHead className="text-center">Valor</TableHead>
                   <TableHead className="text-center">Obs.</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
@@ -576,10 +546,9 @@ const Finance = () => {
                   <TableRow><TableCell colSpan={10} className="text-center py-8">Nenhuma transação encontrada.</TableCell></TableRow>
                 ) : (
                   filtered.map((t) => {
-                    const payRaw = String(t.action_text || '');
-                    const pagamento = isYMD(payRaw.slice(0,10)) ? isoToBR(payRaw.slice(0,10)) : (payRaw || '—');
-                    const meio = t.client_text || clientLabelById(t.client_id) || '—';
-                    const juros = t.material_text || materialLabelById(t.material_id) || '—';
+                    const actionText = t.action_text || actionLabelById(t.action_id) || '—';
+                    const clientText = t.client_text || clientLabelById(t.client_id) || '—';
+                    const materialText = t.material_text || materialLabelById(t.material_id) || '—';
                     const typeColor = t.type === 'entrada' ? 'default' : t.type === 'saida' ? 'destructive' : 'secondary';
                     const statusVariant =
                       (t.status || 'Pendente') === 'Pago' ? 'default' :
@@ -588,10 +557,7 @@ const Finance = () => {
                     return (
                       <TableRow key={t.id}>
                         <TableCell className="text-center">{isoToBR(String(t.date || '').slice(0, 10))}</TableCell>
-                        <TableCell className="text-center">{pagamento}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant={typeColor} className="capitalize">{t.type}</Badge>
-                        </TableCell>
+                        <TableCell className="text-center"><Badge variant={typeColor} className="capitalize">{t.type}</Badge></TableCell>
                         <TableCell className="text-center">{t.category || '—'}</TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -607,8 +573,9 @@ const Finance = () => {
                             </select>
                           </div>
                         </TableCell>
-                        <TableCell className="text-center">{meio}</TableCell>
-                        <TableCell className="text-center">{juros}</TableCell>
+                        <TableCell className="text-center">{actionText}</TableCell>
+                        <TableCell className="text-center">{clientText}</TableCell>
+                        <TableCell className="text-center">{materialText}</TableCell>
                         <TableCell className="text-center font-medium">{BRL(t.amount)}</TableCell>
                         <TableCell className="text-center">{t.notes || '—'}</TableCell>
                         <TableCell className="text-center">
@@ -640,10 +607,7 @@ const Finance = () => {
             <div className="p-6 pb-2">
               <DialogHeader className="pb-2">
                 <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
-                <DialogDescription>
-                  Registre uma entrada, saída ou despesa. Defina Vencimento, Pagamento (opcional), Status,
-                  Meio de Pagamento e Juros. Datas no formato DD/MM/AAAA.
-                </DialogDescription>
+                <DialogDescription>Registre uma entrada, saída ou despesa. Ação, Cliente e Material são texto livre; defina também o Status.</DialogDescription>
               </DialogHeader>
             </div>
 
@@ -657,19 +621,10 @@ const Finance = () => {
                     <option value="despesa">Despesa</option>
                   </select>
                 </div>
-
-                {/* Linha de datas lado a lado em md+ */}
-                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <Label>Data de Vencimento</Label>
-                    <Input name="dueDateBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.dueDateBr} onChange={onDueDateChange} required />
-                  </div>
-                  <div>
-                    <Label>Data de Pagamento</Label>
-                    <Input name="payDateBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.payDateBr} onChange={onPayDateChange} />
-                  </div>
+                <div>
+                  <Label>Data</Label>
+                  <Input name="dateBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.dateBr} onChange={onDateBRChange} required />
                 </div>
-
                 <div>
                   <Label>Valor</Label>
                   <Input type="number" step="0.01" name="amount" value={form.amount} onChange={onChange} required />
@@ -678,7 +633,6 @@ const Finance = () => {
                   <Label>Categoria</Label>
                   <Input name="category" value={form.category} onChange={onChange} placeholder="Ex.: Mídia, Produção..." />
                 </div>
-
                 <div>
                   <Label>Status</Label>
                   <select name="status" value={form.status} onChange={onChange} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
@@ -688,23 +642,19 @@ const Finance = () => {
                   </select>
                 </div>
 
-                {/* Linha de campos texto (mapeados) */}
                 <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <Label>Meio de Pagamento</Label>
-                    <Input name="paymentMethod" value={form.paymentMethod} onChange={onChange} placeholder="Ex.: PIX, Boleto, Cartão..." />
+                    <Label>Ação (texto livre)</Label>
+                    <Input name="action_text" value={form.action_text} onChange={onChange} placeholder="Ex.: Blitz Shopping, Campanha Setembro..." />
                   </div>
                   <div>
-                    <Label>Taxa de Juros</Label>
-                    <Input name="interestRate" value={form.interestRate} onChange={onChange} placeholder="Ex.: 2.5" />
+                    <Label>Cliente (texto livre)</Label>
+                    <Input name="client_text" value={form.client_text} onChange={onChange} placeholder="Ex.: Supermercado Rio Branco" />
                   </div>
-                  {/* Retrocompat: se o registro antigo tiver texto livre em action_text, mostramos somente para referência */}
-                  {editing && form.action_text && !isYMD(String(form.action_text).slice(0,10)) && (
-                    <div className="md:col-span-1">
-                      <Label>Pagamento (texto antigo)</Label>
-                      <Input value={form.action_text} readOnly className="bg-muted" />
-                    </div>
-                  )}
+                  <div>
+                    <Label>Material (texto livre)</Label>
+                    <Input name="material_text" value={form.material_text} onChange={onChange} placeholder="Ex.: 3.000 panfletos" />
+                  </div>
                 </div>
 
                 <div className="md:col-span-2">
