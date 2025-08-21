@@ -1,207 +1,164 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '@/services/api';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Label } from '@/components/ui/label.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
-import { Textarea } from '@/components/ui/textarea.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
-import { Search, Edit, Trash2, Plus } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { BRL, brToISO, isoToBR, maskDateBR, toNumberBR } from '@/lib/br.js';
 
-/* ===== Helpers ===== */
-const BRL = (n) =>
-  `R$ ${Number(n || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
-
-const parseMoney = (val) => {
-  if (val === null || val === undefined) return 0;
-  const s = String(val).trim();
-  if (!s) return 0;
-  const cleaned = s
-    .replace(/[^\d.,-]/g, '')
-    .replace(/\.(?=\d{3}(?:\D|$))/g, '')
-    .replace(',', '.');
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const maskBR = (v) => {
-  let s = (v || '').replace(/\D/g, '').slice(0, 8);
-  if (s.length >= 5) s = `${s.slice(0, 2)}/${s.slice(2, 4)}/${s.slice(4)}`;
-  else if (s.length >= 3) s = `${s.slice(0, 2)}/${s.slice(2)}`;
-  return s;
-};
-const isoToBR = (iso) => (iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '');
-const brToISO = (br) => {
-  if (!br || !/^\d{2}\/\d{2}\/\d{4}$/.test(br)) return '';
-  const [d, m, y] = br.split('/');
-  return `${y}-${m}-${d}`;
-};
-const todayISO = () => new Date().toISOString().slice(0, 10);
-const isOverdue = (vencISO) => vencISO && vencISO < todayISO();
+const path = '/contas-receber';
 
 const emptyForm = {
   vencimentoBr: '',
   cliente: '',
   notaFiscal: '',
   dataEmissaoBr: '',
-  valor: '',
-  taxasJuros: '',
+  valorStr: '',
+  taxasJurosStr: '',
   docRecebimento: '',
   dataBaixaBr: '',
-  valorLiquidoRecebido: '',
-  observacoes: '',
-  status: 'pendente',
+  valorLiquidoStr: '',
+  status: 'Pendente',
 };
 
-export default function ContasReceberTab() {
-  const [itens, setItens] = useState([]);
+const ContasReceberTab = () => {
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // filtros
   const [search, setSearch] = useState('');
-  const [mes, setMes] = useState('todos');
+  const [month, setMonth] = useState('todos');
 
+  // modal
   const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
 
-  const fetchAll = async () => {
+  const load = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/contas-receber');
-      setItens(Array.isArray(data) ? data : data?.items || []);
+      const { data } = await api.get(path);
+      setRows(Array.isArray(data) ? data : []);
     } catch (e) {
-      console.error('Erro ao buscar contas a receber', e);
-      setItens([]);
+      console.error('Erro ao carregar contas a receber', e);
+      setRows([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAll();
+    load();
   }, []);
 
-  const normalize = (r) => {
-    const v = parseMoney(r?.valor);
-    const vl = parseMoney(r?.valorLiquidoRecebido);
-    let status = (r?.status || '').toString().toLowerCase();
-    if (!status || !['pago', 'pendente', 'cancelado'].includes(status)) {
-      status = vl >= v && v > 0 ? 'pago' : 'pendente';
-    }
-    return { ...r, valor: v, valorLiquidoRecebido: vl, status };
-  };
+  const monthOptions = useMemo(() => {
+    const set = new Set();
+    rows.forEach(r => {
+      const ym = String(r.vencimento || '').slice(0, 7);
+      if (/^\d{4}-\d{2}$/.test(ym)) set.add(ym);
+    });
+    return Array.from(set).sort().reverse().map(ym => {
+      const [y, m] = ym.split('-');
+      return { value: ym, label: new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) };
+    });
+  }, [rows]);
 
-  const lista = useMemo(() => {
-    let arr = itens.map(normalize);
-    if (mes !== 'todos') arr = arr.filter((i) => (i?.vencimento || '').slice(0, 7) === mes);
+  const filtered = useMemo(() => {
+    let list = [...rows];
     if (search.trim()) {
       const q = search.toLowerCase();
-      arr = arr.filter((i) =>
-        [i.cliente, i.notaFiscal, i.docRecebimento, i.observacoes, BRL(i.valor), isoToBR(i.vencimento)]
+      list = list.filter(r =>
+        [r.cliente, r.notaFiscal, r.docRecebimento]
           .filter(Boolean)
-          .some((f) => String(f).toLowerCase().includes(q))
+          .some(v => String(v).toLowerCase().includes(q))
       );
     }
-    return arr.sort((a, b) => String(a.vencimento || '').localeCompare(String(b.vencimento || '')));
-  }, [itens, mes, search]);
+    if (month !== 'todos') {
+      list = list.filter(r => String(r.vencimento || '').slice(0, 7) === month);
+    }
+    list.sort((a, b) => String(a.vencimento || '').localeCompare(String(b.vencimento || '')));
+    return list;
+  }, [rows, search, month]);
 
-  const meses = useMemo(() => {
-    const s = new Set();
-    itens.forEach((i) => {
-      const k = String(i.vencimento || '').slice(0, 7);
-      if (/\d{4}-\d{2}/.test(k)) s.add(k);
-    });
-    return Array.from(s)
-      .sort()
-      .map((ym) => {
-        const [y, m] = ym.split('-');
-        const label = new Date(Number(y), Number(m) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-        return { value: ym, label };
-      });
-  }, [itens]);
+  // KPIs
+  const totalValor = filtered.reduce((s, r) => s + Number(r.valor || 0), 0);
+  const totalRecebido = filtered.reduce((s, r) => s + Number(r.valorLiquidoRecebido || 0), 0);
+  const emAberto = Math.max(totalValor - totalRecebido, 0);
 
-  /* KPIs */
-  const totalRecebidoLiq = useMemo(() => lista.reduce((s, i) => s + (i.valorLiquidoRecebido || 0), 0), [lista]);
-  const totalReceber = useMemo(() => lista.reduce((s, i) => s + (i.valor || 0), 0), [lista]);
-  const totalEmAberto = useMemo(() => lista
-      .filter(i => i.status !== 'pago' && i.status !== 'cancelado')
-      .reduce((s, i) => s + ((i.valor || 0) - (i.valorLiquidoRecebido || 0)), 0),
-    [lista]);
-  const vencidos = useMemo(() =>
-    lista.filter(i => i.status !== 'pago' && i.status !== 'cancelado' && isOverdue(i.vencimento)).length, [lista]);
-
-  const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setOpen(true); };
-  const openEdit = (row) => {
-    const n = normalize(row);
-    setEditing(row);
-    setForm({
-      vencimentoBr: isoToBR(row.vencimento),
-      cliente: row.cliente || '',
-      notaFiscal: row.notaFiscal || '',
-      dataEmissaoBr: isoToBR(row.dataEmissao || ''),
-      valor: String(n.valor ?? ''),
-      taxasJuros: String(parseMoney(row.taxasJuros) ?? ''),
-      docRecebimento: row.docRecebimento || '',
-      dataBaixaBr: isoToBR(row.dataBaixa || ''),
-      valorLiquidoRecebido: String(n.valorLiquidoRecebido ?? ''),
-      observacoes: row.observacoes || '',
-      status: n.status,
-    });
+  const openCreate = () => {
+    setEditing(null);
+    setForm(emptyForm);
     setOpen(true);
   };
 
-  const onChange = (e) => {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
+  const openEdit = (r) => {
+    setEditing(r);
+    setForm({
+      vencimentoBr: isoToBR(r.vencimento),
+      cliente: r.cliente || '',
+      notaFiscal: r.notaFiscal || '',
+      dataEmissaoBr: isoToBR(r.dataEmissao),
+      valorStr: r.valor != null ? String(r.valor).replace('.', ',') : '',
+      taxasJurosStr: r.taxasJuros != null ? String(r.taxasJuros).replace('.', ',') : '',
+      docRecebimento: r.docRecebimento || '',
+      dataBaixaBr: isoToBR(r.dataBaixa),
+      valorLiquidoStr: r.valorLiquidoRecebido != null ? String(r.valorLiquidoRecebido).replace('.', ',') : '',
+      status: r.status || 'Pendente',
+    });
+    setOpen(true);
   };
 
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    const payload = {
-      vencimento: brToISO(form.vencimentoBr),
-      cliente: form.cliente || '',
-      notaFiscal: form.notaFiscal || '',
-      dataEmissao: brToISO(form.dataEmissaoBr) || null,
-      valor: parseMoney(form.valor),
-      taxasJuros: parseMoney(form.taxasJuros),
-      docRecebimento: form.docRecebimento || '',
-      dataBaixa: brToISO(form.dataBaixaBr) || null,
-      valorLiquidoRecebido: parseMoney(form.valorLiquidoRecebido),
-      observacoes: form.observacoes || '',
-      status: form.status,
-    };
     try {
-      if (editing?.id) await api.put(`/contas-receber/${editing.id}`, payload);
-      else await api.post('/contas-receber', payload);
+      const payload = {
+        vencimento: brToISO(form.vencimentoBr),
+        cliente: form.cliente || '',
+        notaFiscal: form.notaFiscal || '',
+        dataEmissao: form.dataEmissaoBr ? brToISO(form.dataEmissaoBr) : null,
+        valor: toNumberBR(form.valorStr),
+        taxasJuros: toNumberBR(form.taxasJurosStr),
+        docRecebimento: form.docRecebimento || '',
+        dataBaixa: form.dataBaixaBr ? brToISO(form.dataBaixaBr) : null,
+        valorLiquidoRecebido: toNumberBR(form.valorLiquidoStr),
+        status: form.status || 'Pendente',
+      };
+
+      if (editing?.id) await api.put(`${path}/${editing.id}`, payload);
+      else await api.post(path, payload);
+
       setOpen(false);
       setEditing(null);
-      setForm({ ...emptyForm });
-      await fetchAll();
+      setForm(emptyForm);
+      load();
     } catch (err) {
-      console.error('Erro ao salvar conta a receber:', err);
+      console.error('Erro ao salvar conta a receber', err);
       alert('Não foi possível salvar. Verifique o backend.');
     } finally {
       setSaving(false);
     }
   };
 
-  const removeRow = async (id) => {
-    if (!confirm('Excluir esta conta?')) return;
+  const destroyItem = async (id) => {
+    if (!window.confirm('Confirma excluir esta conta?')) return;
     try {
-      await api.delete(`/contas-receber/${id}`);
-      await fetchAll();
-    } catch (err) {
-      console.error('Erro ao excluir:', err);
+      await api.delete(`${path}/${id}`);
+      load();
+    } catch (e) {
+      console.error('Erro ao excluir', e);
       alert('Não foi possível excluir.');
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
@@ -209,37 +166,53 @@ export default function ContasReceberTab() {
             <CardTitle className="text-sm">Entradas (a Receber)</CardTitle>
             <CardDescription>Receitas registradas</CardDescription>
           </CardHeader>
-        <CardContent><div className="text-xl sm:text-2xl font-bold">{BRL(totalReceber)}</div></CardContent>
+          <CardContent><div className="text-xl sm:text-2xl font-bold">{BRL(totalValor)}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Total Recebido Líquido</CardTitle>
             <CardDescription>Valor já recebido</CardDescription>
           </CardHeader>
-          <CardContent><div className="text-xl sm:text-2xl font-bold text-green-600">{BRL(totalRecebidoLiq)}</div></CardContent>
+          <CardContent><div className="text-xl sm:text-2xl font-bold">{BRL(totalRecebido)}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Em Aberto</CardTitle>
-            <CardDescription>{vencidos} recebimento(s) vencido(s)</CardDescription>
+            <CardDescription>recebimento(s) vencido(s)</CardDescription>
           </CardHeader>
-          <CardContent><div className="text-xl sm:text-2xl font-bold text-orange-600">{BRL(totalEmAberto)}</div></CardContent>
+          <CardContent><div className="text-xl sm:text-2xl font-bold text-orange-600">{BRL(emAberto)}</div></CardContent>
         </Card>
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-col md:flex-row gap-2 items-stretch md:items-center">
-        <div className="relative flex-1 md:max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Buscar contas..." value={search} onChange={(e)=>setSearch(e.target.value)} />
-        </div>
-        <select className="w-full md:w-56 border rounded-md px-3 py-2 text-sm bg-background" value={mes} onChange={(e)=>setMes(e.target.value)}>
-          <option value="todos">Todos os meses</option>
-          {meses.map((m)=><option key={m.value} value={m.value}>{m.label}</option>)}
-        </select>
-        <Button variant="outline" onClick={()=>{ setSearch(''); setMes('todos'); }}>Limpar Filtros</Button>
-        <Button className="gap-2" onClick={openCreate}><Plus className="size-4" /> Nova Conta</Button>
-      </div>
+      {/* Filtros / ações */}
+      <Card className="mb-2">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg md:text-xl font-semibold">Contas a Receber</CardTitle>
+              <CardDescription>Gerencie suas contas a receber</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-col md:flex-row gap-2 md:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input className="pl-9" placeholder="Buscar contas..." value={search} onChange={(e)=>setSearch(e.target.value)} />
+            </div>
+            <select
+              value={month}
+              onChange={(e)=>setMonth(e.target.value)}
+              className="w-56 border rounded-md px-3 py-2 text-sm bg-background"
+            >
+              <option value="todos">Todos os meses</option>
+              {monthOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+            <Button variant="outline" size="sm" onClick={()=>{ setSearch(''); setMonth('todos'); }}>Limpar Filtros</Button>
+            <Button size="sm" onClick={openCreate}>+ Nova Conta</Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Tabela */}
       <Card>
@@ -264,109 +237,141 @@ export default function ContasReceberTab() {
               <TableBody>
                 {loading ? (
                   <TableRow><TableCell colSpan={11} className="text-center py-8">Carregando…</TableCell></TableRow>
-                ) : lista.length === 0 ? (
+                ) : filtered.length === 0 ? (
                   <TableRow><TableCell colSpan={11} className="text-center py-8">Nenhuma conta encontrada.</TableCell></TableRow>
                 ) : (
-                  lista.map((i)=>{
-                    const badgeVariant = i.status === 'pago' ? 'default' : i.status === 'pendente' ? 'secondary' : 'destructive';
-                    return (
-                      <TableRow key={i.id}>
-                        <TableCell className="text-center">{isoToBR(i.vencimento)}</TableCell>
-                        <TableCell className="text-center">{i.cliente || '—'}</TableCell>
-                        <TableCell className="text-center">{i.notaFiscal || '—'}</TableCell>
-                        <TableCell className="text-center">{i.dataEmissao ? isoToBR(i.dataEmissao) : '—'}</TableCell>
-                        <TableCell className="text-center">{BRL(i.valor)}</TableCell>
-                        <TableCell className="text-center">{BRL(i.taxasJuros || 0)}</TableCell>
-                        <TableCell className="text-center">{i.docRecebimento || '—'}</TableCell>
-                        <TableCell className="text-center">{i.dataBaixa ? isoToBR(i.dataBaixa) : '—'}</TableCell>
-                        <TableCell className="text-center">{BRL(i.valorLiquidoRecebido || 0)}</TableCell>
-                        <TableCell className="text-center"><Badge variant={badgeVariant} className="capitalize">{i.status}</Badge></TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex justify-center gap-2">
-                            <Button variant="outline" size="sm" className="gap-2" onClick={()=>openEdit(i)}><Edit className="size-4" />Editar</Button>
-                            <Button variant="destructive" size="sm" className="gap-2" onClick={()=>removeRow(i.id)}><Trash2 className="size-4" />Excluir</Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                  filtered.map(r => (
+                    <TableRow key={r.id}>
+                      <TableCell className="text-center">{isoToBR(r.vencimento)}</TableCell>
+                      <TableCell className="text-center">{r.cliente || '—'}</TableCell>
+                      <TableCell className="text-center">{r.notaFiscal || '—'}</TableCell>
+                      <TableCell className="text-center">{isoToBR(r.dataEmissao)}</TableCell>
+                      <TableCell className="text-center">{BRL(r.valor || 0)}</TableCell>
+                      <TableCell className="text-center">{BRL(r.taxasJuros || 0)}</TableCell>
+                      <TableCell className="text-center">{r.docRecebimento || '—'}</TableCell>
+                      <TableCell className="text-center">{isoToBR(r.dataBaixa)}</TableCell>
+                      <TableCell className="text-center">{BRL(r.valorLiquidoRecebido || 0)}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge className="capitalize" variant={r.status === 'Pago' ? 'default' : r.status === 'Cancelado' ? 'destructive' : 'secondary'}>
+                          {r.status || 'Pendente'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center gap-2">
+                          <Button size="sm" variant="outline" onClick={()=>openEdit(r)}>Editar</Button>
+                          <Button size="sm" variant="destructive" onClick={()=>destroyItem(r.id)}>Excluir</Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
           </div>
           <p className="text-xs text-muted-foreground mt-3 px-6 pb-6">
-            Total: <strong>{lista.length}</strong> conta(s) | A Receber: <strong>{BRL(totalReceber)}</strong> | Recebido Líq.: <strong className="text-green-600">{BRL(totalRecebidoLiq)}</strong> | Em Aberto: <strong className="text-orange-600">{BRL(totalEmAberto)}</strong>
+            Total: {filtered.length} conta(s) | A Receber: <strong>{BRL(totalValor)}</strong> | Recebido Líq.: <strong>{BRL(totalRecebido)}</strong> | Em Aberto: <strong className="text-orange-600">{BRL(emAberto)}</strong>
           </p>
         </CardContent>
       </Card>
 
       {/* Modal */}
-      <Dialog open={open} onOpenChange={(v)=>{ if(!v){ setEditing(null); setForm({...emptyForm}); } setOpen(v); }}>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => { if (!v) { setEditing(null); setForm(emptyForm); } setOpen(v); }}
+      >
         <DialogContent className="w-[95vw] sm:max-w-3xl p-0">
           <form onSubmit={submit} className="max-h-[80vh] flex flex-col">
             <div className="p-6 pb-2">
               <DialogHeader className="pb-2">
                 <DialogTitle>{editing ? 'Editar Conta a Receber' : 'Nova Conta a Receber'}</DialogTitle>
-                <DialogDescription>Registre uma nova conta a receber ou atualize uma existente.</DialogDescription>
+                <DialogDescription>Registre/atualize uma conta a receber.</DialogDescription>
               </DialogHeader>
             </div>
+
             <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <Label>Vencimento *</Label>
-                  <Input name="vencimentoBr" placeholder="DD/MM/AAAA" inputMode="numeric"
-                    value={form.vencimentoBr} onChange={(e)=>setForm(f=>({...f, vencimentoBr: maskBR(e.target.value)}))} required/>
+                  <Input
+                    placeholder="DD/MM/AAAA"
+                    value={form.vencimentoBr}
+                    onChange={(e)=>setForm(f=>({...f, vencimentoBr: maskDateBR(e.target.value)}))}
+                    required
+                  />
                 </div>
                 <div>
-                  <Label>Cliente *</Label>
-                  <Input name="cliente" value={form.cliente} onChange={onChange} required />
+                  <Label>Cliente</Label>
+                  <Input value={form.cliente} onChange={(e)=>setForm(f=>({...f, cliente: e.target.value}))} />
                 </div>
                 <div>
                   <Label>Nota Fiscal</Label>
-                  <Input name="notaFiscal" value={form.notaFiscal} onChange={onChange} />
+                  <Input value={form.notaFiscal} onChange={(e)=>setForm(f=>({...f, notaFiscal: e.target.value}))} />
                 </div>
+
                 <div>
                   <Label>Data Emissão</Label>
-                  <Input name="dataEmissaoBr" placeholder="DD/MM/AAAA" inputMode="numeric"
-                    value={form.dataEmissaoBr} onChange={(e)=>setForm(f=>({...f, dataEmissaoBr: maskBR(e.target.value)}))} />
+                  <Input
+                    placeholder="DD/MM/AAAA"
+                    value={form.dataEmissaoBr}
+                    onChange={(e)=>setForm(f=>({...f, dataEmissaoBr: maskDateBR(e.target.value)}))}
+                  />
                 </div>
                 <div>
                   <Label>Valor *</Label>
-                  <Input type="text" inputMode="decimal" placeholder="0,00" name="valor" value={form.valor} onChange={onChange} required />
+                  <Input
+                    placeholder="0,00"
+                    value={form.valorStr}
+                    onChange={(e)=>setForm(f=>({...f, valorStr: e.target.value}))}
+                    required
+                  />
                 </div>
                 <div>
                   <Label>Taxas/Juros</Label>
-                  <Input type="text" inputMode="decimal" placeholder="0,00" name="taxasJuros" value={form.taxasJuros} onChange={onChange} />
+                  <Input
+                    placeholder="0,00"
+                    value={form.taxasJurosStr}
+                    onChange={(e)=>setForm(f=>({...f, taxasJurosStr: e.target.value}))}
+                  />
                 </div>
+
                 <div>
                   <Label>Doc. Recebimento</Label>
-                  <Input name="docRecebimento" value={form.docRecebimento} onChange={onChange} />
+                  <Input value={form.docRecebimento} onChange={(e)=>setForm(f=>({...f, docRecebimento: e.target.value}))} />
                 </div>
                 <div>
                   <Label>Data Baixa</Label>
-                  <Input name="dataBaixaBr" placeholder="DD/MM/AAAA" inputMode="numeric"
-                    value={form.dataBaixaBr} onChange={(e)=>setForm(f=>({...f, dataBaixaBr: maskBR(e.target.value)}))} />
+                  <Input
+                    placeholder="DD/MM/AAAA"
+                    value={form.dataBaixaBr}
+                    onChange={(e)=>setForm(f=>({...f, dataBaixaBr: maskDateBR(e.target.value)}))}
+                  />
                 </div>
                 <div>
-                  <Label>Valor Líq. Recebido</Label>
-                  <Input type="text" inputMode="decimal" placeholder="0,00" name="valorLiquidoRecebido" value={form.valorLiquidoRecebido} onChange={onChange} />
+                  <Label>Valor Líquido Recebido</Label>
+                  <Input
+                    placeholder="0,00"
+                    value={form.valorLiquidoStr}
+                    onChange={(e)=>setForm(f=>({...f, valorLiquidoStr: e.target.value}))}
+                  />
                 </div>
+
                 <div>
                   <Label>Status</Label>
-                  <select name="status" value={form.status} onChange={onChange} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
-                    <option value="pendente">Pendente</option>
-                    <option value="pago">Pago</option>
-                    <option value="cancelado">Cancelado</option>
+                  <select
+                    className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                    value={form.status}
+                    onChange={(e)=>setForm(f=>({...f, status: e.target.value}))}
+                  >
+                    <option>Pago</option>
+                    <option>Pendente</option>
+                    <option>Cancelado</option>
                   </select>
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Observações</Label>
-                  <Textarea name="observacoes" rows={3} value={form.observacoes} onChange={onChange} />
                 </div>
               </div>
             </div>
+
             <div className="border-t bg-background px-6 py-3 flex justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={()=>{ setOpen(false); setEditing(null); setForm({...emptyForm}); }}>Cancelar</Button>
+              <Button type="button" variant="outline" size="sm" onClick={()=>{ setOpen(false); setEditing(null); setForm(emptyForm); }}>Cancelar</Button>
               <Button type="submit" size="sm" disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
             </div>
           </form>
@@ -374,4 +379,6 @@ export default function ContasReceberTab() {
       </Dialog>
     </div>
   );
-}
+};
+
+export default ContasReceberTab;
