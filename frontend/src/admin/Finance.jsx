@@ -70,7 +70,7 @@ const brToISO = (br) => {
 
 const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
-/* ===== Novo formulário com strings e status ===== */
+/* ===== Form com strings e status ===== */
 const emptyForm = {
   type: 'entrada',
   dateBr: '',
@@ -78,10 +78,10 @@ const emptyForm = {
   category: '',
   status: 'Pendente',            // Pago | Pendente | Cancelado
   notes: '',
-  action_text: '',               // agora string livre
-  client_text: '',               // agora string livre
-  material_text: '',             // agora string livre
-  // compat fallback (não usados mais, mas preservo para editar itens antigos sem quebrar)
+  action_text: '',               // string livre
+  client_text: '',               // string livre
+  material_text: '',             // string livre
+  // compat (itens antigos):
   action_id: '',
   client_id: '',
   material_id: '',
@@ -89,9 +89,29 @@ const emptyForm = {
 
 const TX_PATH = '/transactions';
 
+/* ===== Cores fixas ===== */
+const COLORS = {
+  entrada: '#16a34a', // verde
+  saida: '#dc2626',   // vermelho
+  despesa: '#f59e0b', // amarelo
+};
+
+// paleta para categorias (pie) – estável via hash do nome
+const CATEGORY_PALETTE = [
+  '#0ea5e9', '#8b5cf6', '#22c55e', '#f97316', '#14b8a6', '#ef4444',
+  '#84cc16', '#06b6d4', '#a855f7', '#eab308', '#10b981', '#f43f5e',
+  '#3b82f6', '#f59e0b', '#6366f1'
+];
+const hashStr = (s) => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+};
+const colorForCategory = (name='') => CATEGORY_PALETTE[ hashStr(name.toLowerCase()) % CATEGORY_PALETTE.length ];
+
 const Finance = () => {
   const [transactions, setTransactions] = useState([]);
-  const [actions, setActions] = useState([]);     // ainda usado só para fallback de rotulagem em itens antigos
+  const [actions, setActions] = useState([]);     // apenas para rotular itens antigos
   const [clients, setClients] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -166,10 +186,8 @@ const Finance = () => {
           t.category,
           t.notes,
           String(t.amount),
-          // novos campos como string:
-          t.action_text, t.client_text, t.material_text,
-          // fallback antigos:
-          actionLabelById(t.action_id),
+          t.action_text, t.client_text, t.material_text, // novos
+          actionLabelById(t.action_id),                  // antigos
           clientLabelById(t.client_id),
           materialLabelById(t.material_id),
           t.status,
@@ -190,8 +208,7 @@ const Finance = () => {
 
     if (selectedActions.length > 0) {
       const actionSet = new Set(selectedActions);
-      // para itens novos, filtramos se o texto da ação está selecionado por ID? não há ID.
-      // Manteremos filtro apenas p/ itens antigos com action_id.
+      // filtro só tem efeito para itens antigos com action_id:
       list = list.filter((t) => actionSet.has(t.action_id));
     }
 
@@ -217,31 +234,38 @@ const Finance = () => {
   }, [transactions]);
 
   // Charts
+  // Gastos por Categoria – EXCLUINDO ENTRADAS + CORES FIXAS POR CATEGORIA
   const categoryChart = useMemo(() => {
     const counts = {};
     filtered.forEach((t) => {
+      const tipo = t.type || 'entrada';
+      if (tipo === 'entrada') return; // ignora entradas
       const cat = t.category || 'Sem categoria';
       counts[cat] = (counts[cat] || 0) + Number(t.amount || 0);
     });
     return Object.entries(counts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
-      .slice(0, 8);
+      .slice(0, 12);
   }, [filtered]);
 
+  // Fluxo Mensal: três barras LADO A LADO
   const monthlyChart = useMemo(() => {
     const months = {};
     filtered.forEach((t) => {
       const month = String(t.date || '').slice(0, 7);
-      if (!months[month]) months[month] = { entrada: 0, saida: 0, despesa: 0 };
-      months[month][t.type || 'entrada'] += Number(t.amount || 0);
+      if (!months[month]) months[month] = { month, entrada: 0, saida: 0, despesa: 0 };
+      const key = (t.type || 'entrada');
+      if (key === 'entrada') months[month].entrada += Number(t.amount || 0);
+      else if (key === 'saida') months[month].saida += Number(t.amount || 0);
+      else if (key === 'despesa') months[month].despesa += Number(t.amount || 0);
     });
-    return Object.entries(months)
-      .map(([month, data]) => ({ month, ...data }))
+    return Object.values(months)
       .sort((a, b) => a.month.localeCompare(b.month))
       .slice(-6);
   }, [filtered]);
 
+  // mantido (usa /actions para outro gráfico do dashboard – não exibido aqui)
   const actionsChart = useMemo(() => {
     const actionCounts = {};
     actions.forEach((a) => {
@@ -285,11 +309,11 @@ const Finance = () => {
       category: tx.category || '',
       status: tx.status || 'Pendente',
       notes: tx.notes || '',
-      // prioriza strings novas
+      // strings novas
       action_text: tx.action_text || '',
       client_text: tx.client_text || '',
       material_text: tx.material_text || '',
-      // mantém ids antigos para fallback (não serão salvos novamente)
+      // ids antigos (não serão salvos novamente)
       action_id: tx.action_id || '',
       client_id: tx.client_id || '',
       material_id: tx.material_id || '',
@@ -312,12 +336,12 @@ const Finance = () => {
         date: dateISO,
         amount: Number(form.amount || 0),
         category: form.category || '',
-        status: form.status || 'Pendente',                 // <- novo
+        status: form.status || 'Pendente',                 // novo
         notes: form.notes || '',
-        action_text: form.action_text || '',               // <- novo (ajuste nome se seu backend for diferente)
-        client_text: form.client_text || '',               // <- novo
-        material_text: form.material_text || '',           // <- novo
-        // compatibilidade, se o backend ainda tolerar esses campos (não usados mais):
+        action_text: form.action_text || '',               // novo
+        client_text: form.client_text || '',               // novo
+        material_text: form.material_text || '',           // novo
+        // compat (não usamos mais):
         action_id: null,
         client_id: null,
         material_id: null,
@@ -348,12 +372,9 @@ const Finance = () => {
   const updateStatus = async (tx, newStatus) => {
     try {
       const body = { status: newStatus };
-      // tente PATCH; se seu backend usar PUT com objeto inteiro, ajuste aqui:
       await api.patch?.(`${TX_PATH}/${tx.id}`, body).catch(async () => {
-        // fallback para PUT com merge mínimo:
         await api.put(`${TX_PATH}/${tx.id}`, { ...tx, status: newStatus });
       });
-      // atualiza local
       setTransactions((prev) => prev.map((t) => (t.id === tx.id ? { ...t, status: newStatus } : t)));
     } catch (err) {
       console.error('Erro ao atualizar status:', err);
@@ -520,13 +541,22 @@ const Finance = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <Card>
           <CardHeader><CardTitle className="text-lg">Gastos por Categoria</CardTitle></CardHeader>
-        <CardContent>
+          <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
-                <Pie data={categoryChart} cx="50%" cy="50%" labelLine={false}
-                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                     outerRadius={80} fill="#8884d8" dataKey="value">
-                  {categoryChart.map((_, i) => <Cell key={i} fill={`hsl(${i * 45}, 70%, 60%)`} />)}
+                <Pie
+                  data={categoryChart}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {categoryChart.map((entry, i) => (
+                    <Cell key={i} fill={colorForCategory(entry.name)} />
+                  ))}
                 </Pie>
                 <Tooltip formatter={(v) => BRL(v)} />
               </PieChart>
@@ -538,15 +568,21 @@ const Finance = () => {
           <CardHeader><CardTitle className="text-lg">Fluxo Mensal</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={monthlyChart}>
+              <BarChart
+                data={monthlyChart}
+                margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+                barCategoryGap="20%"
+                barGap={6}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v) => BRL(v)} />
                 <Legend />
-                <Bar dataKey="entrada" stackId="a" fill="#16a34a" name="Entradas" />
-                <Bar dataKey="saida" stackId="a" fill="#dc2626" name="Saídas" />
-                <Bar dataKey="despesa" stackId="a" fill="#f59e0b" name="Despesas" />
+                {/* barras lado a lado + cores fixas */}
+                <Bar dataKey="entrada" name="Entradas" fill={COLORS.entrada} />
+                <Bar dataKey="saida" name="Saídas" fill={COLORS.saida} />
+                <Bar dataKey="despesa" name="Despesas" fill={COLORS.despesa} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -568,9 +604,15 @@ const Finance = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
+            {/* Search corrigido: pl-10 + pointer-events-none */}
             <div className="relative flex-1 w-full md:w-[320px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Buscar transações..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                className="pl-10 pr-3"
+                placeholder="Buscar transações..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
 
             <div className="w-full sm:w-auto">
@@ -808,8 +850,7 @@ const Finance = () => {
 };
 
 /* ------------------------- Componentes Auxiliares ------------------------- */
-/* Mantive o SearchSelect no arquivo caso você ainda use em outras telas.
-   Aqui não é mais utilizado para Ação/Cliente/Material. */
+/* Mantido para uso em outras telas; não é mais usado aqui para Ação/Cliente/Material */
 const SearchSelect = ({ items, value, onChange, placeholder = 'Buscar...' }) => {
   const [open, setOpen] = useState(false);
   const selected = items.find((i) => String(i.id) === String(value));
