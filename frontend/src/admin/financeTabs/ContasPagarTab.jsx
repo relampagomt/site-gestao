@@ -1,26 +1,27 @@
-// frontend/src/admin/financeTabs/ContasPagarTab.jsx
 import React from "react";
 import api from "@/lib/api";
 import { toISO, toBR } from "@/utils/dateBR";
-import { parseNum } from "@/utils/financeMath";
 
-/* ==== CSV helpers (mesmo padrão do Lançamentos) ==== */
+// helpers de número/moeda
+const n = (v) => Number(v || 0);
+const money = (v) =>
+  n(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+// CSV
 const toCSV = (rows) => {
   if (!rows?.length) return "";
+  const esc = (v) => `"${String(v ?? "").replaceAll('"', '""')}"`;
   const head = Object.keys(rows[0]);
-  const esc = (v) =>
-    `"${String(v ?? "").replaceAll('"', '""').replaceAll("\n", " ") }"`;
   return [head.join(","), ...rows.map((r) => head.map((k) => esc(r[k])).join(","))].join("\n");
 };
-const downloadCSV = (filename, rows) => {
+const downloadCSV = (name, rows) => {
   const blob = new Blob([toCSV(rows)], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = filename;
+  a.download = name;
   a.click();
   URL.revokeObjectURL(a.href);
 };
-/* ==================================================== */
 
 const emptyForm = {
   id: null,
@@ -33,11 +34,11 @@ const emptyForm = {
 };
 
 function ImportXlsx({ onDone }) {
-  const ref = React.useRef(null);
-  const handleFile = async (f) => {
-    if (!f) return;
+  const inp = React.useRef(null);
+  const onFile = async (file) => {
+    if (!file) return;
     const fd = new FormData();
-    fd.append("file", f);
+    fd.append("file", file);
     await api.post("/contas-pagar/import", fd, {
       headers: { "Content-Type": "multipart/form-data" },
     });
@@ -46,13 +47,13 @@ function ImportXlsx({ onDone }) {
   return (
     <>
       <input
-        ref={ref}
+        ref={inp}
         type="file"
         accept=".xlsx"
         className="hidden"
-        onChange={(e) => handleFile(e.target.files?.[0])}
+        onChange={(e) => onFile(e.target.files?.[0])}
       />
-      <button type="button" className="btn btn-ghost" onClick={() => ref.current?.click()}>
+      <button type="button" className="btn btn-ghost" onClick={() => inp.current?.click()}>
         Importar
       </button>
     </>
@@ -60,23 +61,19 @@ function ImportXlsx({ onDone }) {
 }
 
 export default function ContasPagarTab() {
-  const [items, setItems] = React.useState([]);
+  const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [q, setQ] = React.useState("");
-  const [month, setMonth] = React.useState(""); // YYYY-MM
+  const [month, setMonth] = React.useState("");
 
-  // modal + form
   const [open, setOpen] = React.useState(false);
   const [form, setForm] = React.useState(emptyForm);
-
-  const money = (n) =>
-    (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   const reload = React.useCallback(async () => {
     setLoading(true);
     const qs = month ? `?month=${encodeURIComponent(month)}` : "";
     const { data } = await api.get(`/contas-pagar${qs}`);
-    setItems(Array.isArray(data) ? data : []);
+    setList(Array.isArray(data) ? data : []);
     setLoading(false);
   }, [month]);
 
@@ -84,22 +81,22 @@ export default function ContasPagarTab() {
 
   const filtered = React.useMemo(() => {
     const t = q.trim().toLowerCase();
-    if (!t) return items;
-    return items.filter((it) =>
-      [it.documento, it.descricao, it.notes, it.date, toBR(it.date)]
+    if (!t) return list;
+    return list.filter((it) =>
+      [it.documento, it.descricao, it.notes, it.vencimento, it.dataPagamento]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
         .includes(t)
     );
-  }, [items, q]);
+  }, [list, q]);
 
   const totals = React.useMemo(() => {
     let valor = 0,
       pago = 0;
     filtered.forEach((it) => {
-      valor += parseNum(it.amount ?? it.valor);
-      pago += parseNum(it.valorPago);
+      valor += n(it.valor ?? it.amount);
+      pago += n(it.valorPago);
     });
     return { valor, pago, saldo: valor - pago };
   }, [filtered]);
@@ -126,14 +123,16 @@ export default function ContasPagarTab() {
       vencimento: toISO(form.vencimento),
       documento: form.documento || null,
       descricao: form.descricao || "",
-      valor: form.valor,
+      valor: n(form.valor),
       dataPagamento: toISO(form.dataPagamento) || null,
-      valorPago: form.valorPago || 0,
+      valorPago: n(form.valorPago),
     };
-    if (!payload.vencimento) return alert("Vencimento inválido.");
-    if (!payload.valor || Number(payload.valor) <= 0) return alert("Valor inválido.");
+    if (!payload.vencimento) return alert("Vencimento inválido");
+    if (!payload.valor) return alert("Valor inválido");
+
     if (form.id) await api.patch(`/contas-pagar/${form.id}`, payload);
     else await api.post(`/contas-pagar`, payload);
+
     setOpen(false);
     await reload();
   };
@@ -146,11 +145,11 @@ export default function ContasPagarTab() {
 
   const exportar = () => {
     const rows = filtered.map((it) => {
-      const valor = parseNum(it.amount ?? it.valor);
-      const pago = parseNum(it.valorPago ?? 0);
+      const valor = n(it.valor ?? it.amount);
+      const pago = n(it.valorPago);
       return {
         id: it.id,
-        vencimento: toBR(it.date || it.vencimento),
+        vencimento: toBR(it.vencimento || it.date),
         documento: it.documento || "",
         descricao: it.descricao || it.notes || "",
         valor,
@@ -165,7 +164,7 @@ export default function ContasPagarTab() {
   return (
     <section className="card bg-base-100 shadow-sm">
       <div className="card-body">
-        {/* --- BARRA DE AÇÕES (mesma ordem/estilo do Lançamentos) --- */}
+        {/* ====== BARRA DE AÇÕES (igual lançamentos) ====== */}
         <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center mb-4">
           <input
             className="input input-bordered w-full md:flex-1"
@@ -211,7 +210,7 @@ export default function ContasPagarTab() {
           </button>
         </div>
 
-        {/* --- TABELA (mesma aparência do Lançamentos) --- */}
+        {/* ====== TABELA (igual lançamentos) ====== */}
         <div className="overflow-x-auto">
           <table className="table w-full">
             <thead>
@@ -236,12 +235,12 @@ export default function ContasPagarTab() {
               )}
               {!loading &&
                 filtered.map((it) => {
-                  const valor = parseNum(it.amount ?? it.valor);
-                  const pago = parseNum(it.valorPago);
+                  const valor = n(it.valor ?? it.amount);
+                  const pago = n(it.valorPago);
                   const status = pago >= valor ? "Pago" : "Pendente";
                   return (
                     <tr key={it.id}>
-                      <td>{toBR(it.date || it.vencimento)}</td>
+                      <td>{toBR(it.vencimento || it.date)}</td>
                       <td>{it.documento || "-"}</td>
                       <td>{it.descricao || it.notes || "-"}</td>
                       <td className="text-right">{money(valor)}</td>
@@ -289,14 +288,13 @@ export default function ContasPagarTab() {
           </table>
         </div>
 
-        {/* rodapé igual lançamentos */}
         <div className="pt-2 text-xs text-gray-500">
           Total: {filtered.length} conta(s) | A Pagar: {money(totals.valor)} | Pago:{" "}
           {money(totals.pago)} | Em Aberto: {money(totals.saldo)}
         </div>
       </div>
 
-      {/* --- MODAL (datas BR na UI, ISO ao salvar) --- */}
+      {/* ====== MODAL ====== */}
       {open && (
         <div className="modal modal-open">
           <div className="modal-box max-w-3xl">

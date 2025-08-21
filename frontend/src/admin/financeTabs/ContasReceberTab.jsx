@@ -1,22 +1,23 @@
-// frontend/src/admin/financeTabs/ContasReceberTab.jsx
 import React from "react";
 import api from "@/lib/api";
 import { toISO, toBR } from "@/utils/dateBR";
-import { parseNum } from "@/utils/financeMath";
 
-/* CSV helpers */
+const n = (v) => Number(v || 0);
+const money = (v) =>
+  n(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+// CSV
 const toCSV = (rows) => {
   if (!rows?.length) return "";
+  const esc = (v) => `"${String(v ?? "").replaceAll('"', '""')}"`;
   const head = Object.keys(rows[0]);
-  const esc = (v) =>
-    `"${String(v ?? "").replaceAll('"', '""').replaceAll("\n", " ") }"`;
   return [head.join(","), ...rows.map((r) => head.map((k) => esc(r[k])).join(","))].join("\n");
 };
-const downloadCSV = (filename, rows) => {
+const downloadCSV = (name, rows) => {
   const blob = new Blob([toCSV(rows)], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = filename;
+  a.download = name;
   a.click();
   URL.revokeObjectURL(a.href);
 };
@@ -35,11 +36,11 @@ const emptyForm = {
 };
 
 function ImportXlsx({ onDone }) {
-  const ref = React.useRef(null);
-  const handleFile = async (f) => {
-    if (!f) return;
+  const inp = React.useRef(null);
+  const onFile = async (file) => {
+    if (!file) return;
     const fd = new FormData();
-    fd.append("file", f);
+    fd.append("file", file);
     await api.post("/contas-receber/import", fd, {
       headers: { "Content-Type": "multipart/form-data" },
     });
@@ -48,13 +49,13 @@ function ImportXlsx({ onDone }) {
   return (
     <>
       <input
-        ref={ref}
+        ref={inp}
         type="file"
         accept=".xlsx"
         className="hidden"
-        onChange={(e) => handleFile(e.target.files?.[0])}
+        onChange={(e) => onFile(e.target.files?.[0])}
       />
-      <button type="button" className="btn btn-ghost" onClick={() => ref.current?.click()}>
+      <button type="button" className="btn btn-ghost" onClick={() => inp.current?.click()}>
         Importar
       </button>
     </>
@@ -62,7 +63,7 @@ function ImportXlsx({ onDone }) {
 }
 
 export default function ContasReceberTab() {
-  const [items, setItems] = React.useState([]);
+  const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [q, setQ] = React.useState("");
   const [month, setMonth] = React.useState("");
@@ -70,14 +71,11 @@ export default function ContasReceberTab() {
   const [open, setOpen] = React.useState(false);
   const [form, setForm] = React.useState(emptyForm);
 
-  const money = (n) =>
-    (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
   const reload = React.useCallback(async () => {
     setLoading(true);
     const qs = month ? `?month=${encodeURIComponent(month)}` : "";
     const { data } = await api.get(`/contas-receber${qs}`);
-    setItems(Array.isArray(data) ? data : []);
+    setList(Array.isArray(data) ? data : []);
     setLoading(false);
   }, [month]);
 
@@ -85,22 +83,22 @@ export default function ContasReceberTab() {
 
   const filtered = React.useMemo(() => {
     const t = q.trim().toLowerCase();
-    if (!t) return items;
-    return items.filter((it) =>
-      [it.cliente, it.notaFiscal, it.notes, it.date, toBR(it.date)]
+    if (!t) return list;
+    return list.filter((it) =>
+      [it.cliente, it.notaFiscal, it.notes, it.vencimento, it.dataEmissao, it.dataBaixa]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
         .includes(t)
     );
-  }, [items, q]);
+  }, [list, q]);
 
   const totals = React.useMemo(() => {
     let valor = 0,
       liq = 0;
     filtered.forEach((it) => {
-      valor += parseNum(it.amount ?? it.valor);
-      liq += parseNum(it.valorLiqRecebido);
+      valor += n(it.valor ?? it.amount);
+      liq += n(it.valorLiqRecebido);
     });
     return { valor, liq, saldo: valor - liq };
   }, [filtered]);
@@ -113,7 +111,7 @@ export default function ContasReceberTab() {
     setForm({
       id: it.id,
       vencimento: toISO(it.vencimento || it.date),
-      cliente: it.cliente || it.notes || "",
+      cliente: it.cliente || "",
       notaFiscal: it.notaFiscal || "",
       dataEmissao: toISO(it.dataEmissao),
       valor: it.valor ?? it.amount ?? "",
@@ -131,14 +129,14 @@ export default function ContasReceberTab() {
       cliente: form.cliente || "",
       notaFiscal: form.notaFiscal || null,
       dataEmissao: toISO(form.dataEmissao) || null,
-      valor: form.valor,
-      taxasJuros: form.taxasJuros || 0,
+      valor: n(form.valor),
+      taxasJuros: n(form.taxasJuros),
       documentoRecebimento: form.documentoRecebimento || null,
       dataBaixa: toISO(form.dataBaixa) || null,
-      valorLiqRecebido: form.valorLiqRecebido || 0,
+      valorLiqRecebido: n(form.valorLiqRecebido),
     };
-    if (!payload.vencimento) return alert("Vencimento inválido.");
-    if (!payload.valor || Number(payload.valor) <= 0) return alert("Valor inválido.");
+    if (!payload.vencimento) return alert("Vencimento inválido");
+    if (!payload.valor) return alert("Valor inválido");
 
     if (form.id) await api.patch(`/contas-receber/${form.id}`, payload);
     else await api.post(`/contas-receber`, payload);
@@ -155,16 +153,16 @@ export default function ContasReceberTab() {
 
   const exportar = () => {
     const rows = filtered.map((it) => {
-      const valor = parseNum(it.amount ?? it.valor ?? 0);
-      const liq = parseNum(it.valorLiqRecebido ?? 0);
+      const valor = n(it.valor ?? it.amount);
+      const liq = n(it.valorLiqRecebido);
       return {
         id: it.id,
-        vencimento: toBR(it.date || it.vencimento),
-        cliente: it.cliente || it.notes || "",
+        vencimento: toBR(it.vencimento || it.date),
+        cliente: it.cliente || "",
         nota_fiscal: it.notaFiscal || "",
         data_emissao: toBR(it.dataEmissao),
         valor,
-        taxas_juros: parseNum(it.taxasJuros || 0),
+        taxas_juros: n(it.taxasJuros),
         doc_recebimento: it.documentoRecebimento || "",
         data_baixa: toBR(it.dataBaixa),
         valor_liq_recebido: liq,
@@ -177,7 +175,7 @@ export default function ContasReceberTab() {
   return (
     <section className="card bg-base-100 shadow-sm">
       <div className="card-body">
-        {/* --- BARRA DE AÇÕES (idêntica ao Lançamentos) --- */}
+        {/* ====== BARRA DE AÇÕES (igual lançamentos) ====== */}
         <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center mb-4">
           <input
             className="input input-bordered w-full md:flex-1"
@@ -223,7 +221,7 @@ export default function ContasReceberTab() {
           </button>
         </div>
 
-        {/* --- TABELA --- */}
+        {/* ====== TABELA (igual lançamentos) ====== */}
         <div className="overflow-x-auto">
           <table className="table w-full">
             <thead>
@@ -251,17 +249,17 @@ export default function ContasReceberTab() {
               )}
               {!loading &&
                 filtered.map((it) => {
-                  const valor = parseNum(it.amount ?? it.valor);
-                  const liq = parseNum(it.valorLiqRecebido);
+                  const valor = n(it.valor ?? it.amount);
+                  const liq = n(it.valorLiqRecebido);
                   const status = liq >= valor ? "Recebido" : "Pendente";
                   return (
                     <tr key={it.id}>
-                      <td>{toBR(it.date || it.vencimento)}</td>
-                      <td>{it.cliente || it.notes || "-"}</td>
+                      <td>{toBR(it.vencimento || it.date)}</td>
+                      <td>{it.cliente || "-"}</td>
                       <td>{it.notaFiscal || "-"}</td>
                       <td>{toBR(it.dataEmissao)}</td>
                       <td className="text-right">{money(valor)}</td>
-                      <td className="text-right">{money(parseNum(it.taxasJuros || 0))}</td>
+                      <td className="text-right">{money(n(it.taxasJuros))}</td>
                       <td>{it.documentoRecebimento || "-"}</td>
                       <td>{toBR(it.dataBaixa)}</td>
                       <td className="text-right">{money(liq)}</td>
@@ -315,7 +313,7 @@ export default function ContasReceberTab() {
         </div>
       </div>
 
-      {/* MODAL */}
+      {/* ====== MODAL ====== */}
       {open && (
         <div className="modal modal-open">
           <div className="modal-box max-w-5xl">
