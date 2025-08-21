@@ -1,0 +1,6 @@
+{
+  "version": 2,
+  "installCommand": "pnpm i --no-frozen-lockfile --reporter=append-only",
+  "buildCommand": "pnpm -C frontend build",
+  "outputDirectory": "frontend/dist"
+}
