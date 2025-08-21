@@ -11,16 +11,17 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Search } from 'lucide-react';
 
 import { BRL, isoToBR, toNumberBR } from '@/lib/br.js';
+import { maskMoneyBR, maskDateBR, maskToISO, isoToMask } from '@/lib/masks.js';
 
 const PATH = '/contas-pagar';
 
 const emptyForm = {
-  vencimento: '',      // YYYY-MM-DD
+  vencimentoMask: '',   // dd/mm/aaaa
   documento: '',
   descricao: '',
-  valorStr: '',        // string pt-BR no estado
-  dataPagamento: '',   // YYYY-MM-DD (opcional)
-  status: 'Pendente',  // Pago | Pendente | Cancelado
+  valorStr: '',         // string pt-BR com máscara
+  dataPagamentoMask: '',// dd/mm/aaaa (opcional)
+  status: 'Pendente',   // Pago | Pendente | Cancelado
   observacoes: '',
 };
 
@@ -43,8 +44,10 @@ function decorate(row) {
   const valor = Number(row?.valor ?? row?.amount ?? 0);
   let pago = Number(row?.valorPago ?? 0);
   const status = normalizeStatus(row?.status ?? row?.situacao ?? row?.paymentStatus);
+
   if ((!row?.valorPago || isNaN(pago)) && status === 'Pago') pago = valor;
   if (status === 'Cancelado') pago = 0;
+
   const aberto = Math.max(valor - pago, 0);
   return { ...row, status, _valor: valor, _pago: pago, _aberto: aberto };
 }
@@ -73,6 +76,7 @@ export default function ContasPagarTab() {
       setLoading(false);
     }
   };
+
   useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
@@ -102,23 +106,34 @@ export default function ContasPagarTab() {
     return { total, pago, emAberto, atrasados };
   }, [rows]);
 
-  const openNew = () => { setEditing(null); setForm(emptyForm); setOpen(true); };
+  const openNew = () => {
+    setEditing(null);
+    setForm(emptyForm);
+    setOpen(true);
+  };
+
   const openEdit = (row) => {
     setEditing(row);
     setForm({
-      vencimento: (row.date || row.vencimento || '').slice(0,10),
+      vencimentoMask: isoToMask((row.date || row.vencimento || '').slice(0,10)),
       documento: row.documento || '',
       descricao: row.descricao || row.notes || '',
       valorStr: (row.valor ?? row.amount ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
-      dataPagamento: (row.dataPagamento || '').slice(0,10),
+      dataPagamentoMask: isoToMask((row.dataPagamento || '').slice(0,10)),
       status: normalizeStatus(row.status || 'Pendente'),
       observacoes: row.observacoes || '',
     });
     setOpen(true);
   };
+
   const remove = async (id) => {
     if (!confirm('Remover este lançamento?')) return;
-    try { await api.delete(`${PATH}/${id}`); await load(); } catch (e) { console.error(e); }
+    try {
+      await api.delete(`${PATH}/${id}`);
+      await load();
+    } catch (e) {
+      console.error('Erro ao remover conta a pagar', e);
+    }
   };
 
   const submit = async (e) => {
@@ -126,35 +141,43 @@ export default function ContasPagarTab() {
     setSaving(true);
     try {
       const valor = toNumberBR(form.valorStr);
-      let dataPagamento = form.dataPagamento || '';
+      const vencimento = maskToISO(form.vencimentoMask);
+      let dataPagamento = maskToISO(form.dataPagamentoMask) || '';
       const status = normalizeStatus(form.status);
       let valorPago = 0;
 
       if (status === 'Pago') {
         valorPago = valor;
-        if (!dataPagamento) dataPagamento = form.vencimento;
+        if (!dataPagamento) dataPagamento = vencimento; // default = vencimento
       } else {
-        valorPago = 0;
+        valorPago = 0; // Pendente/Cancelado
       }
 
       const payload = {
-        vencimento: form.vencimento,
+        vencimento: vencimento || null,       // ISO
         documento: form.documento || null,
         descricao: form.descricao || '',
-        valor,
-        dataPagamento: dataPagamento || null,
-        valorPago,
+        valor,                                // number
+        dataPagamento: dataPagamento || null, // ISO | null
+        valorPago,                            // derivado
         status,
         observacoes: form.observacoes || '',
       };
 
-      if (editing?.id) await api.put(`${PATH}/${editing.id}`, payload);
-      else await api.post(PATH, payload);
-
-      setOpen(false); setEditing(null); setForm(emptyForm); await load();
+      if (editing?.id) {
+        await api.put(`${PATH}/${editing.id}`, payload);
+      } else {
+        await api.post(PATH, payload);
+      }
+      setOpen(false);
+      setEditing(null);
+      setForm(emptyForm);
+      await load();
     } catch (e) {
       console.error('Erro ao salvar conta a pagar', e);
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -277,7 +300,11 @@ export default function ContasPagarTab() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Vencimento</Label>
-                  <Input lang="pt-BR" type="date" value={form.vencimento} onChange={(e)=>setForm(f=>({...f, vencimento: e.target.value}))} />
+                  <Input
+                    placeholder="dd/mm/aaaa"
+                    value={form.vencimentoMask}
+                    onChange={(e)=>setForm(f=>({...f, vencimentoMask: maskDateBR(e.target.value)}))}
+                  />
                 </div>
                 <div>
                   <Label>Documento</Label>
@@ -289,15 +316,27 @@ export default function ContasPagarTab() {
                 </div>
                 <div>
                   <Label>Valor</Label>
-                  <Input placeholder="0,00" value={form.valorStr} onChange={(e)=>setForm(f=>({...f, valorStr: e.target.value}))} />
+                  <Input
+                    placeholder="0,00"
+                    value={form.valorStr}
+                    onChange={(e)=>setForm(f=>({...f, valorStr: maskMoneyBR(e.target.value)}))}
+                  />
                 </div>
                 <div>
                   <Label>Data Pagamento (se pago)</Label>
-                  <Input lang="pt-BR" type="date" value={form.dataPagamento} onChange={(e)=>setForm(f=>({...f, dataPagamento: e.target.value}))} />
+                  <Input
+                    placeholder="dd/mm/aaaa"
+                    value={form.dataPagamentoMask}
+                    onChange={(e)=>setForm(f=>({...f, dataPagamentoMask: maskDateBR(e.target.value)}))}
+                  />
                 </div>
                 <div>
                   <Label>Status</Label>
-                  <select className="w-full border rounded-md px-3 py-2" value={form.status} onChange={(e)=>setForm(f=>({...f, status: e.target.value}))}>
+                  <select
+                    className="w-full border rounded-md px-3 py-2"
+                    value={form.status}
+                    onChange={(e)=>setForm(f=>({...f, status: e.target.value}))}
+                  >
                     <option>Pago</option>
                     <option>Pendente</option>
                     <option>Cancelado</option>
