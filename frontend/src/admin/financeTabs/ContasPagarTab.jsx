@@ -10,8 +10,23 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
 import { Search, Edit, Trash2, Plus } from 'lucide-react';
 
+/* ===== Helpers ===== */
 const BRL = (n) =>
   `R$ ${Number(n || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+
+// aceita "1.234,56" (pt-BR) e "1234.56"
+const parseMoney = (val) => {
+  if (val === null || val === undefined) return 0;
+  const s = String(val).trim();
+  if (!s) return 0;
+  // remove espaços e moeda, normaliza separadores
+  const cleaned = s
+    .replace(/[^\d.,-]/g, '')      // mantém dígitos, vírgula, ponto e sinal
+    .replace(/\.(?=\d{3}(?:\D|$))/g, '') // remove pontos de milhar
+    .replace(',', '.');            // vírgula -> ponto
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+};
 
 const maskBR = (v) => {
   let s = (v || '').replace(/\D/g, '').slice(0, 8);
@@ -36,7 +51,7 @@ const emptyForm = {
   dataPagamentoBr: '',
   valorPago: '',
   observacoes: '',
-  status: 'pendente', // novo campo
+  status: 'pendente',
 };
 
 export default function ContasPagarTab() {
@@ -68,23 +83,19 @@ export default function ContasPagarTab() {
     fetchAll();
   }, []);
 
-  // normaliza | status final
   const normalize = (r) => {
-    const v = Number(r?.valor || 0);
-    const vp = Number(r?.valorPago || 0);
+    const v = parseMoney(r?.valor);
+    const vp = parseMoney(r?.valorPago);
     let status = (r?.status || '').toString().toLowerCase();
     if (!status || !['pago', 'pendente', 'cancelado'].includes(status)) {
       status = vp >= v && v > 0 ? 'pago' : 'pendente';
     }
-    return { ...r, status };
+    return { ...r, valor: v, valorPago: vp, status };
   };
 
   const lista = useMemo(() => {
     let arr = itens.map(normalize);
-
-    if (mes !== 'todos') {
-      arr = arr.filter((i) => (i?.vencimento || '').slice(0, 7) === mes);
-    }
+    if (mes !== 'todos') arr = arr.filter((i) => (i?.vencimento || '').slice(0, 7) === mes);
     if (search.trim()) {
       const q = search.toLowerCase();
       arr = arr.filter((i) =>
@@ -96,7 +107,6 @@ export default function ContasPagarTab() {
     return arr.sort((a, b) => String(a.vencimento || '').localeCompare(String(b.vencimento || '')));
   }, [itens, mes, search]);
 
-  // meses disponíveis
   const meses = useMemo(() => {
     const s = new Set();
     itens.forEach((i) => {
@@ -112,44 +122,30 @@ export default function ContasPagarTab() {
       });
   }, [itens]);
 
-  // KPIs
-  const totalPago = useMemo(
-    () =>
-      lista
-        .filter((i) => i.status === 'pago')
-        .reduce((s, i) => s + Number(i.valorPago || i.valor || 0), 0),
-    [lista]
-  );
-  const totalGasto = useMemo(() => lista.reduce((s, i) => s + Number(i.valor || 0), 0), [lista]);
-  const totalAberto = useMemo(
-    () =>
-      lista
-        .filter((i) => i.status !== 'pago' && i.status !== 'cancelado')
-        .reduce((s, i) => s + (Number(i.valor || 0) - Number(i.valorPago || 0)), 0),
-    [lista]
-  );
-  const vencidas = useMemo(
-    () => lista.filter((i) => i.status !== 'pago' && i.status !== 'cancelado' && isOverdue(i.vencimento)).length,
-    [lista]
-  );
+  /* KPIs */
+  const totalPago = useMemo(() => lista.filter(i => i.status === 'pago')
+    .reduce((s, i) => s + (i.valorPago || i.valor || 0), 0), [lista]);
+  const totalGasto = useMemo(() => lista.reduce((s, i) => s + (i.valor || 0), 0), [lista]);
+  const totalAberto = useMemo(() => lista
+      .filter(i => i.status !== 'pago' && i.status !== 'cancelado')
+      .reduce((s, i) => s + ((i.valor || 0) - (i.valorPago || 0)), 0),
+    [lista]);
+  const vencidas = useMemo(() =>
+    lista.filter(i => i.status !== 'pago' && i.status !== 'cancelado' && isOverdue(i.vencimento)).length, [lista]);
 
-  const openCreate = () => {
-    setEditing(null);
-    setForm({ ...emptyForm });
-    setOpen(true);
-  };
-
+  const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setOpen(true); };
   const openEdit = (row) => {
+    const n = normalize(row);
     setEditing(row);
     setForm({
       vencimentoBr: isoToBR(row.vencimento),
       documento: row.documento || '',
       descricao: row.descricao || '',
-      valor: String(row.valor ?? ''),
+      valor: String(n.valor ?? ''),
       dataPagamentoBr: isoToBR(row.dataPagamento || ''),
-      valorPago: String(row.valorPago ?? ''),
+      valorPago: String(n.valorPago ?? ''),
       observacoes: row.observacoes || '',
-      status: normalize(row).status,
+      status: n.status,
     });
     setOpen(true);
   };
@@ -166,9 +162,9 @@ export default function ContasPagarTab() {
       vencimento: brToISO(form.vencimentoBr),
       documento: form.documento || '',
       descricao: form.descricao || '',
-      valor: Number(form.valor || 0),
+      valor: parseMoney(form.valor),
       dataPagamento: brToISO(form.dataPagamentoBr) || null,
-      valorPago: Number(form.valorPago || 0),
+      valorPago: parseMoney(form.valorPago),
       observacoes: form.observacoes || '',
       status: form.status,
     };
@@ -225,20 +221,17 @@ export default function ContasPagarTab() {
         </Card>
       </div>
 
-      {/* Filtros / ações */}
+      {/* Filtros */}
       <div className="flex flex-col md:flex-row gap-2 items-stretch md:items-center">
         <div className="relative flex-1 md:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Buscar contas..." value={search} onChange={(e)=>setSearch(e.target.value)} />
         </div>
-
-        <select className="w-full md:w-56 border rounded-md px-3 py-2 text-sm bg-background"
-                value={mes} onChange={(e)=>setMes(e.target.value)}>
+        <select className="w-full md:w-56 border rounded-md px-3 py-2 text-sm bg-background" value={mes} onChange={(e)=>setMes(e.target.value)}>
           <option value="todos">Todos os meses</option>
           {meses.map((m)=><option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
-
-        <Button variant="outline" onClick={()=>{setSearch(''); setMes('todos')}}>Limpar Filtros</Button>
+        <Button variant="outline" onClick={()=>{ setSearch(''); setMes('todos'); }}>Limpar Filtros</Button>
         <Button className="gap-2" onClick={openCreate}><Plus className="size-4" /> Nova Conta</Button>
       </div>
 
@@ -266,9 +259,7 @@ export default function ContasPagarTab() {
                   <TableRow><TableCell colSpan={8} className="text-center py-8">Nenhuma conta encontrada.</TableCell></TableRow>
                 ) : (
                   lista.map((i)=> {
-                    const status = normalize(i).status;
-                    const badgeVariant =
-                      status === 'pago' ? 'default' : status === 'pendente' ? 'secondary' : 'destructive';
+                    const badgeVariant = i.status === 'pago' ? 'default' : i.status === 'pendente' ? 'secondary' : 'destructive';
                     return (
                       <TableRow key={i.id}>
                         <TableCell className="text-center">{isoToBR(i.vencimento)}</TableCell>
@@ -277,7 +268,7 @@ export default function ContasPagarTab() {
                         <TableCell className="text-center">{BRL(i.valor)}</TableCell>
                         <TableCell className="text-center">{i.dataPagamento ? isoToBR(i.dataPagamento) : '—'}</TableCell>
                         <TableCell className="text-center">{BRL(i.valorPago || 0)}</TableCell>
-                        <TableCell className="text-center"><Badge variant={badgeVariant} className="capitalize">{status}</Badge></TableCell>
+                        <TableCell className="text-center"><Badge variant={badgeVariant} className="capitalize">{i.status}</Badge></TableCell>
                         <TableCell className="text-center">
                           <div className="flex justify-center gap-2">
                             <Button variant="outline" size="sm" className="gap-2" onClick={()=>openEdit(i)}><Edit className="size-4" />Editar</Button>
@@ -324,7 +315,7 @@ export default function ContasPagarTab() {
                 </div>
                 <div>
                   <Label>Valor *</Label>
-                  <Input type="number" step="0.01" name="valor" value={form.valor} onChange={onChange} required />
+                  <Input type="text" inputMode="decimal" placeholder="0,00" name="valor" value={form.valor} onChange={onChange} required />
                 </div>
                 <div>
                   <Label>Data Pagamento</Label>
@@ -333,7 +324,7 @@ export default function ContasPagarTab() {
                 </div>
                 <div>
                   <Label>Valor Pago</Label>
-                  <Input type="number" step="0.01" name="valorPago" value={form.valorPago} onChange={onChange} />
+                  <Input type="text" inputMode="decimal" placeholder="0,00" name="valorPago" value={form.valorPago} onChange={onChange} />
                 </div>
                 <div>
                   <Label>Status</Label>

@@ -10,8 +10,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
 import { Search, Edit, Trash2, Plus } from 'lucide-react';
 
+/* ===== Helpers ===== */
 const BRL = (n) =>
   `R$ ${Number(n || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+
+const parseMoney = (val) => {
+  if (val === null || val === undefined) return 0;
+  const s = String(val).trim();
+  if (!s) return 0;
+  const cleaned = s
+    .replace(/[^\d.,-]/g, '')
+    .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+    .replace(',', '.');
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+};
 
 const maskBR = (v) => {
   let s = (v || '').replace(/\D/g, '').slice(0, 8);
@@ -39,7 +52,7 @@ const emptyForm = {
   dataBaixaBr: '',
   valorLiquidoRecebido: '',
   observacoes: '',
-  status: 'pendente', // novo
+  status: 'pendente',
 };
 
 export default function ContasReceberTab() {
@@ -72,75 +85,80 @@ export default function ContasReceberTab() {
   }, []);
 
   const normalize = (r) => {
-    const v = Number(r?.valor || 0);
-    const vl = Number(r?.valorLiquidoRecebido || 0);
+    const v = parseMoney(r?.valor);
+    const vl = parseMoney(r?.valorLiquidoRecebido);
     let status = (r?.status || '').toString().toLowerCase();
     if (!status || !['pago', 'pendente', 'cancelado'].includes(status)) {
       status = vl >= v && v > 0 ? 'pago' : 'pendente';
     }
-    return { ...r, status };
+    return { ...r, valor: v, valorLiquidoRecebido: vl, status };
   };
 
   const lista = useMemo(() => {
     let arr = itens.map(normalize);
-    if (mes !== 'todos') arr = arr.filter((i) => (i?.vencimento || '').slice(0,7) === mes);
+    if (mes !== 'todos') arr = arr.filter((i) => (i?.vencimento || '').slice(0, 7) === mes);
     if (search.trim()) {
       const q = search.toLowerCase();
       arr = arr.filter((i) =>
         [i.cliente, i.notaFiscal, i.docRecebimento, i.observacoes, BRL(i.valor), isoToBR(i.vencimento)]
           .filter(Boolean)
-          .some((f)=>String(f).toLowerCase().includes(q))
+          .some((f) => String(f).toLowerCase().includes(q))
       );
     }
-    return arr.sort((a,b)=>String(a.vencimento||'').localeCompare(String(b.vencimento||'')));
+    return arr.sort((a, b) => String(a.vencimento || '').localeCompare(String(b.vencimento || '')));
   }, [itens, mes, search]);
 
-  const meses = useMemo(()=>{
+  const meses = useMemo(() => {
     const s = new Set();
-    itens.forEach(i=>{
-      const k = String(i.vencimento||'').slice(0,7);
-      if(/\d{4}-\d{2}/.test(k)) s.add(k);
+    itens.forEach((i) => {
+      const k = String(i.vencimento || '').slice(0, 7);
+      if (/\d{4}-\d{2}/.test(k)) s.add(k);
     });
-    return Array.from(s).sort().map(ym=>{
-      const [y,m]=ym.split('-');
-      const label = new Date(Number(y), Number(m)-1).toLocaleDateString('pt-BR',{month:'long', year:'numeric'});
-      return {value: ym, label};
-    });
-  },[itens]);
+    return Array.from(s)
+      .sort()
+      .map((ym) => {
+        const [y, m] = ym.split('-');
+        const label = new Date(Number(y), Number(m) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        return { value: ym, label };
+      });
+  }, [itens]);
 
-  // KPIs
-  const totalRecebidoLiq = useMemo(()=> lista.reduce((s,i)=> s + Number(i.valorLiquidoRecebido || 0),0), [lista]);
-  const totalReceber     = useMemo(()=> lista.reduce((s,i)=> s + Number(i.valor || 0),0), [lista]);
-  const totalEmAberto    = useMemo(()=> lista
-    .filter((i)=> i.status!=='pago' && i.status!=='cancelado')
-    .reduce((s,i)=> s + (Number(i.valor||0)-Number(i.valorLiquidoRecebido||0)),0), [lista]);
-  const vencidos         = useMemo(()=> lista.filter((i)=> i.status!=='pago' && i.status!=='cancelado' && isOverdue(i.vencimento)).length, [lista]);
+  /* KPIs */
+  const totalRecebidoLiq = useMemo(() => lista.reduce((s, i) => s + (i.valorLiquidoRecebido || 0), 0), [lista]);
+  const totalReceber = useMemo(() => lista.reduce((s, i) => s + (i.valor || 0), 0), [lista]);
+  const totalEmAberto = useMemo(() => lista
+      .filter(i => i.status !== 'pago' && i.status !== 'cancelado')
+      .reduce((s, i) => s + ((i.valor || 0) - (i.valorLiquidoRecebido || 0)), 0),
+    [lista]);
+  const vencidos = useMemo(() =>
+    lista.filter(i => i.status !== 'pago' && i.status !== 'cancelado' && isOverdue(i.vencimento)).length, [lista]);
 
-  const openCreate = () => { setEditing(null); setForm({...emptyForm}); setOpen(true); };
+  const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setOpen(true); };
   const openEdit = (row) => {
+    const n = normalize(row);
     setEditing(row);
     setForm({
       vencimentoBr: isoToBR(row.vencimento),
       cliente: row.cliente || '',
       notaFiscal: row.notaFiscal || '',
       dataEmissaoBr: isoToBR(row.dataEmissao || ''),
-      valor: String(row.valor ?? ''),
-      taxasJuros: String(row.taxasJuros ?? ''),
+      valor: String(n.valor ?? ''),
+      taxasJuros: String(parseMoney(row.taxasJuros) ?? ''),
       docRecebimento: row.docRecebimento || '',
       dataBaixaBr: isoToBR(row.dataBaixa || ''),
-      valorLiquidoRecebido: String(row.valorLiquidoRecebido ?? ''),
+      valorLiquidoRecebido: String(n.valorLiquidoRecebido ?? ''),
       observacoes: row.observacoes || '',
-      status: normalize(row).status,
+      status: n.status,
     });
     setOpen(true);
   };
 
-  const onChange = (e)=> {
-    const {name, value} = e.target;
-    setForm((f)=>({...f, [name]: value}));
+  const onChange = (e) => {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
   };
 
-  const submit = async (e)=> {
+  const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
     const payload = {
@@ -148,35 +166,35 @@ export default function ContasReceberTab() {
       cliente: form.cliente || '',
       notaFiscal: form.notaFiscal || '',
       dataEmissao: brToISO(form.dataEmissaoBr) || null,
-      valor: Number(form.valor || 0),
-      taxasJuros: Number(form.taxasJuros || 0),
+      valor: parseMoney(form.valor),
+      taxasJuros: parseMoney(form.taxasJuros),
       docRecebimento: form.docRecebimento || '',
       dataBaixa: brToISO(form.dataBaixaBr) || null,
-      valorLiquidoRecebido: Number(form.valorLiquidoRecebido || 0),
+      valorLiquidoRecebido: parseMoney(form.valorLiquidoRecebido),
       observacoes: form.observacoes || '',
       status: form.status,
     };
-    try{
-      if(editing?.id) await api.put(`/contas-receber/${editing.id}`, payload);
+    try {
+      if (editing?.id) await api.put(`/contas-receber/${editing.id}`, payload);
       else await api.post('/contas-receber', payload);
       setOpen(false);
       setEditing(null);
-      setForm({...emptyForm});
+      setForm({ ...emptyForm });
       await fetchAll();
-    }catch(err){
+    } catch (err) {
       console.error('Erro ao salvar conta a receber:', err);
       alert('Não foi possível salvar. Verifique o backend.');
-    }finally{
+    } finally {
       setSaving(false);
     }
   };
 
-  const removeRow = async (id)=> {
-    if(!confirm('Excluir esta conta?')) return;
-    try{
+  const removeRow = async (id) => {
+    if (!confirm('Excluir esta conta?')) return;
+    try {
       await api.delete(`/contas-receber/${id}`);
       await fetchAll();
-    }catch(err){
+    } catch (err) {
       console.error('Erro ao excluir:', err);
       alert('Não foi possível excluir.');
     }
@@ -191,7 +209,7 @@ export default function ContasReceberTab() {
             <CardTitle className="text-sm">Entradas (a Receber)</CardTitle>
             <CardDescription>Receitas registradas</CardDescription>
           </CardHeader>
-          <CardContent><div className="text-xl sm:text-2xl font-bold">{BRL(totalReceber)}</div></CardContent>
+        <CardContent><div className="text-xl sm:text-2xl font-bold">{BRL(totalReceber)}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
@@ -209,21 +227,18 @@ export default function ContasReceberTab() {
         </Card>
       </div>
 
-      {/* Filtros / ações */}
+      {/* Filtros */}
       <div className="flex flex-col md:flex-row gap-2 items-stretch md:items-center">
         <div className="relative flex-1 md:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Buscar contas..." value={search} onChange={(e)=>setSearch(e.target.value)} />
         </div>
-
-        <select className="w-full md:w-56 border rounded-md px-3 py-2 text-sm bg-background"
-                value={mes} onChange={(e)=>setMes(e.target.value)}>
+        <select className="w-full md:w-56 border rounded-md px-3 py-2 text-sm bg-background" value={mes} onChange={(e)=>setMes(e.target.value)}>
           <option value="todos">Todos os meses</option>
           {meses.map((m)=><option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
-
-        <Button variant="outline" onClick={()=>{setSearch(''); setMes('todos');}}>Limpar Filtros</Button>
-        <Button className="gap-2" onClick={()=>openCreate()}><Plus className="size-4" /> Nova Conta</Button>
+        <Button variant="outline" onClick={()=>{ setSearch(''); setMes('todos'); }}>Limpar Filtros</Button>
+        <Button className="gap-2" onClick={openCreate}><Plus className="size-4" /> Nova Conta</Button>
       </div>
 
       {/* Tabela */}
@@ -253,9 +268,7 @@ export default function ContasReceberTab() {
                   <TableRow><TableCell colSpan={11} className="text-center py-8">Nenhuma conta encontrada.</TableCell></TableRow>
                 ) : (
                   lista.map((i)=>{
-                    const status = normalize(i).status;
-                    const badgeVariant =
-                      status === 'pago' ? 'default' : status === 'pendente' ? 'secondary' : 'destructive';
+                    const badgeVariant = i.status === 'pago' ? 'default' : i.status === 'pendente' ? 'secondary' : 'destructive';
                     return (
                       <TableRow key={i.id}>
                         <TableCell className="text-center">{isoToBR(i.vencimento)}</TableCell>
@@ -267,7 +280,7 @@ export default function ContasReceberTab() {
                         <TableCell className="text-center">{i.docRecebimento || '—'}</TableCell>
                         <TableCell className="text-center">{i.dataBaixa ? isoToBR(i.dataBaixa) : '—'}</TableCell>
                         <TableCell className="text-center">{BRL(i.valorLiquidoRecebido || 0)}</TableCell>
-                        <TableCell className="text-center"><Badge variant={badgeVariant} className="capitalize">{status}</Badge></TableCell>
+                        <TableCell className="text-center"><Badge variant={badgeVariant} className="capitalize">{i.status}</Badge></TableCell>
                         <TableCell className="text-center">
                           <div className="flex justify-center gap-2">
                             <Button variant="outline" size="sm" className="gap-2" onClick={()=>openEdit(i)}><Edit className="size-4" />Editar</Button>
@@ -319,11 +332,11 @@ export default function ContasReceberTab() {
                 </div>
                 <div>
                   <Label>Valor *</Label>
-                  <Input type="number" step="0.01" name="valor" value={form.valor} onChange={onChange} required />
+                  <Input type="text" inputMode="decimal" placeholder="0,00" name="valor" value={form.valor} onChange={onChange} required />
                 </div>
                 <div>
                   <Label>Taxas/Juros</Label>
-                  <Input type="number" step="0.01" name="taxasJuros" value={form.taxasJuros} onChange={onChange} />
+                  <Input type="text" inputMode="decimal" placeholder="0,00" name="taxasJuros" value={form.taxasJuros} onChange={onChange} />
                 </div>
                 <div>
                   <Label>Doc. Recebimento</Label>
@@ -336,7 +349,7 @@ export default function ContasReceberTab() {
                 </div>
                 <div>
                   <Label>Valor Líq. Recebido</Label>
-                  <Input type="number" step="0.01" name="valorLiquidoRecebido" value={form.valorLiquidoRecebido} onChange={onChange} />
+                  <Input type="text" inputMode="decimal" placeholder="0,00" name="valorLiquidoRecebido" value={form.valorLiquidoRecebido} onChange={onChange} />
                 </div>
                 <div>
                   <Label>Status</Label>
