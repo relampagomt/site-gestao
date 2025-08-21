@@ -27,20 +27,44 @@ const emptyForm = {
   status: 'Pendente',
 };
 
+function normalizeStatus(any) {
+  const raw = (any ?? '').toString().trim().toLowerCase();
+  if (raw === 'pago' || raw === 'paid' || raw === 'quitado' || raw === 'settled' || raw === '1' || raw === 'true') {
+    return 'Pago';
+  }
+  if (raw === 'cancelado' || raw === 'canceled' || raw === 'cancelled' || raw === 'estornado') {
+    return 'Cancelado';
+  }
+  if (raw === 'pendente' || raw === 'pending' || raw === '' || raw === '0' || raw === 'false' || raw === 'em aberto') {
+    return 'Pendente';
+  }
+  return any ? String(any) : 'Pendente';
+}
+
+function StatusBadge({ value }) {
+  const v = normalizeStatus(value);
+  if (v === 'Pago')      return <Badge className="bg-green-600">Pago</Badge>;
+  if (v === 'Pendente')  return <Badge className="bg-amber-600">Pendente</Badge>;
+  if (v === 'Cancelado') return <Badge className="bg-gray-500">Cancelado</Badge>;
+  return <Badge className="bg-gray-500">{v}</Badge>;
+}
+
 function decorate(row) {
   const valor = Number(row?.valor ?? row?.amount ?? 0);
   const taxas = Number(row?.taxasJuros ?? 0);
-  let liq = Number(row?.valorLiqRecebido ?? 0);
+  let liq = Number(row?.valorLiqRecebido ?? row?.valorLiquidoRecebido ?? 0);
+  const status = normalizeStatus(row?.status ?? row?.situacao ?? row?.paymentStatus);
 
-  if (row?.status === 'Pago') {
-    // Se backend não trouxe, derivar:
-    if (!row?.valorLiqRecebido) liq = Math.max(valor - taxas, 0);
+  if (status === 'Pago') {
+    if ((!row?.valorLiqRecebido && !row?.valorLiquidoRecebido) || isNaN(liq)) {
+      liq = Math.max(valor - taxas, 0);
+    }
   } else {
-    liq = 0; // Pendente/Cancelado
+    liq = 0;
   }
 
   const aberto = Math.max(valor - liq, 0);
-  return { ...row, _valor: valor, _liq: liq, _aberto: aberto, _taxas: taxas };
+  return { ...row, status, _valor: valor, _liq: liq, _aberto: aberto, _taxas: taxas };
 }
 
 export default function ContasReceberTab() {
@@ -113,9 +137,11 @@ export default function ContasReceberTab() {
       notaFiscal: row.notaFiscal || '',
       valorStr: (row.valor ?? row.amount ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
       taxasStr: (row.taxasJuros ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
-      docRecebimento: row.documentoRecebimento || '',
-      valorLiquidoStr: (row.valorLiqRecebido ?? '').toString().replace('.', ','),
-      status: row.status || 'Pendente',
+      docRecebimento: row.documentoRecebimento || row.docRecebimento || '',
+      valorLiquidoStr: (row.valorLiqRecebido ?? row.valorLiquidoRecebido ?? '')
+        .toString()
+        .replace('.', ','),
+      status: normalizeStatus(row.status || 'Pendente'),
     });
     setOpen(true);
   };
@@ -139,9 +165,9 @@ export default function ContasReceberTab() {
 
       let dataBaixa = form.dataBaixa || '';
       let valorLiquido = toNumberBR(form.valorLiquidoStr);
+      const status = normalizeStatus(form.status);
 
-      if (form.status === 'Pago') {
-        // Se usuário não informou líquido, derivar (mínimo 0)
+      if (status === 'Pago') {
         if (!valorLiquido) valorLiquido = Math.max(valor - taxas, 0);
         if (!dataBaixa) dataBaixa = form.vencimento; // default = vencimento
       } else {
@@ -158,7 +184,7 @@ export default function ContasReceberTab() {
         taxasJuros: taxas,                      // number
         documentoRecebimento: form.docRecebimento || null,
         valorLiqRecebido: valorLiquido,         // derivado
-        status: form.status,
+        status,                                 // já normalizado
       };
 
       if (editing?.id) {
@@ -265,11 +291,7 @@ export default function ContasReceberTab() {
                     <TableCell className="text-center">{BRL(r._liq)}</TableCell>
                     <TableCell className="text-center">{isoToBR(r.dataEmissao) || '-'}</TableCell>
                     <TableCell className="text-center">{isoToBR(r.dataBaixa) || '-'}</TableCell>
-                    <TableCell className="text-center">
-                      {r.status === 'Pago' && <Badge className="bg-green-600">Pago</Badge>}
-                      {r.status === 'Pendente' && <Badge className="bg-amber-600">Pendente</Badge>}
-                      {r.status === 'Cancelado' && <Badge className="bg-gray-500">Cancelado</Badge>}
-                    </TableCell>
+                    <TableCell className="text-center"><StatusBadge value={r.status} /></TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center gap-2">
                         <Button size="sm" variant="outline" onClick={()=>openEdit(r)}>Editar</Button>

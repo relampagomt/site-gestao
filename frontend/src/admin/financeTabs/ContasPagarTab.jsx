@@ -24,16 +24,46 @@ const emptyForm = {
   observacoes: '',
 };
 
+/** Normaliza e mapeia status vindos do backend para 'Pago' | 'Pendente' | 'Cancelado' */
+function normalizeStatus(any) {
+  const raw =
+    (any ??
+      '').toString().trim().toLowerCase();
+
+  if (raw === 'pago' || raw === 'paid' || raw === 'quitado' || raw === 'settled' || raw === '1' || raw === 'true') {
+    return 'Pago';
+  }
+  if (
+    raw === 'pendente' || raw === 'pending' || raw === '' || raw === '0' || raw === 'false' || raw === 'em aberto'
+  ) {
+    return 'Pendente';
+  }
+  if (raw === 'cancelado' || raw === 'canceled' || raw === 'cancelled' || raw === 'estornado') {
+    return 'Cancelado';
+  }
+  // fallback: devolve capitalizado do valor original se não reconhecido
+  return any ? String(any) : 'Pendente';
+}
+
+function StatusBadge({ value }) {
+  const v = normalizeStatus(value);
+  if (v === 'Pago')      return <Badge className="bg-green-600">Pago</Badge>;
+  if (v === 'Pendente')  return <Badge className="bg-amber-600">Pendente</Badge>;
+  if (v === 'Cancelado') return <Badge className="bg-gray-500">Cancelado</Badge>;
+  return <Badge className="bg-gray-500">{v}</Badge>;
+}
+
 function decorate(row) {
   const valor = Number(row?.valor ?? row?.amount ?? 0);
   let pago = Number(row?.valorPago ?? 0);
+  const status = normalizeStatus(row?.status ?? row?.situacao ?? row?.paymentStatus);
 
   // Deriva pagamento quando backend não populou:
-  if (!row?.valorPago && row?.status === 'Pago') pago = valor;
-  if (row?.status === 'Cancelado') pago = 0;
+  if ((!row?.valorPago || isNaN(pago)) && status === 'Pago') pago = valor;
+  if (status === 'Cancelado') pago = 0;
 
   const aberto = Math.max(valor - pago, 0);
-  return { ...row, _valor: valor, _pago: pago, _aberto: aberto };
+  return { ...row, status, _valor: valor, _pago: pago, _aberto: aberto };
 }
 
 export default function ContasPagarTab() {
@@ -104,7 +134,7 @@ export default function ContasPagarTab() {
       descricao: row.descricao || row.notes || '',
       valorStr: (row.valor ?? row.amount ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
       dataPagamento: (row.dataPagamento || '').slice(0,10),
-      status: row.status || 'Pendente',
+      status: normalizeStatus(row.status || 'Pendente'),
       observacoes: row.observacoes || '',
     });
     setOpen(true);
@@ -126,9 +156,10 @@ export default function ContasPagarTab() {
     try {
       const valor = toNumberBR(form.valorStr);
       let dataPagamento = form.dataPagamento || '';
+      const status = normalizeStatus(form.status);
       let valorPago = 0;
 
-      if (form.status === 'Pago') {
+      if (status === 'Pago') {
         valorPago = valor;
         if (!dataPagamento) dataPagamento = form.vencimento; // default = vencimento
       } else {
@@ -136,13 +167,13 @@ export default function ContasPagarTab() {
       }
 
       const payload = {
-        vencimento: form.vencimento,       // YYYY-MM-DD (obrigatório)
+        vencimento: form.vencimento,       // YYYY-MM-DD
         documento: form.documento || null,
         descricao: form.descricao || '',
         valor,                              // number
         dataPagamento: dataPagamento || null,
         valorPago,                          // derivado
-        status: form.status,
+        status,                             // já normalizado
         observacoes: form.observacoes || '',
       };
 
@@ -246,11 +277,7 @@ export default function ContasPagarTab() {
                     <TableCell className="text-center">{BRL(r._valor)}</TableCell>
                     <TableCell className="text-center">{isoToBR(r.dataPagamento) || '-'}</TableCell>
                     <TableCell className="text-center">{BRL(r._pago)}</TableCell>
-                    <TableCell className="text-center">
-                      {r.status === 'Pago' && <Badge className="bg-green-600">Pago</Badge>}
-                      {r.status === 'Pendente' && <Badge className="bg-amber-600">Pendente</Badge>}
-                      {r.status === 'Cancelado' && <Badge className="bg-gray-500">Cancelado</Badge>}
-                    </TableCell>
+                    <TableCell className="text-center"><StatusBadge value={r.status} /></TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center gap-2">
                         <Button size="sm" variant="outline" onClick={()=>openEdit(r)}>Editar</Button>
