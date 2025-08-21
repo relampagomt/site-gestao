@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Label } from '@/components/ui/label.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
-import { Checkbox } from '@/components/ui/checkbox.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
@@ -18,7 +17,6 @@ import {
   TrendingUp,
   ArrowDownCircle,
   ArrowUpCircle,
-  Layers,
   Plus,
   Search,
   Edit,
@@ -48,7 +46,6 @@ const BRL = (n) =>
     .replace('.', ',')
     .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
 
-// Eixo Y sem “R$ 0k” repetido
 const BRL_COMPACT = (n) =>
   new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -119,7 +116,7 @@ const colorForCategory = (name='') => CATEGORY_PALETTE[ hashStr(name.toLowerCase
 /* =================== Componente =================== */
 const Finance = () => {
   const [transactions, setTransactions] = useState([]);
-  const [actions, setActions] = useState([]);
+  const [actions, setActions] = useState([]);     // só para rotular itens antigos (action_id)
   const [clients, setClients] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -134,7 +131,6 @@ const Finance = () => {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('todos');
   const [monthFilter, setMonthFilter] = useState('todos');
-  const [selectedActions, setSelectedActions] = useState([]);
 
   // Load
   const loadAll = async () => {
@@ -193,13 +189,8 @@ const Finance = () => {
       list = list.filter((t) => String(t.date || '').slice(0, 7) === `${y}-${m}`);
     }
 
-    if (selectedActions.length > 0) {
-      const set = new Set(selectedActions);
-      list = list.filter((t) => set.has(t.action_id)); // só afeta itens antigos
-    }
-
     return list.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
-  }, [transactions, search, typeFilter, monthFilter, selectedActions, actions, clients, materials]);
+  }, [transactions, search, typeFilter, monthFilter, actions, clients, materials]);
 
   // Opções de mês
   const monthOptions = useMemo(() => {
@@ -279,7 +270,6 @@ const Finance = () => {
         search ? `Busca: "${search}"` : '',
         typeFilter !== 'todos' ? `Tipo: ${typeFilter}` : '',
         monthFilter !== 'todos' ? `Mês: ${monthOptions.find(m => m.value === monthFilter)?.label || monthFilter}` : '',
-        selectedActions.length > 0 ? `Ações (antigas): ${selectedActions.length} selecionada(s)` : '',
       ].filter(Boolean).join(' | ') || 'Nenhum filtro aplicado'
     }`,
     columnStyles: {
@@ -289,45 +279,6 @@ const Finance = () => {
     },
     footerContent: `Totais do período: Entradas: ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`
   };
-
-  // Ações selector (para itens antigos)
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const toggleAction = (id) =>
-    setSelectedActions((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-
-  const ActionsSelector = () => (
-    <Popover open={actionsOpen} onOpenChange={setActionsOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" className="w-full justify-between">
-          {selectedActions.length === 0 ? 'Filtrar por ações (itens antigos)' : <span className="truncate">{selectedActions.length} selecionada(s)</span>}
-          <Layers className="ml-2 h-4 w-4 shrink-0 opacity-60" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent side="bottom" align="start" sideOffset={8} collisionPadding={16} className="z-[100] p-0 w-[min(92vw,560px)]">
-        <div className="max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y [touch-action:pan-y] [-webkit-overflow-scrolling:touch]">
-          <Command>
-            <CommandInput placeholder="Buscar ação..." />
-            <CommandEmpty>Nenhuma ação encontrada.</CommandEmpty>
-            <CommandList className="max-h-none">
-              <CommandGroup heading="Ações">
-                {actions.map((a) => {
-                  const checked = selectedActions.includes(a.id);
-                  const label = actionLabelById(a.id) || `Ação ${a.id}`;
-                  return (
-                    <CommandItem key={a.id} value={label} className="flex items-center gap-2" onSelect={() => toggleAction(a.id)}>
-                      <Checkbox checked={checked} onCheckedChange={() => toggleAction(a.id)} />
-                      <span className="flex-1 truncate">{label}</span>
-                      {checked && <span className="text-xs text-muted-foreground">selecionada</span>}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
 
   // Handlers form
   const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -397,6 +348,7 @@ const Finance = () => {
     catch { alert('Não foi possível excluir. Verifique o backend.'); }
   };
 
+  /* =================== UI =================== */
   return (
     <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
       <div className="flex items-center justify-between mb-4">
@@ -520,8 +472,8 @@ const Finance = () => {
             />
           </div>
 
-          {/* Linha 2: filtros e ações */}
-          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 items-center">
+          {/* Linha 2: filtros e ações (sem filtro por ações antigas) */}
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 items-center">
             <div className="w-full">
               <select
                 value={typeFilter}
@@ -549,14 +501,10 @@ const Finance = () => {
             </div>
 
             <div className="w-full">
-              <ActionsSelector />
-            </div>
-
-            <div className="w-full">
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={() => { setSearch(''); setTypeFilter('todos'); setMonthFilter('todos'); setSelectedActions([]); }}
+                onClick={() => { setSearch(''); setTypeFilter('todos'); setMonthFilter('todos'); }}
               >
                 Limpar Filtros
               </Button>
