@@ -1,14 +1,11 @@
 # backend/src/routes/finance.py
-# Drop-in: substitui seu arquivo atual.
-# Implementa aliases, normalizações, validações e exporta finance_bp (compat Render).
-
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 import json
 import os
 
 bp = Blueprint("finance", __name__)
-finance_bp = bp  # alias para compatibilidade com `from src.routes.finance import finance_bp`
+finance_bp = bp
 __all__ = ["finance_bp"]
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -32,7 +29,6 @@ def _save_all(items):
         json.dump(items, f, ensure_ascii=False, indent=2)
 
 def _parse_date_any(v):
-    """Aceita DD/MM/AAAA ou YYYY-MM-DD e retorna YYYY-MM-DD; caso inválido, retorna ''."""
     if not v:
         return ""
     s = str(v).strip()
@@ -83,11 +79,12 @@ def _next_id(items):
 
 def _apply_aliases(payload):
     """
-    Mapeia aliases do front para os campos internos.
-    - date <= date | due_date | dueDate (BR ou ISO)
-    - action_text <= action_text | pay_date | payDate (BR ou ISO; opcional)
-    - client_text <= client_text | payment_method | paymentMethod
-    - material_text <= material_text | interest_rate | interestRate
+    Aliases aceitos:
+      - date <= date | due_date | dueDate (DD/MM/AAAA ou ISO)
+      - action_text <= action_text | pay_date | payDate (DD/MM/AAAA ou ISO) (opcional)
+      - client_text <= client_text | payment_method | paymentMethod
+      - material_text <= material_text | interest_rate | interestRate
+      - invoice_number <= invoice_number | invoiceNumber | nota_fiscal | notaFiscal
     """
     # vencimento
     date_raw = payload.get("date") or payload.get("due_date") or payload.get("dueDate")
@@ -115,9 +112,31 @@ def _apply_aliases(payload):
         except Exception:
             interest_rate_num = None
 
+    # nota fiscal
+    invoice_value = (
+        payload.get("invoice_number")
+        or payload.get("invoiceNumber")
+        or payload.get("nota_fiscal")
+        or payload.get("notaFiscal")
+        or ""
+    )
+    # permite numérico ou string
+    try:
+        if invoice_value is None:
+            invoice_value = ""
+        else:
+            # normaliza número inteiro quando possível
+            if isinstance(invoice_value, str) and invoice_value.strip().isdigit():
+                invoice_value = int(invoice_value.strip())
+            elif isinstance(invoice_value, (int, float)):
+                if float(invoice_value).is_integer():
+                    invoice_value = int(invoice_value)
+    except Exception:
+        pass
+
     data = {
         "date": date_iso,
-        "action_text": action_value,             # ISO (se válido) ou texto antigo
+        "action_text": action_value,
         "client_text": str(client_value),
         "material_text": str(material_value),
         "type": _norm_type(payload.get("type")),
@@ -125,7 +144,8 @@ def _apply_aliases(payload):
         "amount": _to_float(payload.get("amount", 0)),
         "category": (payload.get("category") or "").strip(),
         "notes": (payload.get("notes") or "").strip(),
-        # retrocompat - manter *_id se vierem
+        "invoice_number": invoice_value,
+        # retrocompat: manter *_id se vierem
         "action_id": payload.get("action_id") or payload.get("actionId"),
         "client_id": payload.get("client_id") or payload.get("clientId"),
         "material_id": payload.get("material_id") or payload.get("materialId"),
@@ -142,7 +162,6 @@ def _validate_required_date(data):
     return True, ""
 
 def _sort_default(items):
-    # ordenar por date desc, depois id desc
     def keyf(x):
         return (str(x.get("date") or ""), str(x.get("id") or ""))
     return sorted(items, key=lambda x: (keyf(x)[0], keyf(x)[1]), reverse=True)
@@ -206,11 +225,9 @@ def patch_transaction(id):
     current = items[idx]
     partial = _apply_aliases(payload)
 
-    # Se não veio date no PATCH, mantemos o atual
     if not (payload.get("date") or payload.get("due_date") or payload.get("dueDate")):
-      partial["date"] = current.get("date")
+        partial["date"] = current.get("date")
 
-    # Merge
     merged = { **current, **{k: v for k, v in partial.items() if v is not None} }
     merged["type"] = _norm_type(merged.get("type"))
     merged["status"] = _norm_status(merged.get("status"))

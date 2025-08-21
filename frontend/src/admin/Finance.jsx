@@ -1,12 +1,7 @@
 // frontend/src/admin/Finance.jsx
-// Drop-in: substitui seu arquivo atual.
-// Implementa o novo modelo de campos, máscaras de data, export CSV/PDF embutido,
-// tabela, gráficos e PATCH de status.
-
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '@/services/api';
 
-// shadcn/ui – use os que você já tem no projeto
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
@@ -15,7 +10,6 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
-
 import { TrendingUp, ArrowDownCircle, ArrowUpCircle, Plus, Search, Edit, Trash2, Download } from 'lucide-react';
 
 import {
@@ -73,29 +67,35 @@ const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '').slice(0, 10));
 
 const emptyForm = {
   type: 'entrada',
-  // NOVOS CAMPOS no front
   dueDateBr: '',     // Data de Vencimento (DD/MM/AAAA)
   payDateBr: '',     // Data de Pagamento (DD/MM/AAAA) - opcional
   paymentMethod: '', // Meio de Pagamento -> client_text
-  interestRate: '',  // Taxa de Juros -> material_text (string)
-  // comuns
+  interestRate: '',  // Taxa de Juros -> material_text
   amount: '',
   category: '',
-  status: 'Pendente', // Pago | Pendente | Cancelado
+  status: 'Pendente',
+  invoiceNumber: '', // NOVO: Nota Fiscal
   notes: '',
-  // retrocompat/exibição
+  // retrocompat (leitura)
   action_text: '',
   client_text: '',
   material_text: '',
   action_id: '',
   client_id: '',
   material_id: '',
+  invoice_number: ''
 };
 
 const TX_PATH = '/transactions';
 
 // Cores
-const COLORS = { entrada: '#16a34a', saida: '#dc2626', despesa: '#f59e0b' };
+const COLORS = {
+  entrada: '#16a34a',    // verde
+  saida: '#dc2626',      // vermelho
+  despesa: '#f59e0b',    // laranja/âmbar
+  pendente: '#f59e0b',   // laranja para a coluna PENDENTE no gráfico
+  cancelado: '#000000'   // preto para a coluna CANCELADO no gráfico
+};
 
 // paleta fixa por categoria (pie)
 const CATEGORY_PALETTE = [
@@ -103,11 +103,7 @@ const CATEGORY_PALETTE = [
   '#84cc16', '#06b6d4', '#a855f7', '#eab308', '#10b981', '#f43f5e',
   '#3b82f6', '#f59e0b', '#6366f1'
 ];
-const hashStr = (s) => {
-  let h = 0;
-  for (let i = 0; i < String(s).length; i++) h = (h * 31 + String(s).charCodeAt(i)) >>> 0;
-  return h;
-};
+const hashStr = (s) => { let h = 0; for (let i = 0; i < String(s).length; i++) h = (h * 31 + String(s).charCodeAt(i)) >>> 0; return h; };
 const colorForCategory = (name='') => CATEGORY_PALETTE[ hashStr(String(name).toLowerCase()) % CATEGORY_PALETTE.length ];
 
 /* =================== Componente =================== */
@@ -132,9 +128,8 @@ const Finance = () => {
     try {
       const { data } = await api.get(TX_PATH);
       setTransactions(Array.isArray(data) ? data : []);
-    } catch {
-      setTransactions([]);
-    } finally { setLoading(false); }
+    } catch { setTransactions([]); }
+    finally { setLoading(false); }
   };
   useEffect(() => { loadAll(); }, []);
 
@@ -147,7 +142,8 @@ const Finance = () => {
       list = list.filter((t) =>
         [
           t.category, t.notes, String(t.amount),
-          t.action_text, t.client_text, t.material_text, t.status, t.type
+          t.action_text, t.client_text, t.material_text, t.status, t.type,
+          t.invoice_number
         ].filter(Boolean).some((f) => String(f).toLowerCase().includes(q))
       );
     }
@@ -200,16 +196,24 @@ const Finance = () => {
     const months = {};
     filtered.forEach((t) => {
       const month = String(t.date || '').slice(0, 7) || '—';
-      if (!months[month]) months[month] = { month, entrada: 0, saida: 0, despesa: 0 };
-      if (t.type === 'entrada') months[month].entrada += Number(t.amount || 0);
-      if (t.type === 'saida') months[month].saida += Number(t.amount || 0);
-      if (t.type === 'despesa') months[month].despesa += Number(t.amount || 0);
+      if (!months[month]) months[month] = { month, entrada: 0, pendente: 0, cancelado: 0, saida: 0, despesa: 0 };
+
+      const val = Number(t.amount || 0);
+      if (t.type === 'entrada') {
+        if ((t.status || 'Pendente') === 'Pago') months[month].entrada += val;
+        else if ((t.status || 'Pendente') === 'Pendente') months[month].pendente += val;
+        else if ((t.status || 'Pendente') === 'Cancelado') months[month].cancelado += val;
+      } else if (t.type === 'saida') {
+        months[month].saida += val;
+      } else if (t.type === 'despesa') {
+        months[month].despesa += val;
+      }
     });
     return Object.values(months).sort((a, b) => a.month.localeCompare(b.month)).slice(-6);
   }, [filtered]);
 
   // KPIs
-  const totalEntrada = filtered.filter((t) => t.type === 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const totalEntrada = filtered.filter((t) => t.type === 'entrada' && (t.status || 'Pendente') === 'Pago').reduce((s, t) => s + Number(t.amount || 0), 0);
   const totalSaida = filtered.filter((t) => t.type !== 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
   const saldo = totalEntrada - totalSaida;
 
@@ -227,14 +231,15 @@ const Finance = () => {
       meio_pagamento: t.client_text || '',
       juros: t.material_text || '',
       valor: Number(t.amount || 0),
+      nf: t.invoice_number ?? '',
       observacoes: t.notes || '',
     };
   }), [filtered]);
 
   const exportCSV = () => {
-    const headers = ['Vencimento','Pagamento','Tipo','Categoria','Status','Meio de Pagamento','Juros','Valor','Observações'];
+    const headers = ['Vencimento','Pagamento','Tipo','Categoria','Status','Meio de Pagamento','Juros','Valor','Nota Fiscal','Observações'];
     const body = exportRows.map(r => [
-      r.vencimento, r.pagamento, r.tipo, r.categoria, r.status, r.meio_pagamento, r.juros, String(r.valor).replace('.', ','), r.observacoes
+      r.vencimento, r.pagamento, r.tipo, r.categoria, r.status, r.meio_pagamento, r.juros, String(r.valor).replace('.', ','), r.nf, r.observacoes
     ]);
     const csv = [headers, ...body].map(row =>
       row.map(v => {
@@ -257,12 +262,12 @@ const Finance = () => {
     doc.setFontSize(14);
     doc.text('Relatório Financeiro', 40, 40);
 
-    const totalLine = `Entradas: ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`;
+    const totalLine = `Entradas (pagas): ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`;
     doc.setFontSize(10);
     doc.text(totalLine, 40, 60);
 
-    const head = [['Vencimento','Pagamento','Tipo','Categoria','Status','Meio de Pagamento','Juros','Valor','Observações']];
-    const body = exportRows.map(r => [r.vencimento, r.pagamento, r.tipo, r.categoria, r.status, r.meio_pagamento, r.juros, BRL(r.valor), r.observacoes]);
+    const head = [['Vencimento','Pagamento','Tipo','Categoria','Status','Meio de Pagamento','Juros','Valor','Nota Fiscal','Observações']];
+    const body = exportRows.map(r => [r.vencimento, r.pagamento, r.tipo, r.categoria, r.status, r.meio_pagamento, r.juros, BRL(r.valor), r.nf || '', r.observacoes]);
 
     // @ts-ignore
     doc.autoTable({
@@ -273,7 +278,7 @@ const Finance = () => {
       columnStyles: {
         0: { cellWidth: 70 }, 1: { cellWidth: 70 }, 2: { cellWidth: 60 },
         3: { cellWidth: 110 }, 4: { cellWidth: 70 }, 5: { cellWidth: 110 },
-        6: { cellWidth: 70 }, 7: { cellWidth: 70 }, 8: { cellWidth: 180 },
+        6: { cellWidth: 70 }, 7: { cellWidth: 70 }, 8: { cellWidth: 70 }, 9: { cellWidth: 180 },
       }
     });
 
@@ -287,7 +292,6 @@ const Finance = () => {
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setOpen(true); };
   const openEdit = (tx) => {
-    // preenche novos campos a partir do registro existente
     const dueDateBr = isoToBR(String(tx.date || '').slice(0, 10)) || '';
     const action = String(tx.action_text || '');
     const payDateBr = isYMD(action) ? isoToBR(action.slice(0,10)) : '';
@@ -301,14 +305,15 @@ const Finance = () => {
       amount: String(tx.amount ?? ''),
       category: tx.category || '',
       status: tx.status || 'Pendente',
+      invoiceNumber: tx.invoice_number ?? '',
       notes: tx.notes || '',
-      // retrocompat somente para exibição
       action_text: tx.action_text || '',
       client_text: tx.client_text || '',
       material_text: tx.material_text || '',
       action_id: tx.action_id || '',
       client_id: tx.client_id || '',
       material_id: tx.material_id || '',
+      invoice_number: tx.invoice_number ?? ''
     });
     setOpen(true);
   };
@@ -329,8 +334,8 @@ const Finance = () => {
         amount: Number(form.amount || 0),
         category: form.category || '',
         status: form.status || 'Pendente',
+        invoice_number: form.invoiceNumber || '',
         notes: form.notes || '',
-        // manter *_id nulos no novo front
         action_id: null, client_id: null, material_id: null,
       };
 
@@ -376,12 +381,12 @@ const Finance = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Entradas</CardTitle>
+            <CardTitle className="text-sm font-medium">Entradas (pagas)</CardTitle>
             <ArrowUpCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-xl sm:text-2xl font-bold">{BRL(totalEntrada)}</div>
-            <p className="text-xs text-muted-foreground">Receitas registradas</p>
+            <p className="text-xs text-muted-foreground">Somente com status Pago</p>
           </CardContent>
         </Card>
         <Card>
@@ -403,7 +408,7 @@ const Finance = () => {
             <div className={`text-xl sm:text-2xl font-bold ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {BRL(saldo)}
             </div>
-            <p className="text-xs text-muted-foreground">Entradas - Saídas</p>
+            <p className="text-xs text-muted-foreground">Entradas (pagas) - Saídas/Despesas</p>
           </CardContent>
         </Card>
       </div>
@@ -449,7 +454,9 @@ const Finance = () => {
                 />
                 <Tooltip formatter={(v) => BRL(v)} />
                 <Legend />
-                <Bar dataKey="entrada" name="Entradas" fill={COLORS.entrada} />
+                <Bar dataKey="entrada" name="Entradas (pagas)" fill={COLORS.entrada} />
+                <Bar dataKey="pendente" name="Pendente" fill={COLORS.pendente} />
+                <Bar dataKey="cancelado" name="Cancelado" fill={COLORS.cancelado} />
                 <Bar dataKey="saida" name="Saídas" fill={COLORS.saida} />
                 <Bar dataKey="despesa" name="Despesas" fill={COLORS.despesa} />
               </BarChart>
@@ -472,38 +479,6 @@ const Finance = () => {
             </div>
           </div>
         </CardHeader>
-
-        <CardContent className="space-y-3">
-          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 items-center">
-            <div className="w-full">
-              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
-                <option value="todos">Todos os tipos</option>
-                <option value="entrada">Entrada</option>
-                <option value="saida">Saída</option>
-                <option value="despesa">Despesa</option>
-              </select>
-            </div>
-
-            <div className="w-full">
-              <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
-                <option value="todos">Todos os meses</option>
-                {monthOptions.map((m) => (<option key={m.value} value={m.value}>{m.label}</option>))}
-              </select>
-            </div>
-
-            <div className="w-full">
-              <Button variant="outline" className="w-full" onClick={() => { setSearch(''); setTypeFilter('todos'); setMonthFilter('todos'); }}>
-                Limpar Filtros
-              </Button>
-            </div>
-
-            <div className="w-full">
-              <Button className="w-full gap-2" onClick={openCreate}>
-                <Plus className="size-4" /> Novo Lançamento
-              </Button>
-            </div>
-          </div>
-        </CardContent>
       </Card>
 
       {/* Tabela */}
@@ -518,6 +493,7 @@ const Finance = () => {
                   <TableHead className="text-center">Tipo</TableHead>
                   <TableHead className="text-center">Categoria</TableHead>
                   <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">Nota Fiscal</TableHead>
                   <TableHead className="text-center">Meio de Pagamento</TableHead>
                   <TableHead className="text-center">Juros</TableHead>
                   <TableHead className="text-center">Valor</TableHead>
@@ -527,29 +503,36 @@ const Finance = () => {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={10} className="text-center py-8">Carregando…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center py-8">Carregando…</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={10} className="text-center py-8">Nenhuma transação encontrada.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center py-8">Nenhuma transação encontrada.</TableCell></TableRow>
                 ) : (
                   filtered.map((t) => {
                     const payRaw = String(t.action_text || '');
                     const pagamento = isYMD(payRaw) ? isoToBR(payRaw.slice(0,10)) : (payRaw || '—');
-                    const statusVariant =
-                      (t.status || 'Pendente') === 'Pago' ? 'default' :
-                      (t.status || 'Pendente') === 'Cancelado' ? 'destructive' : 'secondary';
-                    const typeColor = t.type === 'entrada' ? 'default' : t.type === 'saida' ? 'destructive' : 'secondary';
+
+                    // status cores exigidas
+                    const statusColor =
+                      (t.status || 'Pendente') === 'Pago' ? 'bg-green-600 text-white' :
+                      (t.status || 'Pendente') === 'Cancelado' ? 'bg-red-600 text-white' :
+                      'bg-yellow-500 text-black';
+
+                    // tipo visual
+                    const typeBadge =
+                      t.type === 'entrada' ? 'bg-green-600 text-white' :
+                      t.type === 'saida' ? 'bg-red-600 text-white' : 'bg-amber-500 text-black';
 
                     return (
                       <TableRow key={t.id}>
                         <TableCell className="text-center">{isoToBR(String(t.date || '').slice(0, 10))}</TableCell>
                         <TableCell className="text-center">{pagamento}</TableCell>
                         <TableCell className="text-center">
-                          <Badge variant={typeColor} className="capitalize">{t.type}</Badge>
+                          <span className={`px-2 py-1 rounded text-xs capitalize ${typeBadge}`}>{t.type}</span>
                         </TableCell>
                         <TableCell className="text-center">{t.category || '—'}</TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-2">
-                            <Badge variant={statusVariant}>{t.status || 'Pendente'}</Badge>
+                            <span className={`px-2 py-1 rounded text-xs ${statusColor}`}>{t.status || 'Pendente'}</span>
                             <select
                               className="border rounded-md px-2 py-1 text-xs bg-background"
                               value={t.status || 'Pendente'}
@@ -561,6 +544,7 @@ const Finance = () => {
                             </select>
                           </div>
                         </TableCell>
+                        <TableCell className="text-center">{t.invoice_number ?? '—'}</TableCell>
                         <TableCell className="text-center">{t.client_text || '—'}</TableCell>
                         <TableCell className="text-center">{t.material_text || '—'}</TableCell>
                         <TableCell className="text-center font-medium">{BRL(t.amount)}</TableCell>
@@ -579,7 +563,7 @@ const Finance = () => {
             </Table>
           </div>
           <p className="text-xs text-muted-foreground mt-3 px-6 pb-6">
-            Total: <strong>{filtered.length}</strong> | Entradas: <strong>{BRL(totalEntrada)}</strong> | Saídas: <strong>{BRL(totalSaida)}</strong> | Saldo: <strong className={saldo >= 0 ? 'text-green-600' : 'text-red-600'}>{BRL(saldo)}</strong>
+            Total: <strong>{filtered.length}</strong> | Entradas (pagas): <strong>{BRL(totalEntrada)}</strong> | Saídas: <strong>{BRL(totalSaida)}</strong> | Saldo: <strong className={saldo >= 0 ? 'text-green-600' : 'text-red-600'}>{BRL(saldo)}</strong>
           </p>
         </CardContent>
       </Card>
@@ -594,9 +578,7 @@ const Finance = () => {
             <div className="p-6 pb-2">
               <DialogHeader className="pb-2">
                 <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
-                <DialogDescription>
-                  Datas no formato DD/MM/AAAA. Pagamento é opcional.
-                </DialogDescription>
+                <DialogDescription>Datas no formato DD/MM/AAAA. Pagamento é opcional.</DialogDescription>
               </DialogHeader>
             </div>
 
@@ -632,13 +614,20 @@ const Finance = () => {
                   <Input name="category" value={form.category} onChange={onChange} placeholder="Ex.: Mídia, Produção..." />
                 </div>
 
-                <div>
-                  <Label>Status</Label>
-                  <select name="status" value={form.status} onChange={onChange} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
-                    <option>Pago</option>
-                    <option>Pendente</option>
-                    <option>Cancelado</option>
-                  </select>
+                {/* Linha com Status e Nota Fiscal (à direita de Status) */}
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Status</Label>
+                    <select name="status" value={form.status} onChange={onChange} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                      <option>Pago</option>
+                      <option>Pendente</option>
+                      <option>Cancelado</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Nota Fiscal</Label>
+                    <Input type="number" name="invoiceNumber" value={form.invoiceNumber} onChange={onChange} placeholder="Ex.: 12345" />
+                  </div>
                 </div>
 
                 <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -651,7 +640,6 @@ const Finance = () => {
                     <Input name="interestRate" value={form.interestRate} onChange={onChange} placeholder="Ex.: 2.5" />
                   </div>
 
-                  {/* se registro antigo tiver action_text não-ISO, mostrar referência */}
                   {editing && form.action_text && !isYMD(String(form.action_text)) && (
                     <div className="md:col-span-2">
                       <Label>Pagamento (texto antigo)</Label>
