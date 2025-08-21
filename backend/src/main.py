@@ -15,11 +15,10 @@ for p in (backend_dir, src_dir):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from flask import Flask, jsonify, redirect
+from flask import Flask, jsonify, redirect, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from werkzeug.exceptions import RequestEntityTooLarge
-
 
 def create_app():
     app = Flask(__name__)
@@ -39,16 +38,24 @@ def create_app():
         level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    log = logging.getLogger(__name__)
 
     # -----------------------
     # CORS
     # -----------------------
-    allowed_origins = [
-        "*",
-        "https://site-gestao-mu.vercel.app",
+    # Em produção, prefira listar origens explicitamente.
+    default_origins = [
+        "https://www.panfletagemrelampago.com.br",
+        "https://panfletagemrelampago.com.br",
+        "https://site-gestao.onrender.com",      # backend Render
+        "https://site-gestao-mu.vercel.app",     # front Vercel (se ainda usar)
         "http://localhost:5173",
         "http://localhost:3000",
     ]
+    # Permite sobrescrever por env (se precisar): ORIGINS="https://foo,https://bar"
+    env_origins = [o.strip() for o in os.getenv("ORIGINS", "").split(",") if o.strip()]
+    allowed_origins = env_origins or default_origins
+
     CORS(
         app,
         resources={r"/api/*": {"origins": allowed_origins}},
@@ -85,7 +92,7 @@ def create_app():
     app.register_blueprint(metrics_bp, url_prefix="/api/metrics")
     app.register_blueprint(upload_bp, url_prefix="/api")
     app.register_blueprint(user_bp, url_prefix="/api")
-    app.register_blueprint(finance_bp, url_prefix="/api")  # 🔥 garante /api/finance e /api/contas-*
+    app.register_blueprint(finance_bp, url_prefix="/api")  # /api/transactions, /api/contas-*
 
     # -----------------------
     # Healthcheck
@@ -115,6 +122,7 @@ def create_app():
     # -----------------------
     @app.route("/api/<path:any_path>", methods=["OPTIONS"])
     def api_preflight(any_path):
+        # Útil para browsers que fazem preflight amplo
         return ("", 204)
 
     # -----------------------
@@ -130,6 +138,8 @@ def create_app():
 
     @app.errorhandler(500)
     def handle_500(e):
+        # Loga stacktrace completo para facilitar investigação de 500
+        log.exception("Internal server error on %s %s", request.method, request.path)
         return jsonify(error="internal_server_error"), 500
 
     # -----------------------
@@ -139,7 +149,7 @@ def create_app():
         try:
             ensure_admin_seed()
         except Exception as se:
-            logging.getLogger(__name__).exception("ensure_admin_seed failed: %s", se)
+            log.exception("ensure_admin_seed failed: %s", se)
 
     return app
 

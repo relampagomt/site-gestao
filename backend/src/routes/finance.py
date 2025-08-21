@@ -1,425 +1,365 @@
 # backend/src/routes/finance.py
-import os
-import json
-import base64
-import uuid
-import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
 
-from flask import Blueprint, request, jsonify, Response
-from flask_jwt_extended import get_jwt_identity
-from src.middleware.auth_middleware import roles_allowed
+import decimal
+from datetime import datetime, date
+from typing import Any, Dict, Optional
 
-log = logging.getLogger(__name__)
+from flask import Blueprint, request, jsonify, current_app
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
+
+# -----------------------------------------------------------------------------
+# Integrações básicas
+# -----------------------------------------------------------------------------
+# Espera-se que o app já tenha SQLAlchemy inicializado em main.py:
+#   db = SQLAlchemy(app)
+# Para evitar import cíclico, pegamos via current_app.extensions quando necessário.
+
+def _get_db() -> SQLAlchemy:
+    db: SQLAlchemy = current_app.extensions["sqlalchemy"].db  # type: ignore
+    return db
+
 finance_bp = Blueprint("finance", __name__)
 
-# =========================== Config & Consts ===========================
-_VALID_TYPES = {"entrada", "saida", "despesa"}
-_COLL = os.getenv("FINANCE_COLL", "finance_transactions")
+# -----------------------------------------------------------------------------
+# Modelo (caso seu projeto já tenha, deixe este como referência ou alinhe o nome)
+# -----------------------------------------------------------------------------
+# Tabela padrão: transactions
+# Campos mínimos: id, date, amount, type ('entrada'|'saida'), category, notes, action_id
+# Ajuste nomes se já existir um modelo equivalente no projeto.
 
-# Fallback JSON (volátil no plano grátis da Render)
-_JSON_PATH = os.getenv("FINANCE_JSON_PATH") or "/tmp/finance_transactions.json"
-
-# Firestore toggle
-_USE_FIRESTORE = (os.getenv("USE_FIRESTORE", "true").lower() in ("1", "true", "yes"))
-
-# CORS: FRONTEND_URL pode ter várias origens separadas por vírgula
-_ALLOWED_ORIGINS = set(
-    [o.strip() for o in (os.getenv("FRONTEND_URL") or "").split(",") if o.strip()]
-)
-_DEFAULT_ALLOW_ORIGIN = "*" if not _ALLOWED_ORIGINS else None
-
-
-# ============================ Utils gerais =============================
-def _iso_date_only(val) -> str:
-    """Normaliza para YYYY-MM-DD; retorna '' se inválida."""
-    s = str(val or "")[:10]
+def _decimal_two(v: Any) -> decimal.Decimal:
     try:
-        d = datetime.strptime(s, "%Y-%m-%d")
+        return decimal.Decimal(str(v)).quantize(decimal.Decimal("0.01"))
+    except Exception:
+        return decimal.Decimal("0.00")
+
+def _iso_date_only(d: Any) -> Optional[str]:
+    if not d:
+        return None
+    if isinstance(d, date):
         return d.strftime("%Y-%m-%d")
-    except Exception:
-        return ""
+    s = str(d).strip()
+    # aceita DD/MM/AAAA, YYYY-MM-DD e ISO datetime
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%fZ"):
+        try:
+            dt = datetime.strptime(s[:19], fmt) if "T" in s else datetime.strptime(s, fmt)
+            return dt.strftime("%Y-%m-%d")
+        except Exception:
+            continue
+    return None
 
-
-def _to_number(v):
-    try:
-        return float(v)
-    except Exception:
+def _to_number(v: Any) -> float:
+    if v is None or v == "":
         return 0.0
-
-
-def _doc_to_json(doc: Dict[str, Any]) -> Dict[str, Any]:
-    d = dict(doc or {})
-    if not d.get("id"):
-        d["id"] = str(uuid.uuid4())
-    d["amount"] = _to_number(d.get("amount", 0))
-    d["date"] = _iso_date_only(d.get("date"))
-    return d
-
-
-def _month_bounds(ym: str) -> Optional[tuple]:
-    """Recebe 'YYYY-MM' e devolve ('YYYY-MM-01', 'YYYY-MM-último_dia')."""
-    if not (isinstance(ym, str) and len(ym) == 7 and ym[4] == "-"):
-        return None
-    y, m = ym.split("-")
+    s = str(v).replace(".", "").replace(",", ".")
     try:
-        y, m = int(y), int(m)
-        start = datetime(y, m, 1)
-        if m == 12:
-            end = datetime(y + 1, 1, 1) - timedelta(days=1)
-        else:
-            end = datetime(y, m + 1, 1) - timedelta(days=1)
-        return (start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+        return float(s)
     except Exception:
-        return None
+        try:
+            return float(v)
+        except Exception:
+            return 0.0
 
+def _ok(payload, status=200):
+    return jsonify(payload), status
 
-# ========================== Fallback JSON I/O ==========================
-def _ensure_dir(path: str):
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-    except Exception as e:
-        log.warning("[finance] não foi possível criar diretório: %s", e)
+# Obtemos o Model dinamicamente, caso já exista no projeto:
+def _get_transaction_model():
+    db = _get_db()
+    class Transaction(db.Model):  # type: ignore
+        __tablename__ = "transactions"
 
+        id = db.Column(db.Integer, primary_key=True)
+        date = db.Column(db.Date, nullable=False, index=True)
+        amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+        type = db.Column(db.String(16), nullable=False, index=True)  # 'entrada' | 'saida'
+        category = db.Column(db.String(64), nullable=True, index=True)
+        notes = db.Column(db.Text, nullable=True)
+        action_id = db.Column(db.String(64), nullable=True, index=True)
 
-def _json_load() -> List[Dict[str, Any]]:
-    try:
-        if not os.path.exists(_JSON_PATH):
-            return []
-        with open(_JSON_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except Exception as e:
-        log.exception("[finance] erro lendo JSON: %s", e)
-        return []
+        created_at = db.Column(db.DateTime, server_default=func.now(), nullable=False)
+        updated_at = db.Column(db.DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
-
-def _json_save(items: List[Dict[str, Any]]):
-    _ensure_dir(_JSON_PATH)
-    with open(_JSON_PATH, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2, default=str)
-
-
-# ============================ Firestore I/O ============================
-_fs_client = None
-_fs_ready = None  # cache do estado (True = ok, False = indisponível)
-
-
-def _decode_b64_json(b64: str) -> Optional[dict]:
-    try:
-        raw = base64.b64decode(b64).decode("utf-8")
-        return json.loads(raw)
-    except Exception:
-        return None
-
-
-def _get_firestore():
-    """Inicializa Firestore com FIREBASE_CREDENTIALS_B64 ou GOOGLE_APPLICATION_CREDENTIALS_JSON."""
-    global _fs_client, _fs_ready
-
-    if not _USE_FIRESTORE:
-        _fs_ready = False
-        return None
-
-    if _fs_ready is not None:
-        return _fs_client if _fs_ready else None
-
-    try:
-        from google.cloud import firestore  # type: ignore
-    except Exception as e:
-        log.warning("[finance] google-cloud-firestore não instalado: %s", e)
-        _fs_ready = False
-        return None
-
-    try:
-        b64 = os.getenv("FIREBASE_CREDENTIALS_B64")
-        if b64:
-            from google.oauth2 import service_account  # type: ignore
-            info = _decode_b64_json(b64)
-            if not info:
-                raise RuntimeError("FIREBASE_CREDENTIALS_B64 inválido")
-            creds = service_account.Credentials.from_service_account_info(info)
-            project = info.get("project_id") or os.getenv("FIREBASE_PROJECT_ID")
-            _client = firestore.Client(credentials=creds, project=project)
-            _fs_ready = True
-            _fs_client = _client
-            return _fs_client
-
-        gac_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-        if gac_json:
-            from google.oauth2 import service_account  # type: ignore
-            info = json.loads(gac_json)
-            creds = service_account.Credentials.from_service_account_info(info)
-            _client = firestore.Client(credentials=creds, project=info.get("project_id"))
-            _fs_ready = True
-            _fs_client = _client
-            return _fs_client
-
-        _client = firestore.Client()
-        _fs_ready = True
-        _fs_client = _client
-        return _fs_client
-
-    except Exception as e:
-        log.warning("[finance] Firestore indisponível: %s (usando fallback JSON)", e)
-        _fs_ready = False
-        _fs_client = None
-        return None
-
-
-def _fs_list(ttype: str, action_id: str, month: str) -> List[Dict[str, Any]]:
-    client = _get_firestore()
-    if not client:
-        return _json_load()
-
-    try:
-        coll = client.collection(_COLL)
-        docs = [d.to_dict() for d in coll.stream()]
-        items = []
-        for d in docs:
-            it = {
-                "id": d.get("id"),
-                "type": d.get("type"),
-                "date": d.get("date"),
-                "amount": _to_number(d.get("amount")),
-                "category": d.get("category") or "",
-                "notes": d.get("notes") or "",
-                "action_id": d.get("action_id"),
-                "created_by": d.get("created_by"),
-                "created_at": d.get("created_at"),
+        def to_dict(self):
+            return {
+                "id": self.id,
+                "date": self.date.strftime("%Y-%m-%d"),
+                "amount": float(self.amount or 0),
+                "type": self.type,
+                "category": self.category,
+                "notes": self.notes,
+                "action_id": self.action_id,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             }
-            items.append(_doc_to_json(it))
+    return Transaction
 
-        if ttype in _VALID_TYPES:
-            items = [x for x in items if (x.get("type") or "") == ttype]
-        if action_id:
-            items = [x for x in items if str(x.get("action_id") or "") == action_id]
-        if isinstance(month, str) and len(month) == 7:
-            rng = _month_bounds(month)
-            if rng:
-                start, end = rng
-                items = [x for x in items if start <= (x.get("date") or "") <= end]
+# -----------------------------------------------------------------------------
+# CRUD de /transactions (genéricas) — usado também pelos aliases
+# -----------------------------------------------------------------------------
 
-        items.sort(key=lambda x: (x.get("date") or "", x.get("id") or ""), reverse=True)
-        return items
-    except Exception as e:
-        log.exception("[finance][fs_list] falha: %s", e)
-        return _json_load()
-
-
-def _fs_create(doc: Dict[str, Any]) -> Dict[str, Any]:
-    client = _get_firestore()
-    if not client:
-        items = _json_load()
-        items.append(doc)
-        _json_save(items)
-        return doc
-
-    try:
-        client.collection(_COLL).document(doc["id"]).set(doc)
-        return doc
-    except Exception as e:
-        log.exception("[finance][fs_create] falha: %s", e)
-        items = _json_load()
-        items.append(doc)
-        _json_save(items)
-        return doc
-
-
-def _fs_update(txid: str, upd: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    client = _get_firestore()
-    if not client:
-        items = _json_load()
-        for i, it in enumerate(items):
-            if str(it.get("id")) == str(txid):
-                items[i].update(upd)
-                _json_save(items)
-                return _doc_to_json(items[i])
-        return None
-
-    try:
-        ref = client.collection(_COLL).document(txid)
-        snap = ref.get()
-        if not snap.exists:
-            return None
-        ref.update(upd)
-        data = snap.to_dict() or {}
-        data.update(upd)
-        return _doc_to_json(data)
-    except Exception as e:
-        log.exception("[finance][fs_update] falha: %s", e)
-        items = _json_load()
-        for i, it in enumerate(items):
-            if str(it.get("id")) == str(txid):
-                items[i].update(upd)
-                _json_save(items)
-                return _doc_to_json(items[i])
-        return None
-
-
-def _fs_delete(txid: str) -> bool:
-    client = _get_firestore()
-    if not client:
-        items = _json_load()
-        new_items = [x for x in items if str(x.get("id")) != str(txid)]
-        _json_save(new_items)
-        return True
-
-    try:
-        client.collection(_COLL).document(txid).delete()
-        return True
-    except Exception as e:
-        log.exception("[finance][fs_delete] falha: %s", e)
-        items = _json_load()
-        new_items = [x for x in items if str(x.get("id")) != str(txid)]
-        _json_save(new_items)
-        return True
-
-
-# ============================== CORS ===================================
-@finance_bp.after_request
-def _add_cors_headers(resp: Response):
-    origin = request.headers.get("Origin")
-    allow = _DEFAULT_ALLOW_ORIGIN
-    if origin and _ALLOWED_ORIGINS:
-        if origin in _ALLOWED_ORIGINS:
-            allow = origin
-        else:
-            log.debug("[finance][CORS] origem não permitida: %s", origin)
-
-    resp.headers["Access-Control-Allow-Origin"] = allow or "*"
-    resp.headers["Vary"] = "Origin"
-    resp.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
-    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    resp.headers["Access-Control-Expose-Headers"] = "Authorization, Content-Type"
-    return resp
-
-
-@finance_bp.route("/finance/transactions", methods=["OPTIONS"])
-@finance_bp.route("/transactions", methods=["OPTIONS"])
-def _preflight_transactions():
-    return ("", 204)
-
-
-# =============================== Rotas ================================
-@finance_bp.route("/finance/transactions", methods=["GET"])
 @finance_bp.route("/transactions", methods=["GET"])
-@roles_allowed('admin')
 def list_transactions():
-    try:
-        ttype = (request.args.get("type") or "").strip().lower()
-        action_id = (request.args.get("action_id") or "").strip()
-        month = (request.args.get("month") or "").strip()
+    """
+    Filtros aceitos (querystring):
+      - type: 'entrada' | 'saida'
+      - date_from, date_to: YYYY-MM-DD
+      - category: str
+      - q: busca em notes
+    """
+    db = _get_db()
+    Transaction = _get_transaction_model()
 
-        items = _fs_list(ttype, action_id, month)
-        return jsonify(items), 200
-    except Exception as e:
-        log.exception("[finance][GET] falha: %s", e)
-        return jsonify({"message": "internal_error"}), 500
+    q = Transaction.query
+
+    t = request.args.get("type")
+    if t in ("entrada", "saida"):
+        q = q.filter(Transaction.type == t)
+
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    if date_from:
+        d = _iso_date_only(date_from)
+        if d:
+            q = q.filter(Transaction.date >= d)
+    if date_to:
+        d = _iso_date_only(date_to)
+        if d:
+            q = q.filter(Transaction.date <= d)
+
+    category = request.args.get("category")
+    if category:
+        q = q.filter(Transaction.category == category)
+
+    term = request.args.get("q")
+    if term:
+        q = q.filter(Transaction.notes.ilike(f"%{term}%"))
+
+    q = q.order_by(Transaction.date.desc(), Transaction.id.desc())
+
+    items = [it.to_dict() for it in q.all()]
+    return _ok({"items": items, "count": len(items)})
 
 
-@finance_bp.route("/finance/transactions", methods=["POST"])
 @finance_bp.route("/transactions", methods=["POST"])
-@roles_allowed('admin')
 def create_transaction():
-    try:
-        data = request.get_json(silent=True) or {}
+    """
+    body:
+      - type (obrigatório): 'entrada' | 'saida'
+      - date (YYYY-MM-DD, obrigatório)
+      - amount (number, obrigatório)
+      - category (opcional)
+      - notes (opcional)
+      - action_id (opcional)
+    """
+    db = _get_db()
+    Transaction = _get_transaction_model()
 
-        ttype = str(data.get("type", "")).lower().strip()
-        if ttype not in _VALID_TYPES:
-            return jsonify({"message": "type inválido (entrada, saida, despesa)"}), 400
+    data: Dict[str, Any] = (request.get_json(silent=True) or {})
+    # Permite que aliases injetem um json já mapeado pela property privada
+    data = getattr(request, "_cached_json", data)
 
-        date = _iso_date_only(data.get("date"))
-        if not date:
-            return jsonify({"message": "date inválida (YYYY-MM-DD)"}), 400
+    typ = (data.get("type") or "").strip().lower()
+    if typ not in ("entrada", "saida"):
+        return _ok({"message": "type inválido: use 'entrada' ou 'saida'."}, 400)
 
-        doc = {
-            "id": str(uuid.uuid4()),
-            "type": ttype,
-            "date": date,
-            "amount": abs(_to_number(data.get("amount", 0))),
-            "category": (data.get("category") or "").strip(),
-            "notes": (data.get("notes") or "").strip(),
-            "action_id": (data.get("action_id") or "").strip() or None,
-            "created_by": get_jwt_identity(),
-            "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        }
+    d = _iso_date_only(data.get("date"))
+    if not d:
+        return _ok({"message": "date inválida. Formato esperado: YYYY-MM-DD."}, 400)
 
-        saved = _fs_create(doc)
-        return jsonify(_doc_to_json(saved)), 201
-    except Exception as e:
-        log.exception("[finance][POST] falha: %s", e)
-        return jsonify({"message": "internal_error"}), 500
+    amount = _to_number(data.get("amount"))
+    if amount <= 0:
+        return _ok({"message": "amount deve ser maior que zero."}, 400)
 
-
-@finance_bp.route("/finance/transactions/<txid>", methods=["PUT", "PATCH"])
-@finance_bp.route("/transactions/<txid>", methods=["PUT", "PATCH"])
-@roles_allowed('admin')
-def update_transaction(txid):
-    try:
-        data = request.get_json(silent=True) or {}
-        upd: Dict[str, Any] = {}
-
-        if "type" in data and str(data["type"]).lower() in _VALID_TYPES:
-            upd["type"] = str(data["type"]).lower()
-        if "date" in data:
-            d = _iso_date_only(data["date"])
-            if d:
-                upd["date"] = d
-        if "amount" in data:
-            upd["amount"] = abs(_to_number(data["amount"]))
-        for k in ("category", "notes", "action_id"):
-            if k in data:
-                v = data[k]
-                upd[k] = (v or "").strip() if isinstance(v, str) else v
-
-        if not upd:
-            return jsonify({"message": "Nada para atualizar"}), 400
-
-        out = _fs_update(txid, upd)
-        if not out:
-            return jsonify({"message": "não encontrado"}), 404
-        return jsonify(out), 200
-    except Exception as e:
-        log.exception("[finance][PUT] falha: %s", e)
-        return jsonify({"message": "internal_error"}), 500
+    tx = Transaction(
+        type=typ,
+        date=datetime.strptime(d, "%Y-%m-%d").date(),
+        amount=_decimal_two(amount),
+        category=(data.get("category") or None),
+        notes=(data.get("notes") or None),
+        action_id=(data.get("action_id") or None),
+    )
+    db.session.add(tx)
+    db.session.commit()
+    return _ok(tx.to_dict(), 201)
 
 
-@finance_bp.route("/finance/transactions/<txid>", methods=["DELETE"])
-@finance_bp.route("/transactions/<txid>", methods=["DELETE"])
-@roles_allowed('admin')
-def delete_transaction(txid):
-    try:
-        ok = _fs_delete(txid)
-        if ok:
-            return ("", 204)
-        return jsonify({"message": "não encontrado"}), 404
-    except Exception as e:
-        log.exception("[finance][DELETE] falha: %s", e)
-        return jsonify({"message": "internal_error"}), 500
+@finance_bp.route("/transactions/<int:txid>", methods=["PUT", "PATCH"])
+def update_transaction(txid: int):
+    db = _get_db()
+    Transaction = _get_transaction_model()
+
+    tx = Transaction.query.get(txid)
+    if not tx:
+        return _ok({"message": "Transação não encontrada."}, 404)
+
+    data: Dict[str, Any] = (request.get_json(silent=True) or {})
+    data = getattr(request, "_cached_json", data)
+
+    if "type" in data:
+        typ = (data.get("type") or "").strip().lower()
+        if typ in ("entrada", "saida"):
+            tx.type = typ
+
+    if "date" in data:
+        d = _iso_date_only(data.get("date"))
+        if d:
+            tx.date = datetime.strptime(d, "%Y-%m-%d").date()
+
+    if "amount" in data:
+        tx.amount = _decimal_two(_to_number(data.get("amount")))
+
+    if "category" in data:
+        tx.category = (data.get("category") or None)
+
+    if "notes" in data:
+        tx.notes = (data.get("notes") or None)
+
+    if "action_id" in data:
+        tx.action_id = (data.get("action_id") or None)
+
+    db.session.commit()
+    return _ok(tx.to_dict(), 200)
 
 
-# =============================== Aliases ================================
+@finance_bp.route("/transactions/<int:txid>", methods=["DELETE"])
+def delete_transaction(txid: int):
+    db = _get_db()
+    Transaction = _get_transaction_model()
+
+    tx = Transaction.query.get(txid)
+    if not tx:
+        return _ok({"message": "Transação não encontrada."}, 404)
+    db.session.delete(tx)
+    db.session.commit()
+    return _ok({}, 204)
+
+# -----------------------------------------------------------------------------
+# Mapeadores dos aliases (front envia 'vencimento', 'valor', 'descricao'…)
+# -----------------------------------------------------------------------------
+
+def _map_payable_to_tx_payload(data: dict) -> dict:
+    """Contas a Pagar → /transactions"""
+    return {
+        "type": "saida",
+        "date": _iso_date_only(data.get("vencimento") or data.get("date")),
+        "amount": abs(_to_number(data.get("valor") if data.get("valor") is not None else data.get("amount"))),
+        "category": (data.get("categoria") or data.get("category") or "conta_pagar"),
+        "notes": (data.get("descricao") or data.get("notes") or "").strip(),
+        "action_id": (data.get("action_id") or None),
+    }
+
+def _map_receivable_to_tx_payload(data: dict) -> dict:
+    """Contas a Receber → /transactions"""
+    return {
+        "type": "entrada",
+        "date": _iso_date_only(data.get("vencimento") or data.get("dataEmissao") or data.get("date")),
+        "amount": abs(_to_number(data.get("valor") if data.get("valor") is not None else data.get("amount"))),
+        "category": (data.get("categoria") or data.get("category") or "conta_receber"),
+        "notes": (
+            data.get("descricao")
+            or data.get("cliente")
+            or data.get("notaFiscal")
+            or data.get("notes")
+            or ""
+        ).strip(),
+        "action_id": (data.get("action_id") or None),
+    }
+
+# -----------------------------------------------------------------------------
+# Aliases: /contas-pagar  e  /contas-receber
+# -----------------------------------------------------------------------------
+
+# --------- LISTAR (corrige 405 do print) ---------
+@finance_bp.route("/contas-pagar", methods=["GET"])
+def listar_contas_pagar():
+    # injeta filtro type=saida e reutiliza list_transactions
+    args = request.args.to_dict(flat=True)
+    args["type"] = "saida"
+    # hack simples para repassar filtros:
+    with current_app.test_request_context(query_string=args):
+        return list_transactions()
+
+@finance_bp.route("/contas-receber", methods=["GET"])
+def listar_contas_receber():
+    args = request.args.to_dict(flat=True)
+    args["type"] = "entrada"
+    with current_app.test_request_context(query_string=args):
+        return list_transactions()
+
+# --------- CRIAR (corrige 500 mapeando campos) ---------
 @finance_bp.route("/contas-pagar", methods=["POST"])
-@roles_allowed('admin')
 def criar_conta_pagar():
-    """
-    Alias para criação de Conta a Pagar -> força type="saida"
-    """
     data = request.get_json(silent=True) or {}
-    data["type"] = "saida"
-    request._cached_json = data
+    mapped = _map_payable_to_tx_payload(data)
+    if not mapped.get("date"):
+        return _ok({"message": "vencimento/date inválido. Use YYYY-MM-DD."}, 400)
+    request._cached_json = mapped  # repassa para create_transaction
     return create_transaction()
-
 
 @finance_bp.route("/contas-receber", methods=["POST"])
-@roles_allowed('admin')
 def criar_conta_receber():
-    """
-    Alias para criação de Conta a Receber -> força type="entrada"
-    """
     data = request.get_json(silent=True) or {}
-    data["type"] = "entrada"
-    request._cached_json = data
+    mapped = _map_receivable_to_tx_payload(data)
+    if not mapped.get("date"):
+        return _ok({"message": "vencimento/date inválido. Use YYYY-MM-DD."}, 400)
+    request._cached_json = mapped
     return create_transaction()
+
+# --------- ATUALIZAR ---------
+@finance_bp.route("/contas-pagar/<int:txid>", methods=["PUT", "PATCH"])
+def atualizar_conta_pagar(txid: int):
+    data = request.get_json(silent=True) or {}
+    upd: Dict[str, Any] = {}
+    if any(k in data for k in ("vencimento", "date")):
+        d = _iso_date_only(data.get("vencimento") or data.get("date"))
+        if d:
+            upd["date"] = d
+    if any(k in data for k in ("valor", "amount")):
+        upd["amount"] = abs(_to_number(data.get("valor") if data.get("valor") is not None else data.get("amount")))
+    if any(k in data for k in ("descricao", "notes")):
+        upd["notes"] = (data.get("descricao") or data.get("notes") or "").strip()
+    if any(k in data for k in ("categoria", "category")):
+        upd["category"] = (data.get("categoria") or data.get("category") or "").strip()
+    upd["type"] = "saida"
+    if not upd:
+        return _ok({"message": "Nada para atualizar."}, 400)
+    request._cached_json = upd
+    return update_transaction(txid)
+
+@finance_bp.route("/contas-receber/<int:txid>", methods=["PUT", "PATCH"])
+def atualizar_conta_receber(txid: int):
+    data = request.get_json(silent=True) or {}
+    upd: Dict[str, Any] = {}
+    if any(k in data for k in ("vencimento", "dataEmissao", "date")):
+        d = _iso_date_only(data.get("vencimento") or data.get("dataEmissao") or data.get("date"))
+        if d:
+            upd["date"] = d
+    if any(k in data for k in ("valor", "amount")):
+        upd["amount"] = abs(_to_number(data.get("valor") if data.get("valor") is not None else data.get("amount")))
+    if any(k in data for k in ("descricao","cliente","notaFiscal","notes")):
+        upd["notes"] = (
+            data.get("descricao")
+            or data.get("cliente")
+            or data.get("notaFiscal")
+            or data.get("notes")
+            or ""
+        ).strip()
+    if any(k in data for k in ("categoria", "category")):
+        upd["category"] = (data.get("categoria") or data.get("category") or "").strip()
+    upd["type"] = "entrada"
+    if not upd:
+        return _ok({"message": "Nada para atualizar."}, 400)
+    request._cached_json = upd
+    return update_transaction(txid)
+
+# --------- DELETAR ---------
+@finance_bp.route("/contas-pagar/<int:txid>", methods=["DELETE"])
+def deletar_conta_pagar(txid: int):
+    return delete_transaction(txid)
+
+@finance_bp.route("/contas-receber/<int:txid>", methods=["DELETE"])
+def deletar_conta_receber(txid: int):
+    return delete_transaction(txid)
