@@ -16,9 +16,9 @@ for p in (backend_dir, src_dir):
         sys.path.insert(0, p)
 
 from flask import Flask, jsonify, redirect, request
-from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from werkzeug.exceptions import RequestEntityTooLarge
+
 
 def create_app():
     app = Flask(__name__)
@@ -40,32 +40,56 @@ def create_app():
     )
     log = logging.getLogger(__name__)
 
+    JWTManager(app)
+
     # -----------------------
-    # CORS
+    # CORS Global (sem depender de extensão)
     # -----------------------
-    # Em produção, prefira listar origens explicitamente.
     default_origins = [
         "https://www.panfletagemrelampago.com.br",
         "https://panfletagemrelampago.com.br",
-        "https://site-gestao.onrender.com",      # backend Render
-        "https://site-gestao-mu.vercel.app",     # front Vercel (se ainda usar)
+        "https://site-gestao.onrender.com",
+        "https://site-gestao-mu.vercel.app",
         "http://localhost:5173",
         "http://localhost:3000",
+        "http://localhost",
     ]
-    # Permite sobrescrever por env (se precisar): ORIGINS="https://foo,https://bar"
     env_origins = [o.strip() for o in os.getenv("ORIGINS", "").split(",") if o.strip()]
-    allowed_origins = env_origins or default_origins
+    ALLOWED_ORIGINS = set(env_origins or default_origins)
 
-    CORS(
-        app,
-        resources={r"/api/*": {"origins": allowed_origins}},
-        supports_credentials=False,
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization"],
-        expose_headers=["Content-Type", "Authorization"],
-        max_age=86400,
-    )
-    JWTManager(app)
+    def _pick_allow_origin(req_origin: str | None) -> str | None:
+        if not req_origin:
+            return None
+        if req_origin in ALLOWED_ORIGINS:
+            return req_origin
+        if req_origin.endswith(".panfletagemrelampago.com.br"):
+            return req_origin
+        return None
+
+    @app.after_request
+    def _force_cors_headers(resp):
+        origin = request.headers.get("Origin")
+        allow = _pick_allow_origin(origin)
+        if allow:
+            resp.headers["Access-Control-Allow-Origin"] = allow
+            resp.headers["Vary"] = "Origin"
+            resp.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+            resp.headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type"
+            resp.headers["Access-Control-Max-Age"] = "86400"
+        return resp
+
+    @app.route("/api/<path:any_path>", methods=["OPTIONS"])
+    def api_preflight(any_path):
+        origin = request.headers.get("Origin")
+        allow = _pick_allow_origin(origin)
+        resp = jsonify({"ok": True})
+        if allow:
+            resp.headers["Access-Control-Allow-Origin"] = allow
+            resp.headers["Vary"] = "Origin"
+            resp.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+            resp.headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type"
+            resp.headers["Access-Control-Max-Age"] = "86400"
+        return resp, 204
 
     # -----------------------
     # Imports tardios
@@ -92,7 +116,7 @@ def create_app():
     app.register_blueprint(metrics_bp, url_prefix="/api/metrics")
     app.register_blueprint(upload_bp, url_prefix="/api")
     app.register_blueprint(user_bp, url_prefix="/api")
-    app.register_blueprint(finance_bp, url_prefix="/api")  # /api/transactions, /api/contas-*
+    app.register_blueprint(finance_bp, url_prefix="/api")  # /api/transactions e /api/contas-*
 
     # -----------------------
     # Healthcheck
@@ -101,7 +125,6 @@ def create_app():
     def healthcheck_root():
         return jsonify({"status": "ok"}), 200
 
-    # healthcheck também em /api
     @app.route("/api/healthcheck", methods=["GET", "HEAD", "OPTIONS"])
     def healthcheck_api():
         return jsonify({"status": "ok"}), 200
@@ -118,14 +141,6 @@ def create_app():
         return redirect("/api/metrics/service-distribution", code=307)
 
     # -----------------------
-    # Preflight genérico
-    # -----------------------
-    @app.route("/api/<path:any_path>", methods=["OPTIONS"])
-    def api_preflight(any_path):
-        # Útil para browsers que fazem preflight amplo
-        return ("", 204)
-
-    # -----------------------
     # Error Handlers
     # -----------------------
     @app.errorhandler(404)
@@ -138,7 +153,6 @@ def create_app():
 
     @app.errorhandler(500)
     def handle_500(e):
-        # Loga stacktrace completo para facilitar investigação de 500
         log.exception("Internal server error on %s %s", request.method, request.path)
         return jsonify(error="internal_server_error"), 500
 
