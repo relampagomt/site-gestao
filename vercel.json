@@ -2,5 +2,26 @@
   "version": 2,
   "installCommand": "pnpm i --no-frozen-lockfile --reporter=append-only",
   "buildCommand": "pnpm -C frontend build",
-  "outputDirectory": "frontend/dist"
+  "outputDirectory": "frontend/dist",
+
+  // 1) Proxy de API: envia /api/* para o backend no Render (preserva método/headers/body)
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://site-gestao.onrender.com/api/$1" }
+  ],
+
+  // 2) SPA fallback: depois de servir arquivos estáticos, qualquer rota vira /index.html
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ],
+
+  // 3) Cabeçalho útil para evitar cache em chamadas de API no edge
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
+  ]
 }
