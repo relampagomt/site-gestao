@@ -52,7 +52,8 @@ export default function Fleet(){
     <Card>
       <CardHeader><CardTitle>Frota</CardTitle></CardHeader>
       <CardContent>
-        <Tabs value={tab} onValueChange={setTab}>
+        {/* Tabs não-controladas para evitar perda de foco */}
+        <Tabs defaultValue="abastecimentos" onValueChange={setTab}>
           <TabsList className="flex flex-wrap gap-2">
             {["veiculos","motoristas","vinculos","abastecimentos","km","limpeza","fotos","ocorrencias","dashboard"].map(t=>
               <TabsTrigger key={t} value={t} className="capitalize">{t}</TabsTrigger>
@@ -62,11 +63,11 @@ export default function Fleet(){
           {/* Veículos */}
           <TabsContent value="veiculos">
             <InputGrid>
-              <Input placeholder="Placa" value={veh.placa} onChange={e=>setVeh(s=>({...s,placa:e.target.value}))}/>
-              <Input placeholder="Modelo" value={veh.modelo} onChange={e=>setVeh(s=>({...s,modelo:e.target.value}))}/>
-              <Input placeholder="Marca" value={veh.marca} onChange={e=>setVeh(s=>({...s,marca:e.target.value}))}/>
-              <Input placeholder="Ano" value={veh.ano} onChange={e=>setVeh(s=>({...s,ano:e.target.value}))}/>
-              <Button onClick={()=>post("/api/fleet/vehicles",veh,[vehicles.reload]).then(()=>setVeh({placa:"",modelo:"",marca:"",ano:""}))}>Salvar</Button>
+              <Input autoComplete="off" placeholder="Placa" value={veh.placa} onChange={e=>setVeh(s=>({...s,placa:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Modelo" value={veh.modelo} onChange={e=>setVeh(s=>({...s,modelo:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Marca" value={veh.marca} onChange={e=>setVeh(s=>({...s,marca:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Ano" value={veh.ano} onChange={e=>setVeh(s=>({...s,ano:e.target.value}))}/>
+              <Button type="button" onClick={()=>post("/api/fleet/vehicles",veh,[vehicles.reload]).then(()=>setVeh({placa:"",modelo:"",marca:"",ano:""}))}>Salvar</Button>
             </InputGrid>
             <div className="mt-4 overflow-auto">
               <Table>
@@ -79,10 +80,10 @@ export default function Fleet(){
           {/* Motoristas */}
           <TabsContent value="motoristas">
             <InputGrid cols="md:grid-cols-4">
-              <Input placeholder="Nome" value={drv.nome} onChange={e=>setDrv(s=>({...s,nome:e.target.value}))}/>
-              <Input placeholder="Documento" value={drv.documento} onChange={e=>setDrv(s=>({...s,documento:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Nome" value={drv.nome} onChange={e=>setDrv(s=>({...s,nome:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Documento" value={drv.documento} onChange={e=>setDrv(s=>({...s,documento:e.target.value}))}/>
               <div />
-              <Button onClick={()=>post("/api/fleet/drivers",drv,[drivers.reload]).then(()=>setDrv({nome:"",documento:""}))}>Salvar</Button>
+              <Button type="button" onClick={()=>post("/api/fleet/drivers",drv,[drivers.reload]).then(()=>setDrv({nome:"",documento:""}))}>Salvar</Button>
             </InputGrid>
             <div className="mt-4 overflow-auto">
               <Table>
@@ -101,11 +102,11 @@ export default function Fleet(){
               <select className="border rounded-xl px-3 py-2" value={vinc.driver_id} onChange={e=>setVinc(s=>({...s,driver_id:e.target.value}))}>
                 <option value="">Motorista...</option>{drivers.data.map(d=><option key={d.id} value={d.id}>{d.nome}</option>)}
               </select>
-              <Input placeholder="Placa (texto livre)" value={vinc.placa} onChange={e=>setVinc(s=>({...s,placa:e.target.value}))}/>
-              <Input placeholder="dd/mm/aaaa" value={vinc.inicio} onChange={e=>setVinc(s=>({...s,inicio:e.target.value}))}/>
-              <Input placeholder="dd/mm/aaaa" value={vinc.fim} onChange={e=>setVinc(s=>({...s,fim:e.target.value}))}/>
-              <Input placeholder="Observação" value={vinc.observacao} onChange={e=>setVinc(s=>({...s,observacao:e.target.value}))}/>
-              <Button onClick={()=>post("/api/fleet/assignments",{...vinc, inicio: toISO(vinc.inicio), fim: vinc.fim?toISO(vinc.fim):null},[asg.reload]).then(()=>setVinc({vehicle_id:"",driver_id:"",placa:"",inicio:"",fim:"",observacao:""}))}>Salvar</Button>
+              <Input autoComplete="off" placeholder="Placa (texto livre)" value={vinc.placa} onChange={e=>setVinc(s=>({...s,placa:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="dd/mm/aaaa" value={vinc.inicio} onChange={e=>setVinc(s=>({...s,inicio:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="dd/mm/aaaa" value={vinc.fim} onChange={e=>setVinc(s=>({...s,fim:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Observação" value={vinc.observacao} onChange={e=>setVinc(s=>({...s,observacao:e.target.value}))}/>
+              <Button type="button" onClick={()=>post("/api/fleet/assignments",{...vinc, inicio: toISO(vinc.inicio), fim: vinc.fim?toISO(vinc.fim):null},[asg.reload]).then(()=>setVinc({vehicle_id:"",driver_id:"",placa:"",inicio:"",fim:"",observacao:""}))}>Salvar</Button>
             </InputGrid>
             <div className="mt-4 overflow-auto">
               <Table>
@@ -124,18 +125,18 @@ export default function Fleet(){
               <select className="border rounded-xl px-3 py-2" value={fuel.driver_id} onChange={e=>setFuel(s=>({...s,driver_id:e.target.value}))}>
                 <option value="">Motorista...</option>{drivers.data.map(d=><option key={d.id} value={d.id}>{d.nome}</option>)}
               </select>
-              <Input placeholder="Placa" value={fuel.placa} onChange={e=>setFuel(s=>({...s,placa:e.target.value}))}/>
-              <Input placeholder="dd/mm/aaaa" value={fuel.data} onChange={e=>setFuel(s=>({...s,data:e.target.value}))}/>
-              <Input placeholder="KM" value={fuel.km} onChange={e=>setFuel(s=>({...s,km:e.target.value}))}/>
-              <Input placeholder="Litros" value={fuel.litros} onChange={e=>setFuel(s=>({...s,litros:e.target.value}))}/>
-              <Input placeholder="Valor Unit." value={fuel.valor_unit} onChange={e=>setFuel(s=>({...s,valor_unit:e.target.value}))}/>
-              <Input placeholder="Valor Total" value={fuel.valor_total} onChange={e=>setFuel(s=>({...s,valor_total:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Placa" value={fuel.placa} onChange={e=>setFuel(s=>({...s,placa:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="dd/mm/aaaa" value={fuel.data} onChange={e=>setFuel(s=>({...s,data:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="KM" value={fuel.km} onChange={e=>setFuel(s=>({...s,km:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Litros" value={fuel.litros} onChange={e=>setFuel(s=>({...s,litros:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Valor Unit." value={fuel.valor_unit} onChange={e=>setFuel(s=>({...s,valor_unit:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Valor Total" value={fuel.valor_total} onChange={e=>setFuel(s=>({...s,valor_total:e.target.value}))}/>
               <select className="border rounded-xl px-3 py-2" value={fuel.combustivel} onChange={e=>setFuel(s=>({...s,combustivel:e.target.value}))}>
                 <option>Gasolina</option><option>Etanol</option><option>Diesel</option>
               </select>
-              <Input placeholder="Posto" value={fuel.posto} onChange={e=>setFuel(s=>({...s,posto:e.target.value}))}/>
-              <Input placeholder="NF-e" value={fuel.nota_fiscal} onChange={e=>setFuel(s=>({...s,nota_fiscal:e.target.value}))}/>
-              <Button onClick={()=>post("/api/fleet/fuel-logs",{
+              <Input autoComplete="off" placeholder="Posto" value={fuel.posto} onChange={e=>setFuel(s=>({...s,posto:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="NF-e" value={fuel.nota_fiscal} onChange={e=>setFuel(s=>({...s,nota_fiscal:e.target.value}))}/>
+              <Button type="button" onClick={()=>post("/api/fleet/fuel-logs",{
                 ...fuel,
                 data: toISO(fuel.data),
                 km: parseNum(fuel.km),
@@ -155,17 +156,17 @@ export default function Fleet(){
           {/* KM */}
           <TabsContent value="km">
             <InputGrid cols="md:grid-cols-8">
-              <Input placeholder="ID Veículo" value={kmf.vehicle_id} onChange={e=>setKmf(s=>({...s,vehicle_id:e.target.value}))}/>
-              <Input placeholder="Placa" value={kmf.placa} onChange={e=>setKmf(s=>({...s,placa:e.target.value}))}/>
-              <Input placeholder="dd/mm/aaaa" value={kmf.data} onChange={e=>setKmf(s=>({...s,data:e.target.value}))}/>
-              <Input placeholder="KM" value={kmf.km} onChange={e=>setKmf(s=>({...s,km:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="ID Veículo" value={kmf.vehicle_id} onChange={e=>setKmf(s=>({...s,vehicle_id:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Placa" value={kmf.placa} onChange={e=>setKmf(s=>({...s,placa:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="dd/mm/aaaa" value={kmf.data} onChange={e=>setKmf(s=>({...s,data:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="KM" value={kmf.km} onChange={e=>setKmf(s=>({...s,km:e.target.value}))}/>
               <select className="border rounded-xl px-3 py-2" value={kmf.tipo} onChange={e=>setKmf(s=>({...s,tipo:e.target.value}))}>
                 <option value="leitura">Leitura</option><option value="trajeto">Trajeto</option>
               </select>
-              <Input placeholder="Origem" value={kmf.origem} onChange={e=>setKmf(s=>({...s,origem:e.target.value}))}/>
-              <Input placeholder="Destino" value={kmf.destino} onChange={e=>setKmf(s=>({...s,destino:e.target.value}))}/>
-              <Input placeholder="Observação" value={kmf.observacao} onChange={e=>setKmf(s=>({...s,observacao:e.target.value}))}/>
-              <Button onClick={()=>post("/api/fleet/km-logs",{...kmf, data: toISO(kmf.data), km: parseNum(kmf.km)},[kms.reload]).then(()=>setKmf({vehicle_id:"",placa:"",data:"",km:"",tipo:"leitura",origem:"",destino:"",observacao:""}))}>Salvar</Button>
+              <Input autoComplete="off" placeholder="Origem" value={kmf.origem} onChange={e=>setKmf(s=>({...s,origem:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Destino" value={kmf.destino} onChange={e=>setKmf(s=>({...s,destino:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Observação" value={kmf.observacao} onChange={e=>setKmf(s=>({...s,observacao:e.target.value}))}/>
+              <Button type="button" onClick={()=>post("/api/fleet/km-logs",{...kmf, data: toISO(kmf.data), km: parseNum(kmf.km)},[kms.reload]).then(()=>setKmf({vehicle_id:"",placa:"",data:"",km:"",tipo:"leitura",origem:"",destino:"",observacao:""}))}>Salvar</Button>
             </InputGrid>
             <div className="mt-4 overflow-auto">
               <Table>
@@ -178,16 +179,16 @@ export default function Fleet(){
           {/* Limpeza */}
           <TabsContent value="limpeza">
             <InputGrid cols="md:grid-cols-7">
-              <Input placeholder="ID Veículo" value={clf.vehicle_id} onChange={e=>setClf(s=>({...s,vehicle_id:e.target.value}))}/>
-              <Input placeholder="Placa" value={clf.placa} onChange={e=>setClf(s=>({...s,placa:e.target.value}))}/>
-              <Input placeholder="dd/mm/aaaa" value={clf.data} onChange={e=>setClf(s=>({...s,data:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="ID Veículo" value={clf.vehicle_id} onChange={e=>setClf(s=>({...s,vehicle_id:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Placa" value={clf.placa} onChange={e=>setClf(s=>({...s,placa:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="dd/mm/aaaa" value={clf.data} onChange={e=>setClf(s=>({...s,data:e.target.value}))}/>
               <select className="border rounded-xl px-3 py-2" value={clf.tipo} onChange={e=>setClf(s=>({...s,tipo:e.target.value}))}>
                 <option>Lavagem Completa</option><option>Interna</option><option>Externa</option><option>Higienização</option>
               </select>
-              <Input placeholder="Valor" value={clf.valor} onChange={e=>setClf(s=>({...s,valor:e.target.value}))}/>
-              <Input placeholder="Local" value={clf.local} onChange={e=>setClf(s=>({...s,local:e.target.value}))}/>
-              <Input placeholder="Observação" value={clf.observacao} onChange={e=>setClf(s=>({...s,observacao:e.target.value}))}/>
-              <Button onClick={()=>post("/api/fleet/cleanings",{...clf, data: toISO(clf.data), valor: parseNum(clf.valor)},[clean.reload]).then(()=>setClf({vehicle_id:"",placa:"",data:"",tipo:"Lavagem Completa",valor:"",local:"",observacao:""}))}>Salvar</Button>
+              <Input autoComplete="off" placeholder="Valor" value={clf.valor} onChange={e=>setClf(s=>({...s,valor:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Local" value={clf.local} onChange={e=>setClf(s=>({...s,local:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Observação" value={clf.observacao} onChange={e=>setClf(s=>({...s,observacao:e.target.value}))}/>
+              <Button type="button" onClick={()=>post("/api/fleet/cleanings",{...clf, data: toISO(clf.data), valor: parseNum(clf.valor)},[clean.reload]).then(()=>setClf({vehicle_id:"",placa:"",data:"",tipo:"Lavagem Completa",valor:"",local:"",observacao:""}))}>Salvar</Button>
             </InputGrid>
             <div className="mt-4 overflow-auto">
               <Table>
@@ -200,15 +201,15 @@ export default function Fleet(){
           {/* Fotos */}
           <TabsContent value="fotos">
             <InputGrid cols="md:grid-cols-7">
-              <Input placeholder="ID Veículo" value={phf.vehicle_id} onChange={e=>setPhf(s=>({...s,vehicle_id:e.target.value}))}/>
-              <Input placeholder="Placa" value={phf.placa} onChange={e=>setPhf(s=>({...s,placa:e.target.value}))}/>
-              <Input placeholder="dd/mm/aaaa" value={phf.data} onChange={e=>setPhf(s=>({...s,data:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="ID Veículo" value={phf.vehicle_id} onChange={e=>setPhf(s=>({...s,vehicle_id:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Placa" value={phf.placa} onChange={e=>setPhf(s=>({...s,placa:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="dd/mm/aaaa" value={phf.data} onChange={e=>setPhf(s=>({...s,data:e.target.value}))}/>
               <select className="border rounded-xl px-3 py-2" value={phf.tipo} onChange={e=>setPhf(s=>({...s,tipo:e.target.value}))}>
                 <option>Interior</option><option>Exterior</option>
               </select>
-              <Input placeholder="URL da foto (Blob)" value={phf.url} onChange={e=>setPhf(s=>({...s,url:e.target.value}))}/>
-              <Input placeholder="Observação" value={phf.observacao} onChange={e=>setPhf(s=>({...s,observacao:e.target.value}))}/>
-              <Button onClick={()=>post("/api/fleet/photos",{...phf, data: toISO(phf.data)},[photos.reload]).then(()=>setPhf({vehicle_id:"",placa:"",data:"",tipo:"Interior",url:"",observacao:""}))}>Salvar</Button>
+              <Input autoComplete="off" placeholder="URL da foto (Blob)" value={phf.url} onChange={e=>setPhf(s=>({...s,url:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Observação" value={phf.observacao} onChange={e=>setPhf(s=>({...s,observacao:e.target.value}))}/>
+              <Button type="button" onClick={()=>post("/api/fleet/photos",{...phf, data: toISO(phf.data)},[photos.reload]).then(()=>setPhf({vehicle_id:"",placa:"",data:"",tipo:"Interior",url:"",observacao:""}))}>Salvar</Button>
             </InputGrid>
             <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {photos.data.map(p=>(
@@ -223,16 +224,16 @@ export default function Fleet(){
           {/* Ocorrências */}
           <TabsContent value="ocorrencias">
             <InputGrid cols="md:grid-cols-7">
-              <Input placeholder="ID Veículo" value={ocf.vehicle_id} onChange={e=>setOcf(s=>({...s,vehicle_id:e.target.value}))}/>
-              <Input placeholder="Placa" value={ocf.placa} onChange={e=>setOcf(s=>({...s,placa:e.target.value}))}/>
-              <Input placeholder="dd/mm/aaaa" value={ocf.data} onChange={e=>setOcf(s=>({...s,data:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="ID Veículo" value={ocf.vehicle_id} onChange={e=>setOcf(s=>({...s,vehicle_id:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Placa" value={ocf.placa} onChange={e=>setOcf(s=>({...s,placa:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="dd/mm/aaaa" value={ocf.data} onChange={e=>setOcf(s=>({...s,data:e.target.value}))}/>
               <select className="border rounded-xl px-3 py-2" value={ocf.tipo} onChange={e=>setOcf(s=>({...s,tipo:e.target.value}))}>
                 <option>Multa</option><option>Furo de Pneu</option><option>Batida</option><option>Quebra</option><option>Outro</option>
               </select>
-              <Input placeholder="Valor Estimado" value={ocf.valor_estimado} onChange={e=>setOcf(s=>({...s,valor_estimado:e.target.value}))}/>
-              <Input placeholder="Responsável" value={ocf.responsavel} onChange={e=>setOcf(s=>({...s,responsavel:e.target.value}))}/>
-              <Input placeholder="Descrição" value={ocf.descricao} onChange={e=>setOcf(s=>({...s,descricao:e.target.value}))}/>
-              <Button onClick={()=>post("/api/fleet/occurrences",{...ocf, data: toISO(ocf.data), valor_estimado: parseNum(ocf.valor_estimado)},[occ.reload]).then(()=>setOcf({vehicle_id:"",placa:"",data:"",tipo:"Multa",descricao:"",valor_estimado:"",responsavel:""}))}>Salvar</Button>
+              <Input autoComplete="off" placeholder="Valor Estimado" value={ocf.valor_estimado} onChange={e=>setOcf(s=>({...s,valor_estimado:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Responsável" value={ocf.responsavel} onChange={e=>setOcf(s=>({...s,responsavel:e.target.value}))}/>
+              <Input autoComplete="off" placeholder="Descrição" value={ocf.descricao} onChange={e=>setOcf(s=>({...s,descricao:e.target.value}))}/>
+              <Button type="button" onClick={()=>post("/api/fleet/occurrences",{...ocf, data: toISO(ocf.data), valor_estimado: parseNum(ocf.valor_estimado)},[occ.reload]).then(()=>setOcf({vehicle_id:"",placa:"",data:"",tipo:"Multa",descricao:"",valor_estimado:"",responsavel:""}))}>Salvar</Button>
             </InputGrid>
             <div className="mt-4 overflow-auto">
               <Table>
