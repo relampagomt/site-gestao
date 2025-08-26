@@ -1,44 +1,122 @@
 # backend/src/routes/fleet.py
-# CRUD de Veículos + Abastecimentos (Firestorm/Firestore), rotas /api/fleet/*
-# Substitui o arquivo atual por este INTEIRO.
+# CRUD de Veículos + Abastecimentos em Firestore
+# -> Substitua o arquivo por este conteúdo INTEIRO.
+# -> Corrige inicialização do Firebase (erro ASN.1/extra data) tratando credenciais
+#    via arquivo, JSON em env e Base64, normalizando quebras de linha do private_key.
 
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 import os
+import json
+import base64
 
-# ---- Firestore bootstrap -----------------------------------------------------
-# Usa credenciais via GOOGLE_APPLICATION_CREDENTIALS. Se não houver, tenta encontrar
-# firebase-credentials.json na raiz do backend.
+# ==== Firebase / Firestore =====================================================
 import firebase_admin
 from firebase_admin import credentials, firestore
 
+def _load_sa_from_env() -> dict | None:
+    """
+    Tenta carregar as credenciais do Service Account a partir de variáveis de ambiente.
+    Suporta:
+      - FIREBASE_CREDENTIALS_JSON (JSON puro)
+      - FIREBASE_CREDENTIALS (JSON puro)
+      - FIREBASE_CREDENTIALS_BASE64 (JSON em Base64)
+    Normaliza o campo private_key substituindo '\\n' por '\n'.
+    """
+    raw = os.getenv("FIREBASE_CREDENTIALS_JSON") or os.getenv("FIREBASE_CREDENTIALS")
+    if raw:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            # às vezes vem como base64 por engano
+            try:
+                data = json.loads(base64.b64decode(raw).decode("utf-8"))
+            except Exception:
+                data = None
+        if isinstance(data, dict):
+            if "private_key" in data and isinstance(data["private_key"], str):
+                data["private_key"] = data["private_key"].replace("\\n", "\n")
+            return data
+
+    b64 = os.getenv("FIREBASE_CREDENTIALS_BASE64")
+    if b64:
+        try:
+            data = json.loads(base64.b64decode(b64).decode("utf-8"))
+            if "private_key" in data and isinstance(data["private_key"], str):
+                data["private_key"] = data["private_key"].replace("\\n", "\n")
+            return data
+        except Exception:
+            return None
+    return None
+
+def _load_sa_from_file(path: str) -> dict | None:
+    """
+    Carrega o JSON do arquivo e normaliza o private_key (\n).
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if "private_key" in data and isinstance(data["private_key"], str):
+            data["private_key"] = data["private_key"].replace("\\n", "\n")
+        return data
+    except Exception:
+        return None
+
 def _ensure_firebase():
+    """
+    Inicializa o firebase_admin de forma resiliente:
+      1) Usa credenciais via JSON de env (FIREBASE_CREDENTIALS_JSON / FIREBASE_CREDENTIALS / FIREBASE_CREDENTIALS_BASE64)
+      2) Usa caminho de arquivo em GOOGLE_APPLICATION_CREDENTIALS (lendo e normalizando o private_key)
+      3) Procura firebase-credentials.json em locais comuns do projeto
+      4) Por fim, tenta inicializar sem credencial explícita (ADC)
+    """
     try:
         firebase_admin.get_app()
+        return
     except ValueError:
-        cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-        if not cred_path:
-            # tenta resolver automaticamente (backend/ .. /firebase-credentials.json)
-            here = os.path.dirname(os.path.abspath(__file__))                           # backend/src/routes
-            root = os.path.abspath(os.path.join(here, "..", ".."))                     # backend/src
-            guess1 = os.path.join(root, "firebase-credentials.json")                   # backend/src/firebase-credentials.json
-            guess2 = os.path.abspath(os.path.join(root, "..", "firebase-credentials.json"))  # backend/firebase-credentials.json
-            cred_path = guess1 if os.path.exists(guess1) else (guess2 if os.path.exists(guess2) else None)
-        if cred_path and os.path.exists(cred_path):
-            firebase_admin.initialize_app(credentials.Certificate(cred_path))
-        else:
-            # Último recurso: inicializa sem arquivo se a Render tiver ADC configurada
-            firebase_admin.initialize_app()
+        pass
+
+    # 1) Env JSON
+    sa = _load_sa_from_env()
+    if sa:
+        firebase_admin.initialize_app(credentials.Certificate(sa))
+        return
+
+    # 2) Caminho em GOOGLE_APPLICATION_CREDENTIALS
+    cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if cred_path and os.path.exists(cred_path):
+        sa = _load_sa_from_file(cred_path)
+        if sa:
+            firebase_admin.initialize_app(credentials.Certificate(sa))
+            return
+
+    # 3) Arquivo no repositório (tenta alguns caminhos)
+    here = os.path.dirname(os.path.abspath(__file__))                 # backend/src/routes
+    src_root = os.path.abspath(os.path.join(here, "..", ".."))        # backend/src
+    repo_root = os.path.abspath(os.path.join(src_root, ".."))         # backend/
+    guesses = [
+        os.path.join(src_root, "firebase-credentials.json"),
+        os.path.join(repo_root, "firebase-credentials.json"),
+    ]
+    for g in guesses:
+        if os.path.exists(g):
+            sa = _load_sa_from_file(g)
+            if sa:
+                firebase_admin.initialize_app(credentials.Certificate(sa))
+                return
+
+    # 4) ADC (útil se a plataforma já injeta credenciais)
+    firebase_admin.initialize_app()
 
 _ensure_firebase()
 db = firestore.client()
 
-# ---- Blueprint ----------------------------------------------------------------
+# ==== Blueprint ================================================================
 fleet_bp = Blueprint("fleet", __name__)
 
-# ---- Helpers ------------------------------------------------------------------
-COL_VEHICLES   = "fleet_vehicles"
-COL_FUEL_LOGS  = "fleet_fuel_logs"
+# ==== Helpers =================================================================
+COL_VEHICLES  = "fleet_vehicles"
+COL_FUEL_LOGS = "fleet_fuel_logs"
 
 def _now_iso():
     return datetime.utcnow().isoformat(timespec="seconds") + "Z"
@@ -89,26 +167,27 @@ def vehicles_create():
         "created_at": _now_iso(),
         "updated_at": _now_iso(),
     }
-    ref = db.collection(COL_VEHICLES).add(data)[1]  # add retorna (update_time, ref)
-    doc = ref.get()
-    return jsonify(_doc_to_dict(doc)), 201
+    ref = db.collection(COL_VEHICLES).add(data)[1]
+    return jsonify(_doc_to_dict(ref.get())), 201
 
 @fleet_bp.put("/fleet/vehicles/<id>")
 def vehicles_update(id):
     ref = db.collection(COL_VEHICLES).document(id)
-    if not ref.get().exists:
+    snap = ref.get()
+    if not snap.exists:
         return jsonify({"error": "Veículo não encontrado"}), 404
+
     b = request.get_json(force=True) or {}
     patch = {
         "placa":  (b.get("placa")  or "").upper().strip(),
         "modelo": (b.get("modelo") or "").strip(),
         "marca":  (b.get("marca")  or "").strip(),
         "ano":    (b.get("ano")    or "").strip(),
-        "ativo":  bool(b.get("ativo", True)),
+        "ativo":  bool(b.get("ativo", snap.to_dict().get("ativo", True))),
         "updated_at": _now_iso(),
     }
-    # remove chaves vazias para não sobrescrever com string vazia quando não vier no payload
-    patch = {k: v for k, v in patch.items() if v != ""}
+    # remove strings vazias
+    patch = {k: v for k, v in patch.items() if not (isinstance(v, str) and v == "")}
     ref.update(patch)
     return jsonify(_doc_to_dict(ref.get())), 200
 
@@ -126,15 +205,13 @@ def vehicles_delete(id):
 
 @fleet_bp.get("/fleet/fuel-logs")
 def fuel_list():
-    # suporta filtros simples via querystring: placa, de, ate (YYYY-MM-DD)
-    placa = request.args.get("placa", "").strip().upper()
+    placa = (request.args.get("placa") or "").strip().upper()
     de    = request.args.get("de")
     ate   = request.args.get("ate")
 
     q = db.collection(COL_FUEL_LOGS)
     if placa:
         q = q.where("placa", "==", placa)
-    # datas salvas como ISO (YYYY-MM-DD), então podemos filtrar por string
     if de:
         q = q.where("data", ">=", de)
     if ate:
@@ -149,9 +226,9 @@ def fuel_create():
     b = request.get_json(force=True) or {}
     data = {
         "placa":       (b.get("placa") or "").upper().strip(),
-        "carro":       (b.get("carro") or "").strip(),          # opcional (modelo)
+        "carro":       (b.get("carro") or "").strip(),
         "motorista":   (b.get("motorista") or "").strip(),
-        "data":        (b.get("data") or "")[:10],              # "YYYY-MM-DD"
+        "data":        (b.get("data") or "")[:10],  # YYYY-MM-DD
         "litros":      _parse_float(b.get("litros")),
         "preco_litro": _parse_float(b.get("preco_litro") or b.get("preco") or b.get("precoLitro")),
         "valor_total": _parse_float(b.get("valor_total") or b.get("valor") or 0),
@@ -163,11 +240,10 @@ def fuel_create():
         "created_at": _now_iso(),
         "updated_at": _now_iso(),
     }
-    # calcula valor_total caso não enviado
     if not data["valor_total"]:
         data["valor_total"] = round(data["litros"] * (data["preco_litro"] or 0), 2)
 
-    # guarda snapshot da placa/modelo do veículo (opcional)
+    # snapshot de modelo a partir da placa (opcional)
     if data["placa"]:
         vq = db.collection(COL_VEHICLES).where("placa", "==", data["placa"]).limit(1).stream()
         for vdoc in vq:
@@ -180,8 +256,10 @@ def fuel_create():
 @fleet_bp.put("/fleet/fuel-logs/<id>")
 def fuel_update(id):
     ref = db.collection(COL_FUEL_LOGS).document(id)
-    if not ref.get().exists:
+    snap = ref.get()
+    if not snap.exists:
         return jsonify({"error": "Registro não encontrado"}), 404
+
     b = request.get_json(force=True) or {}
     patch = {
         "placa":       (b.get("placa") or "").upper().strip(),
@@ -198,7 +276,6 @@ def fuel_update(id):
         "combustivel": (b.get("combustivel") or "").strip(),
         "updated_at": _now_iso(),
     }
-    # limpa campos vazios para não sobrescrever com ""
     clean = {}
     for k, v in patch.items():
         if isinstance(v, str):
@@ -207,11 +284,14 @@ def fuel_update(id):
         else:
             if v is not None:
                 clean[k] = v
-    # se preço/litro ou litros mudou, recalcula
+
+    # recalcula total se litros/preço mudaram
+    base = snap.to_dict() or {}
+    litros = clean.get("litros", base.get("litros", 0))
+    preco  = clean.get("preco_litro", base.get("preco_litro", 0))
     if "litros" in clean or "preco_litro" in clean:
-        litros = clean.get("litros", ref.get().to_dict().get("litros", 0))
-        preco  = clean.get("preco_litro", ref.get().to_dict().get("preco_litro", 0))
         clean.setdefault("valor_total", round(float(litros) * float(preco or 0), 2))
+
     ref.update(clean)
     return jsonify(_doc_to_dict(ref.get())), 200
 
@@ -223,9 +303,7 @@ def fuel_delete(id):
     ref.delete()
     return ("", 204)
 
-# ------------------------------------------------------------------------------
-# (Opcional) Health local do módulo
-# ------------------------------------------------------------------------------
+# Opcional: health do módulo
 @fleet_bp.get("/fleet/health")
-def _health():
+def fleet_health():
     return jsonify({"ok": True, "module": "fleet"}), 200
