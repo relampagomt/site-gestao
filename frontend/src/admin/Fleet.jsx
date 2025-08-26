@@ -77,7 +77,7 @@ function InputOdometerBR({ value, onChange, placeholder="Ex.: 56.000", ...props 
 /* ------------ Hook GET simples ------------ */
 const useList = (path) => {
   const [data,setData] = useState([]);
-  const [loading,setLoading] = useState(false);
+  ￼const [loading,setLoading] = useState(false);
   const [err,setErr] = useState("");
   const reload = async (params = null) => {
     setLoading(true); setErr("");
@@ -128,7 +128,6 @@ export default function FleetPage() {
     if (filters.combustivel) params.combustivel = filters.combustivel;
     if (filters.posto) params.posto = filters.posto;
     if (filters.preco) {
-      // usa um único "preco" como igualdade (min=max)
       params.precoMin = filters.preco;
       params.precoMax = filters.preco;
     }
@@ -184,17 +183,16 @@ export default function FleetPage() {
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Frota – Abastecimentos</h1>
 
-      {/* NOVO ABASTECIMENTO */}
       <Card className="mb-6">
         <CardHeader><CardTitle>Novo Abastecimento</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={submitFuel} className="grid md:grid-cols-4 gap-3">
-            {/* seletor de veículo + cadastrar */}
+            {/* 1ª linha */}
             <div className="flex gap-2">
               <select
                 value={fuel.placa}
                 onChange={(e)=>setFuel(p=>({...p, placa: e.target.value}))}
-                className="border rounded px-3 py-2 flex-1"
+                className="border rounded px-3 py-2 flex-1 h-10"
                 required
               >
                 <option value="">Selecione o veículo</option>
@@ -213,13 +211,23 @@ export default function FleetPage() {
             </div>
 
             <InputDateBR value={fuel.data} onChange={(val)=>setFuel(p=>({...p, data: val}))} />
-
             <Input placeholder="Litros" value={fuel.litros}
                    onChange={(e)=>setFuel(p=>({...p, litros:e.target.value}))} />
             <Input placeholder="Preço/Litro" value={fuel.preco_litro}
                    onChange={(e)=>setFuel(p=>({...p, preco_litro:e.target.value}))} />
 
-            {/* Odômetro com legenda e máscara */}
+            {/* 2ª linha */}
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Combustível</span>
+              <select
+                className="border rounded px-3 py-2 w-full h-10"
+                value={fuel.combustivel}
+                onChange={(e)=>setFuel(p=>({...p, combustivel:e.target.value}))}
+              >
+                {FUEL_OPTIONS.map(opt=> <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+            </div>
+
             <div className="flex flex-col gap-1">
               <span className="text-xs text-muted-foreground">Odômetro</span>
               <InputOdometerBR
@@ -233,20 +241,13 @@ export default function FleetPage() {
             <Input placeholder="Motorista" value={fuel.motorista}
                    onChange={(e)=>setFuel(p=>({...p, motorista:e.target.value}))} />
 
-            {/* Combustível com largura total */}
-            <select
-              className="border rounded px-3 py-2 w-full"
-              value={fuel.combustivel}
-              onChange={(e)=>setFuel(p=>({...p, combustivel:e.target.value}))}
-            >
-              {FUEL_OPTIONS.map(opt=> <option key={opt} value={opt}>{opt}</option>)}
-            </select>
-
+            {/* 3ª linha */}
             <Input placeholder="Nota fiscal" value={fuel.nota_fiscal}
                    onChange={(e)=>setFuel(p=>({...p, nota_fiscal:e.target.value}))} />
-            <Input className="md:col-span-4" placeholder="Observações" value={fuel.observacoes}
+            <Input className="md:col-span-3" placeholder="Observações" value={fuel.observacoes}
                    onChange={(e)=>setFuel(p=>({...p, observacoes:e.target.value}))} />
 
+            {/* Rodapé */}
             <div className="md:col-span-4 flex items-center justify-between">
               <div className="font-semibold">Total: {BRL(fuel.valor_total)}</div>
               <div className="flex gap-2">
@@ -258,7 +259,6 @@ export default function FleetPage() {
         </CardContent>
       </Card>
 
-      {/* FILTROS */}
       <Card className="mb-4">
         <CardHeader><CardTitle>Filtros</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-6 gap-3">
@@ -268,24 +268,18 @@ export default function FleetPage() {
                  onChange={(e)=>setFilters(f=>({...f, veiculo:e.target.value}))} />
           <Input placeholder="Motorista" value={filters.motorista}
                  onChange={(e)=>setFilters(f=>({...f, motorista:e.target.value}))} />
-
-          {/* Combustível (filtro) - largura total, com opção "Todos" */}
           <select className="border rounded px-3 py-2 w-full"
                   value={filters.combustivel}
                   onChange={(e)=>setFilters(f=>({...f, combustivel:e.target.value}))}>
             <option value="">Todos</option>
             {FUEL_OPTIONS.map(o=> <option key={o} value={o}>{o}</option>)}
           </select>
-
           <Input placeholder="Posto" value={filters.posto}
                  onChange={(e)=>setFilters(f=>({...f, posto:e.target.value}))} />
-
-          {/* Único campo Preço */}
           <Input type="number" step="0.01" placeholder="Preço"
                  value={filters.preco}
                  onChange={(e)=>setFilters(f=>({...f, preco:e.target.value}))} />
 
-          {/* Datas com legendas De/Até */}
           <div className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">De</span>
             <InputDateBR value={filters.de} onChange={(val)=>setFilters(f=>({...f, de: val}))} />
@@ -302,7 +296,6 @@ export default function FleetPage() {
         </CardContent>
       </Card>
 
-      {/* REGISTROS */}
       <Card>
         <CardHeader><CardTitle>Registros</CardTitle></CardHeader>
         <CardContent className="overflow-auto">
