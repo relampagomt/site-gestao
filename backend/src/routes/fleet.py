@@ -1,9 +1,8 @@
 # backend/src/routes/fleet.py
 # Firestore CRUD (Veículos + Abastecimentos)
-# -> Corrige: registros “sumidos”
-#    - NÃO usa order_by no Firestore (evita índice/ordenação vazia); busca tudo e ordena em memória
-#    - Normaliza datas e aplica filtros em memória
-# -> Mantém fallback do "carro" (modelo pela placa)
+# - Corrige 500 no GET /fleet/fuel-logs (float(None))
+# - Normaliza datas e aplica filtros em memória
+# - Não inicializa credenciais aqui (usa app já inicializado)
 
 from flask import Blueprint, request, jsonify
 from datetime import datetime
@@ -32,29 +31,32 @@ def _get_db():
     return firestore.client()
 
 def _parse_float(v, default=0.0):
+    """
+    Converte para float. Se default for None, retorna None sem converter.
+    """
     try:
         if v is None or v == "":
-            return float(default)
+            return default
         if isinstance(v, (int, float)):
             return float(v)
         s = str(v).replace(".", "").replace(",", ".")
         return float(s)
     except Exception:
-        return float(default)
+        return default
 
 def _parse_int(v, default=0):
     try:
         if v is None or v == "":
-            return int(default)
+            return default
         return int(float(v))
     except Exception:
-        return int(default)
+        return default
 
 def _normalize_date(s: str) -> str:
     """Converte para 'AAAA-MM-DD' (aceita 'AAAA-MM-DD', 'DD/MM/AAAA', 'DDMMAAAA')."""
     if not s:
         return ""
-    s = str(s).strip()
+    s = str(s).trim() if hasattr(str(s), "trim") else str(s).strip()
     if len(s) >= 10 and s[4:5] == "-" and s[7:8] == "-":
         return s[:10]
     if len(s) >= 10 and s[2:3] == "/" and s[5:6] == "/":
@@ -78,7 +80,6 @@ def _contains(val: str, term: str) -> bool:
 def vehicles_list():
     db = _get_db()
     items = [_doc(doc) for doc in db.collection(COL_VEHICLES).stream()]
-    # ordena por criação (se houver) só para ficar estável
     items.sort(key=lambda x: x.get("created_at", ""))
     return jsonify(items), 200
 
@@ -151,10 +152,8 @@ def fuel_list():
     de          = _normalize_date(args.get("de") or args.get("dataDe") or "")
     ate         = _normalize_date(args.get("ate") or args.get("dataAte") or "")
 
-    # Busca TUDO e filtra/ordena em memória -> evita problemas de índice/comparação
     items = [_doc(doc) for doc in db.collection(COL_FUEL_LOGS).stream()]
 
-    # normaliza data e aplica filtros
     norm = []
     for it in items:
         it["data"] = _normalize_date(it.get("data"))
@@ -178,7 +177,6 @@ def fuel_list():
             continue
         norm.append(it)
 
-    # ordena por data asc (ou troque para reverse=True se preferir mais recente primeiro)
     norm.sort(key=lambda x: x.get("data", ""))
     return jsonify(norm), 200
 
@@ -205,7 +203,6 @@ def fuel_create():
     if not data["valor_total"]:
         data["valor_total"] = round(data["litros"] * (data["preco_litro"] or 0), 2)
 
-    # snapshot do modelo pela placa (se não enviado)
     if data["placa"] and not data["carro"]:
         vq = db.collection(COL_VEHICLES).where("placa", "==", data["placa"]).limit(1).stream()
         for vdoc in vq:
