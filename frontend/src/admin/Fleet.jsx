@@ -1,12 +1,4 @@
 // frontend/src/admin/Fleet.jsx
-// -> Ajustes visuais/funcionais citados:
-//    - Mostra coluna "Combustível"
-//    - Seletor de combustível no formulário (Gasolina, Etanol, Diesel, Gás, Aditivado)
-//    - Datas com <input type="date"> (valor ISO), exibição DD/MM/AAAA
-//    - Filtros por veículo, motorista, combustível, placa, preço, posto e período
-//    - Fallback do modelo do veículo pela placa
-//    - Reload após salvar/deletar mantém filtros aplicados
-
 import React, { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.jsx";
@@ -18,6 +10,54 @@ import VehiclesManager from "@/components/fleet/VehiclesManager.jsx";
 const BRL = (n)=> Number(n||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const FUEL_OPTIONS = ["Gasolina", "Etanol", "Diesel", "Gás", "Aditivado"];
 
+/* ---------- Helpers de data (BR <-> ISO) e máscara ---------- */
+const maskDateBR = (s) => {
+  const digits = String(s || "").replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0,2)}/${digits.slice(2)}`;
+  return `${digits.slice(0,2)}/${digits.slice(2,4)}/${digits.slice(4)}`;
+};
+const toISO = (s) => {
+  const str = String(s || "").trim();
+  if (!str) return "";
+  if (str.length >= 10 && str[2]==="/" && str[5]==="/") {
+    const [dd,mm,yy] = str.slice(0,10).split("/");
+    return `${yy}-${mm}-${dd}`;
+  }
+  if (/^\d{8}$/.test(str)) {
+    const dd = str.slice(0,2), mm = str.slice(2,4), yy = str.slice(4,8);
+    return `${yy}-${mm}-${dd}`;
+  }
+  return str.slice(0,10); // assume ISO
+};
+const fmtBRDate = (iso) => {
+  if(!iso) return "";
+  const s = String(iso);
+  if (s.length>=10 && s[4]==="-" && s[7]==="-") {
+    const [yy,mm,dd] = s.slice(0,10).split("-");
+    return `${dd}/${mm}/${yy}`;
+  }
+  if (s.length===8 && /^\d{8}$/.test(s)) {
+    return `${s.slice(0,2)}/${s.slice(2,4)}/${s.slice(4,8)}`;
+  }
+  if (s.length>=10 && s[2]==="/" && s[5]==="/") return s.slice(0,10);
+  return s;
+};
+
+// Input de data com máscara dd/mm/aaaa
+function InputDateBR({ value, onChange, placeholder="dd/mm/aaaa", ...props }) {
+  return (
+    <Input
+      inputMode="numeric"
+      placeholder={placeholder}
+      value={value}
+      onChange={(e)=> onChange(maskDateBR(e.target.value))}
+      {...props}
+    />
+  );
+}
+
+/* ---------- Hook simples para GET ---------- */
 const useList = (path) => {
   const [data,setData] = useState([]);
   const [loading,setLoading] = useState(false);
@@ -34,42 +74,19 @@ const useList = (path) => {
   return { data, loading, err, reload, setData };
 };
 
-const toISO = (s) => {
-  if(!s) return "";
-  if (s.length >= 10 && s[2]==="/" && s[5]==="/") {
-    const [dd,mm,yy] = s.slice(0,10).split("/");
-    return `${yy}-${mm}-${dd}`;
-  }
-  if (/^\d{8}$/.test(s)) {
-    const dd = s.slice(0,2), mm = s.slice(2,4), yy = s.slice(4,8);
-    return `${yy}-${mm}-${dd}`;
-  }
-  return s.slice(0,10);
-};
-const fmtBRDate = (iso) => {
-  if(!iso) return "";
-  const s = String(iso);
-  if (s.length>=10 && s[4]==="-" && s[7]==="-") {
-    const [yy,mm,dd] = s.slice(0,10).split("-");
-    return `${dd}/${mm}/${yy}`;
-  }
-  if (s.length===8 && /^\d{8}$/.test(s)) {
-    return `${s.slice(0,2)}/${s.slice(2,4)}/${s.slice(4,8)}`;
-  }
-  if (s.length>=10 && s[2]==="/" && s[5]==="/") return s.slice(0,10);
-  return s;
-};
-
 export default function FleetPage() {
+  // listas
   const vehicles = useList("/fleet/vehicles");
   const fuelLogs = useList("/fleet/fuel-logs");
 
+  // form de abastecimento
   const [fuel, setFuel] = useState({
     placa:"", data:"", litros:"", preco_litro:"", valor_total:"",
     odometro:"", posto:"", motorista:"", combustivel:"Gasolina",
     nota_fiscal:"", observacoes:""
   });
 
+  // calcula total
   useEffect(()=>{
     const litros = Number(fuel.litros || 0);
     const prec   = Number(fuel.preco_litro || 0);
@@ -83,6 +100,7 @@ export default function FleetPage() {
     nota_fiscal:"", observacoes:""
   });
 
+  // ---------------------- FILTROS ----------------------
   const [filters, setFilters] = useState({
     placa: "", veiculo: "", motorista: "", combustivel: "",
     posto: "", precoMin: "", precoMax: "", de: "", ate: ""
@@ -107,6 +125,7 @@ export default function FleetPage() {
     await fuelLogs.reload({});
   };
 
+  // envio do abastecimento
   const submitFuel = async(e)=>{
     e.preventDefault();
     const payload = {
@@ -128,6 +147,7 @@ export default function FleetPage() {
     await reloadWithFilters();
   };
 
+  // Fallback de "veículo" (carro) quando registro não salvou o modelo
   const modelByPlaca = useMemo(()=>{
     const map = {};
     (vehicles.data || []).forEach(v=>{
@@ -153,6 +173,7 @@ export default function FleetPage() {
         <CardHeader><CardTitle>Novo Abastecimento</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={submitFuel} className="grid md:grid-cols-4 gap-3">
+            {/* Seletor de veículo + botão Gerenciar */}
             <div className="flex gap-2">
               <select
                 value={fuel.placa}
@@ -175,19 +196,36 @@ export default function FleetPage() {
               />
             </div>
 
-            <Input type="date" value={toISO(fuel.data)} onChange={(e)=>setFuel(p=>({...p, data:e.target.value}))} />
-            <Input placeholder="Litros" value={fuel.litros} onChange={(e)=>setFuel(p=>({...p, litros:e.target.value}))} />
-            <Input placeholder="Preço/Litro" value={fuel.preco_litro} onChange={(e)=>setFuel(p=>({...p, preco_litro:e.target.value}))} />
+            {/* Data com MÁSCARA dd/mm/aaaa */}
+            <InputDateBR
+              value={fuel.data}
+              onChange={(val)=>setFuel(p=>({...p, data: val}))}
+            />
 
-            <Input placeholder="Odômetro" value={fuel.odometro} onChange={(e)=>setFuel(p=>({...p, odometro:e.target.value}))} />
-            <Input placeholder="Posto" value={fuel.posto} onChange={(e)=>setFuel(p=>({...p, posto:e.target.value}))} />
-            <Input placeholder="Motorista" value={fuel.motorista} onChange={(e)=>setFuel(p=>({...p, motorista:e.target.value}))} />
-            <select className="border rounded px-3 py-2" value={fuel.combustivel} onChange={(e)=>setFuel(p=>({...p, combustivel:e.target.value}))}>
+            <Input placeholder="Litros" value={fuel.litros}
+                   onChange={(e)=>setFuel(p=>({...p, litros:e.target.value}))} />
+            <Input placeholder="Preço/Litro" value={fuel.preco_litro}
+                   onChange={(e)=>setFuel(p=>({...p, preco_litro:e.target.value}))} />
+
+            <Input placeholder="Odômetro" value={fuel.odometro}
+                   onChange={(e)=>setFuel(p=>({...p, odometro:e.target.value}))} />
+            <Input placeholder="Posto" value={fuel.posto}
+                   onChange={(e)=>setFuel(p=>({...p, posto:e.target.value}))} />
+            <Input placeholder="Motorista" value={fuel.motorista}
+                   onChange={(e)=>setFuel(p=>({...p, motorista:e.target.value}))} />
+
+            <select
+              className="border rounded px-3 py-2"
+              value={fuel.combustivel}
+              onChange={(e)=>setFuel(p=>({...p, combustivel:e.target.value}))}
+            >
               {FUEL_OPTIONS.map(opt=> <option key={opt} value={opt}>{opt}</option>)}
             </select>
 
-            <Input placeholder="Nota fiscal" value={fuel.nota_fiscal} onChange={(e)=>setFuel(p=>({...p, nota_fiscal:e.target.value}))} />
-            <Input className="md:col-span-4" placeholder="Observações" value={fuel.observacoes} onChange={(e)=>setFuel(p=>({...p, observacoes:e.target.value}))} />
+            <Input placeholder="Nota fiscal" value={fuel.nota_fiscal}
+                   onChange={(e)=>setFuel(p=>({...p, nota_fiscal:e.target.value}))} />
+            <Input className="md:col-span-4" placeholder="Observações" value={fuel.observacoes}
+                   onChange={(e)=>setFuel(p=>({...p, observacoes:e.target.value}))} />
 
             <div className="md:col-span-4 flex items-center justify-between">
               <div className="font-semibold">Total: {BRL(fuel.valor_total)}</div>
@@ -204,20 +242,42 @@ export default function FleetPage() {
       <Card className="mb-4">
         <CardHeader><CardTitle>Filtros</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-6 gap-3">
-          <Input placeholder="Placa" value={filters.placa} onChange={(e)=>setFilters(f=>({...f, placa:e.target.value}))} />
-          <Input placeholder="Veículo" value={filters.veiculo} onChange={(e)=>setFilters(f=>({...f, veiculo:e.target.value}))} />
-          <Input placeholder="Motorista" value={filters.motorista} onChange={(e)=>setFilters(f=>({...f, motorista:e.target.value}))} />
-          <select className="border rounded px-3 py-2" value={filters.combustivel} onChange={(e)=>setFilters(f=>({...f, combustivel:e.target.value}))}>
+          <Input placeholder="Placa" value={filters.placa}
+                 onChange={(e)=>setFilters(f=>({...f, placa:e.target.value}))} />
+          <Input placeholder="Veículo" value={filters.veiculo}
+                 onChange={(e)=>setFilters(f=>({...f, veiculo:e.target.value}))} />
+          <Input placeholder="Motorista" value={filters.motorista}
+                 onChange={(e)=>setFilters(f=>({...f, motorista:e.target.value}))} />
+          <select className="border rounded px-3 py-2" value={filters.combustivel}
+                  onChange={(e)=>setFilters(f=>({...f, combustivel:e.target.value}))}>
             <option value="">Todos</option>
             {FUEL_OPTIONS.map(o=> <option key={o} value={o}>{o}</option>)}
           </select>
-          <Input placeholder="Posto" value={filters.posto} onChange={(e)=>setFilters(f=>({...f, posto:e.target.value}))} />
+          <Input placeholder="Posto" value={filters.posto}
+                 onChange={(e)=>setFilters(f=>({...f, posto:e.target.value}))} />
           <div className="flex gap-2">
-            <Input type="number" placeholder="Preço mín." value={filters.precoMin} onChange={(e)=>setFilters(f=>({...f, precoMin:e.target.value}))} />
-            <Input type="number" placeholder="Preço máx." value={filters.precoMax} onChange={(e)=>setFilters(f=>({...f, precoMax:e.target.value}))} />
+            <Input type="number" placeholder="Preço mín." value={filters.precoMin}
+                   onChange={(e)=>setFilters(f=>({...f, precoMin:e.target.value}))} />
+            <Input type="number" placeholder="Preço máx." value={filters.precoMax}
+                   onChange={(e)=>setFilters(f=>({...f, precoMax:e.target.value}))} />
           </div>
-          <Input type="date" value={toISO(filters.de)} onChange={(e)=>setFilters(f=>({...f, de:e.target.value}))} />
-          <Input type="date" value={toISO(filters.ate)} onChange={(e)=>setFilters(f=>({...f, ate:e.target.value}))} />
+
+          {/* Legendas De / Até + inputs com MÁSCARA */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">De</span>
+            <InputDateBR
+              value={filters.de}
+              onChange={(val)=>setFilters(f=>({...f, de: val}))}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Até</span>
+            <InputDateBR
+              value={filters.ate}
+              onChange={(val)=>setFilters(f=>({...f, ate: val}))}
+            />
+          </div>
+
           <div className="md:col-span-6 flex gap-2">
             <Button type="button" onClick={reloadWithFilters}>Aplicar</Button>
             <Button type="button" variant="secondary" onClick={clearFilters}>Limpar filtros</Button>
