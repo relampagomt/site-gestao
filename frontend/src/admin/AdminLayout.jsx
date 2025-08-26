@@ -92,7 +92,7 @@ export default function AdminLayout() {
   }, [user?.role]);
 
   const onLogout = async () => {
-    try:
+    try {
       if (typeof signOut === "function") await signOut();
     } finally {
       navigate("/login", { replace: true });
