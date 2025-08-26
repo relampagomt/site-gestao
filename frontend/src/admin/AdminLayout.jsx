@@ -11,6 +11,9 @@ import {
   LogOut,
   Menu as MenuIcon,
   UserCog,
+  Truck,
+  Bell,
+  ClipboardCheck,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button.jsx";
@@ -68,11 +71,14 @@ export default function AdminLayout() {
       { to: "/admin/materials", label: "Materiais", icon: Package },
       { to: "/admin/actions", label: "Ações", icon: ClipboardList },
       { to: "/admin/vacancies", label: "Vagas", icon: Briefcase },
+      { to: "/admin/fleet", label: "Frota", icon: Truck },
     ];
     const adminOnlyMenu = [
       { to: "/admin/clients", label: "Clientes", icon: Users },
       { to: "/admin/finance", label: "Finanças", icon: Wallet },
       { to: "/admin/users", label: "Usuários", icon: UserCog },
+      { to: "/admin/alerts", label: "Alertas", icon: Bell },
+      { to: "/admin/orders", label: "OS", icon: ClipboardCheck },
     ];
     if (user?.role === "admin") {
       return [
@@ -86,7 +92,7 @@ export default function AdminLayout() {
   }, [user?.role]);
 
   const onLogout = async () => {
-    try {
+    try:
       if (typeof signOut === "function") await signOut();
     } finally {
       navigate("/login", { replace: true });

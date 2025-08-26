@@ -73,6 +73,10 @@ def create_app():
     from src.routes.finance import finance_bp
     from src.services.user_service import ensure_admin_seed
 
+    # >>> ADIÇÕES: novos módulos (Frota e Comercial)
+    from src.routes.fleet import fleet_bp
+    from src.routes.commercial import commercial_bp
+
     # -----------------------
     # Blueprints
     # -----------------------
@@ -85,6 +89,10 @@ def create_app():
     app.register_blueprint(upload_bp, url_prefix="/api")
     app.register_blueprint(user_bp, url_prefix="/api")
     app.register_blueprint(finance_bp, url_prefix="/api")  # /api/finance/* e /api/transactions
+
+    # >>> ADIÇÕES: registros dos novos blueprints
+    app.register_blueprint(fleet_bp, url_prefix="/api")
+    app.register_blueprint(commercial_bp, url_prefix="/api")
 
     # -----------------------
     # Healthcheck

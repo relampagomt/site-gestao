@@ -15,7 +15,11 @@ import Materials from './admin/Materials';
 import Actions from './admin/Actions';
 import Vacancies from './admin/Vacancies';
 import Users from './admin/Users';
-import Finance from './admin/Finance'; // ✅ NOVO
+import Finance from './admin/Finance';
+
+import Fleet from './admin/Fleet';
+import Alerts from './admin/Alerts';
+import Orders from './admin/Orders';
 
 import SupervisorDashboard from './pages/SupervisorDashboard';
 
@@ -44,8 +48,14 @@ function App() {
               <Route path="clients" element={<Clients />} />
               <Route path="materials" element={<Materials />} />
               <Route path="actions" element={<Actions />} />
-              <Route path="finance" element={<Finance />} /> {/* ✅ ROTA DE FINANÇAS */}
+              <Route path="finance" element={<Finance />} />
               <Route path="vacancies" element={<Vacancies />} />
+
+              {/* Novas páginas */}
+              <Route path="fleet" element={<Fleet />} />
+              <Route path="alerts" element={<Alerts />} />
+              <Route path="orders" element={<Orders />} />
+
               <Route
                 path="users"
                 element={
