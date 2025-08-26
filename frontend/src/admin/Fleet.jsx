@@ -27,33 +27,91 @@ export default function Fleet(){
   const clean=useLoad("/api/fleet/cleanings");
   const photos=useLoad("/api/fleet/photos");
   const occ=useLoad("/api/fleet/occurrences");
-  const [tab,setTab]=useState("abastecimentos");
 
   const [veh,setVeh]=useState({placa:"",modelo:"",marca:"",ano:""});
   const [drv,setDrv]=useState({nome:"",documento:""});
   const [vinc,setVinc]=useState({vehicle_id:"",driver_id:"",placa:"",inicio:"",fim:"",observacao:""});
+
+  // -------- Abastecimentos (form + rascunhos) --------
   const [fuel,setFuel]=useState({vehicle_id:"",driver_id:"",placa:"",data:"",km:"",litros:"",valor_unit:"",valor_total:"",combustivel:"Gasolina",posto:"",nota_fiscal:""});
+  const [fuelDrafts,setFuelDrafts]=useState([]); // <<< TABELA DE CONTROLE (rascunhos)
+
   const [kmf,setKmf]=useState({vehicle_id:"",placa:"",data:"",km:"",tipo:"leitura",origem:"",destino:"",observacao:""});
   const [clf,setClf]=useState({vehicle_id:"",placa:"",data:"",tipo:"Lavagem Completa",valor:"",local:"",observacao:""});
   const [phf,setPhf]=useState({vehicle_id:"",placa:"",data:"",tipo:"Interior",url:"",observacao:""});
   const [ocf,setOcf]=useState({vehicle_id:"",placa:"",data:"",tipo:"Multa",descricao:"",valor_estimado:"",responsavel:""});
 
-  const post = async (url, body, reloads=[]) => { await api.post(url, body); reloads.forEach(fn=>fn()); };
+  const post = async (url, body, reloads=[]) => {
+    const r = await api.post(url, body);
+    reloads.forEach(fn=>fn());
+    return r?.data;
+  };
 
-  const parseNum = (v)=> { if(v==null||v==="") return 0; const s=String(v).replace(/\./g,'').replace(',','.'); const n=Number(s); return Number.isFinite(n)?n:0; };
-  useEffect(()=>{ // auto total
+  const parseNum = (v)=> {
+    if(v==null||v==="") return 0;
+    const s=String(v).replace(/\./g,'').replace(',','.');
+    const n=Number(s);
+    return Number.isFinite(n)?n:0;
+  };
+
+  // auto-calcular total do abastecimento enquanto digita
+  useEffect(()=>{
     const l=parseNum(fuel.litros), u=parseNum(fuel.valor_unit);
-    if(l && u) setFuel(s=>({...s, valor_total: (l*u).toLocaleString("pt-BR",{minimumFractionDigits:2, maximumFractionDigits:2})}));
+    if(l && u){
+      setFuel(s=>({...s, valor_total: (l*u).toLocaleString("pt-BR",{minimumFractionDigits:2, maximumFractionDigits:2})}));
+    }
   },[fuel.litros, fuel.valor_unit]);
 
   const InputGrid = ({children, cols="md:grid-cols-6"}) => <div className={`grid gap-3 ${cols}`}>{children}</div>;
+
+  // -------- Helpers da Tabela de Rascunhos (Abastecimentos) --------
+  const addFuelDraft = () => {
+    // valida mínimos úteis para controle
+    if(!fuel.data || !fuel.placa || !fuel.litros || !fuel.valor_unit){
+      alert("Preencha pelo menos Data, Placa, Litros e Valor Unit.");
+      return;
+    }
+    // cria item normalizado, mas sem enviar
+    const item = {
+      ...fuel,
+      data: fuel.data, // manter dd/mm/aaaa no rascunho para você conferir visualmente
+      km: fuel.km,
+      litros: fuel.litros,
+      valor_unit: fuel.valor_unit,
+      valor_total: fuel.valor_total,
+    };
+    setFuelDrafts(list=>[...list, {...item, _id: crypto.randomUUID()}]);
+    setFuel({vehicle_id:"",driver_id:"",placa:"",data:"",km:"",litros:"",valor_unit:"",valor_total:"",combustivel:"Gasolina",posto:"",nota_fiscal:""});
+  };
+
+  const removeFuelDraft = (_id) => {
+    setFuelDrafts(list => list.filter(x=>x._id!==_id));
+  };
+
+  const sendOneFuelDraft = async (draft) => {
+    await post("/api/fleet/fuel-logs", {
+      ...draft,
+      data: toISO(draft.data),
+      km: parseNum(draft.km),
+      litros: parseNum(draft.litros),
+      valor_unit: parseNum(draft.valor_unit),
+      valor_total: parseNum(draft.valor_total),
+    }, [fuels.reload]);
+    removeFuelDraft(draft._id);
+  };
+
+  const sendAllFuelDrafts = async () => {
+    for(const d of fuelDrafts){
+      await sendOneFuelDraft(d);
+    }
+  };
 
   return (
     <Card>
       <CardHeader><CardTitle>Frota</CardTitle></CardHeader>
       <CardContent>
-        {/* Tabs não-controladas para evitar perda de foco */}
-        <Tabs defaultValue="abastecimentos" onValueChange={setTab}>
+        {/* Tabs não-controladas para não perder foco nos inputs */}
+        <Tabs defaultValue="abastecimentos">
           <TabsList className="flex flex-wrap gap-2">
             {["veiculos","motoristas","vinculos","abastecimentos","km","limpeza","fotos","ocorrencias","dashboard"].map(t=>
               <TabsTrigger key={t} value={t} className="capitalize">{t}</TabsTrigger>
@@ -116,9 +174,9 @@ export default function Fleet(){
             </div>
           </TabsContent>
 
-          {/* Abastecimentos */}
+          {/* Abastecimentos (com rascunhos de controle) */}
           <TabsContent value="abastecimentos">
-            <InputGrid cols="md:grid-cols-10">
+            <InputGrid cols="md:grid-cols-11">
               <select className="border rounded-xl px-3 py-2" value={fuel.vehicle_id} onChange={e=>setFuel(s=>({...s,vehicle_id:e.target.value}))}>
                 <option value="">Veículo...</option>{vehicles.data.map(v=><option key={v.id} value={v.id}>{v.placa} - {v.modelo}</option>)}
               </select>
@@ -136,16 +194,81 @@ export default function Fleet(){
               </select>
               <Input autoComplete="off" placeholder="Posto" value={fuel.posto} onChange={e=>setFuel(s=>({...s,posto:e.target.value}))}/>
               <Input autoComplete="off" placeholder="NF-e" value={fuel.nota_fiscal} onChange={e=>setFuel(s=>({...s,nota_fiscal:e.target.value}))}/>
-              <Button type="button" onClick={()=>post("/api/fleet/fuel-logs",{
-                ...fuel,
-                data: toISO(fuel.data),
-                km: parseNum(fuel.km),
-                litros: parseNum(fuel.litros),
-                valor_unit: parseNum(fuel.valor_unit),
-                valor_total: parseNum(fuel.valor_total),
-              },[fuels.reload]).then(()=>setFuel({vehicle_id:"",driver_id:"",placa:"",data:"",km:"",litros:"",valor_unit:"",valor_total:"",combustivel:"Gasolina",posto:"",nota_fiscal:""}))}>Salvar</Button>
+              {/* Botões: adicionar à lista (controle) e salvar direto */}
+              <div className="flex items-center gap-2">
+                <Button type="button" onClick={addFuelDraft}>Adicionar à lista</Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={()=>
+                    post("/api/fleet/fuel-logs",{
+                      ...fuel,
+                      data: toISO(fuel.data),
+                      km: parseNum(fuel.km),
+                      litros: parseNum(fuel.litros),
+                      valor_unit: parseNum(fuel.valor_unit),
+                      valor_total: parseNum(fuel.valor_total),
+                    },[fuels.reload]).then(()=>setFuel({vehicle_id:"",driver_id:"",placa:"",data:"",km:"",litros:"",valor_unit:"",valor_total:"",combustivel:"Gasolina",posto:"",nota_fiscal:""}))
+                  }
+                >
+                  Salvar direto
+                </Button>
+              </div>
             </InputGrid>
-            <div className="mt-4 overflow-auto">
+
+            {/* Tabela de RASCUNHOS para controle */}
+            <div className="mt-6">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium">Rascunhos de Abastecimentos</div>
+                <div className="flex gap-2">
+                  <Button type="button" onClick={sendAllFuelDrafts} disabled={!fuelDrafts.length}>Enviar todos</Button>
+                </div>
+              </div>
+              <div className="overflow-auto border rounded-xl">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Placa</TableHead>
+                      <TableHead>KM</TableHead>
+                      <TableHead>Litros</TableHead>
+                      <TableHead>V.Unit</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead>Comb.</TableHead>
+                      <TableHead>Posto</TableHead>
+                      <TableHead>NF-e</TableHead>
+                      <TableHead className="w-[160px]">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {fuelDrafts.length===0 ? (
+                      <TableRow><TableCell colSpan={10} className="text-center text-sm text-muted-foreground">Nenhum rascunho adicionado.</TableCell></TableRow>
+                    ) : fuelDrafts.map(item=>(
+                      <TableRow key={item._id}>
+                        <TableCell>{item.data}</TableCell>
+                        <TableCell>{item.placa}</TableCell>
+                        <TableCell>{item.km}</TableCell>
+                        <TableCell>{item.litros}</TableCell>
+                        <TableCell>{item.valor_unit}</TableCell>
+                        <TableCell>{item.valor_total}</TableCell>
+                        <TableCell>{item.combustivel}</TableCell>
+                        <TableCell>{item.posto}</TableCell>
+                        <TableCell>{item.nota_fiscal}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button type="button" onClick={()=>sendOneFuelDraft(item)}>Enviar</Button>
+                            <Button type="button" variant="destructive" onClick={()=>removeFuelDraft(item._id)}>Remover</Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            {/* Tabela oficial (já existente) */}
+            <div className="mt-8 overflow-auto">
               <Table>
                 <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Placa</TableHead><TableHead>KM</TableHead><TableHead>Litros</TableHead><TableHead>Comb.</TableHead><TableHead>Posto</TableHead><TableHead>Total</TableHead></TableRow></TableHeader>
                 <TableBody>{fuels.data.map(f=><TableRow key={f.id}><TableCell>{toBR(f.data)}</TableCell><TableCell>{f.placa}</TableCell><TableCell>{f.km}</TableCell><TableCell>{f.litros}</TableCell><TableCell>{f.combustivel}</TableCell><TableCell>{f.posto}</TableCell><TableCell>{BRL(f.valor_total)}</TableCell></TableRow>)}</TableBody>
