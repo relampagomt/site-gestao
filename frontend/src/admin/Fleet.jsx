@@ -117,7 +117,7 @@ export default function FleetPage() {
   /* --------- Filtros --------- */
   const [filters, setFilters] = useState({
     placa: "", veiculo: "", motorista: "", combustivel: "",
-    posto: "", precoMin: "", precoMax: "", de: "", ate: ""
+    posto: "", preco: "", de: "", ate: ""
   });
 
   const reloadWithFilters = async () => {
@@ -127,15 +127,18 @@ export default function FleetPage() {
     if (filters.motorista) params.motorista = filters.motorista;
     if (filters.combustivel) params.combustivel = filters.combustivel;
     if (filters.posto) params.posto = filters.posto;
-    if (filters.precoMin) params.precoMin = filters.precoMin;
-    if (filters.precoMax) params.precoMax = filters.precoMax;
+    if (filters.preco) {
+      // usa um único "preco" como igualdade (min=max)
+      params.precoMin = filters.preco;
+      params.precoMax = filters.preco;
+    }
     if (filters.de) params.de = toISO(filters.de);
     if (filters.ate) params.ate = toISO(filters.ate);
     await fuelLogs.reload(params);
   };
 
   const clearFilters = async () => {
-    setFilters({ placa:"", veiculo:"", motorista:"", combustivel:"", posto:"", precoMin:"", precoMax:"", de:"", ate:"" });
+    setFilters({ placa:"", veiculo:"", motorista:"", combustivel:"", posto:"", preco:"", de:"", ate:"" });
     await fuelLogs.reload({});
   };
 
@@ -186,6 +189,7 @@ export default function FleetPage() {
         <CardHeader><CardTitle>Novo Abastecimento</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={submitFuel} className="grid md:grid-cols-4 gap-3">
+            {/* seletor de veículo + cadastrar */}
             <div className="flex gap-2">
               <select
                 value={fuel.placa}
@@ -229,8 +233,9 @@ export default function FleetPage() {
             <Input placeholder="Motorista" value={fuel.motorista}
                    onChange={(e)=>setFuel(p=>({...p, motorista:e.target.value}))} />
 
+            {/* Combustível com largura total */}
             <select
-              className="border rounded px-3 py-2"
+              className="border rounded px-3 py-2 w-full"
               value={fuel.combustivel}
               onChange={(e)=>setFuel(p=>({...p, combustivel:e.target.value}))}
             >
@@ -263,25 +268,22 @@ export default function FleetPage() {
                  onChange={(e)=>setFilters(f=>({...f, veiculo:e.target.value}))} />
           <Input placeholder="Motorista" value={filters.motorista}
                  onChange={(e)=>setFilters(f=>({...f, motorista:e.target.value}))} />
-          <select className="border rounded px-3 py-2" value={filters.combustivel}
+
+          {/* Combustível (filtro) - largura total, com opção "Todos" */}
+          <select className="border rounded px-3 py-2 w-full"
+                  value={filters.combustivel}
                   onChange={(e)=>setFilters(f=>({...f, combustivel:e.target.value}))}>
             <option value="">Todos</option>
             {FUEL_OPTIONS.map(o=> <option key={o} value={o}>{o}</option>)}
           </select>
+
           <Input placeholder="Posto" value={filters.posto}
                  onChange={(e)=>setFilters(f=>({...f, posto:e.target.value}))} />
 
-          {/* Preço mín/máx com legendas */}
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Preço mín.</span>
-            <Input type="number" placeholder="0" value={filters.precoMin}
-                   onChange={(e)=>setFilters(f=>({...f, precoMin:e.target.value}))} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Preço máx.</span>
-            <Input type="number" placeholder="0" value={filters.precoMax}
-                   onChange={(e)=>setFilters(f=>({...f, precoMax:e.target.value}))} />
-          </div>
+          {/* Único campo Preço */}
+          <Input type="number" step="0.01" placeholder="Preço"
+                 value={filters.preco}
+                 onChange={(e)=>setFilters(f=>({...f, preco:e.target.value}))} />
 
           {/* Datas com legendas De/Até */}
           <div className="flex flex-col gap-1">
