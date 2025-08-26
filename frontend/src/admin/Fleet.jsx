@@ -5,290 +5,130 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.j
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
-import { toISO, toBR } from "@/utils/dateBR";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-  DialogFooter, DialogTrigger
-} from "@/components/ui/dialog.jsx";
+
+/**
+ * IMPORTANTE:
+ * - O axios `api` já tem baseURL `/api`. Portanto, aqui usamos caminhos RELATIVOS:
+ *   `/fleet/...` (sem duplicar `/api`), evitando o erro 405 de `/api/api/...`.
+ */
 
 const BRL = (n)=> (Number(n||0)).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const parseNum=(v)=>{ if(v==null||v==="") return 0; const s=String(v).replace(/\./g,"").replace(",","."); const n=Number(s); return Number.isFinite(n)?n:0; };
 
-const useLoad = (url) => {
+const useLoad=(path)=>{
   const [data,setData]=useState([]);
-  const reload=async()=>{ const r=await api.get(url); setData(r.data||[]); };
-  useEffect(()=>{ reload(); },[url]);
-  return {data,reload};
+  const reload=async()=>{ const {data} = await api.get(path); setData(data||[]); };
+  useEffect(()=>{ reload(); },[path]);
+  return {data, reload};
 };
-
-// helpers ---------------------------------------------------
-const parseNum = (v)=> {
-  if(v==null||v==="") return 0;
-  const s=String(v).replace(/\./g,'').replace(',','.');
-  const n=Number(s);
-  return Number.isFinite(n)?n:0;
-};
-
-// dd/mm/aa -> dd/mm/20aa
-const normalizeDateAA = (s) => {
-  const m = String(s||"").match(/^(\d{2})[^\d]?(\d{2})[^\d]?(\d{2})$/);
-  if(m) return `${m[1]}/${m[2]}/20${m[3]}`;
-  return s;
-};
-
-// mascara de data em tempo real -> dd/mm/aa
-const maskDateAA = (raw) => {
-  const digits = String(raw||"").replace(/\D/g,"").slice(0,6);
-  const p1 = digits.slice(0,2);
-  const p2 = digits.slice(2,4);
-  const p3 = digits.slice(4,6);
-  if(digits.length <= 2) return p1;
-  if(digits.length <= 4) return `${p1}/${p2}`;
-  return `${p1}/${p2}/${p3}`;
-};
-
-// KM com milhar: 12345 -> 12.345
-const maskKM = (raw) => {
-  const digits = String(raw||"").replace(/\D/g,"");
-  if(!digits) return "";
-  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-};
-
-// valor BRL simples (formata no blur)
-const formatValorOnBlur = (v) => {
-  const n = parseNum(v);
-  if(!n) return "";
-  return n.toLocaleString("pt-BR",{minimumFractionDigits:2, maximumFractionDigits:2});
-};
-// ----------------------------------------------------------
 
 export default function Fleet(){
-  const vehicles=useLoad("/api/fleet/vehicles");
-  const drivers=useLoad("/api/fleet/drivers");
-  const fuels=useLoad("/api/fleet/fuel-logs");
+  const vehicles=useLoad("/fleet/vehicles");
+  const drivers =useLoad("/fleet/drivers");
+  const fuels   =useLoad("/fleet/fuel-logs");
 
-  // modal
   const [open,setOpen]=useState(false);
 
-  // form (ajustes solicitados)
-  const [fuel,setFuel]=useState({
-    carro:"",              // texto livre (Carro)
-    motorista:"",          // texto livre (Motorista)
-    placa:"",
-    data:"",               // dd/mm/aa (mascara)
-    km:"",                 // com . de milhar
-    litros:"",
-    valor:"",              // único campo de valor
-    combustivel:"Gasolina",
-    posto:"",
-    nota_fiscal:"",
-    // se quiser mapear para ids depois, deixe vazios:
-    vehicle_id:"", driver_id:""
-  });
+  const [fuel,setFuel]=useState({ vehicle_id:"", date:"", liters:"", price_per_liter:"", total:"", odometer:"", station:"", driver:"", notes:"" });
+  const [editing,setEditing]=useState(null);
 
-  // filtros
-  const [flt,setFlt]=useState({q:"", combustivel:"", placa:"", posto:"", de:"", ate:""});
+  const totalCalc=useMemo(()=>{
+    const l=parseNum(fuel.liters); const p=parseNum(fuel.price_per_liter);
+    return (l*p).toFixed(2);
+  },[fuel.liters,fuel.price_per_liter]);
 
-  const filtered = useMemo(()=>{
-    const deISO = flt.de ? toISO(normalizeDateAA(flt.de)) : null;
-    const ateISO = flt.ate ? toISO(normalizeDateAA(flt.ate)) : null;
-    return (fuels.data||[]).filter(row=>{
-      if(flt.combustivel && row.combustivel!==flt.combustivel) return false;
-      if(flt.placa && !String(row.placa||"").toLowerCase().includes(flt.placa.toLowerCase())) return false;
-      if(flt.posto && !String(row.posto||"").toLowerCase().includes(flt.posto.toLowerCase())) return false;
-      if(flt.q){
-        const hay = `${row.placa||""} ${row.posto||""} ${row.nota_fiscal||""} ${row.carro||""} ${row.motorista||""}`.toLowerCase();
-        if(!hay.includes(flt.q.toLowerCase())) return false;
-      }
-      if(deISO && row.data < deISO) return false;
-      if(ateISO && row.data > ateISO) return false;
-      return true;
-    });
-  },[fuels.data, flt]);
+  const onChange=(e)=>{ const {name,value}=e.target; setFuel((f)=>({...f,[name]:value})); };
 
-  const resetForm = ()=> setFuel({
-    carro:"", motorista:"", placa:"", data:"",
-    km:"", litros:"", valor:"", combustivel:"Gasolina",
-    posto:"", nota_fiscal:"", vehicle_id:"", driver_id:""
-  });
+  const submit=async(e)=>{
+    e.preventDefault();
+    const payload={...fuel};
+    if(!payload.total) payload.total = totalCalc;
 
-  const submitFuel = async () => {
-    await api.post("/api/fleet/fuel-logs",{
-      // envia também os campos livres (se o backend aceitar, ótimo; senão, ignore no server)
-      carro: fuel.carro,
-      motorista: fuel.motorista,
-      vehicle_id: fuel.vehicle_id || null,
-      driver_id: fuel.driver_id || null,
-      placa: fuel.placa,
-      data: toISO(normalizeDateAA(fuel.data)),
-      km: parseNum(fuel.km),
-      litros: parseNum(fuel.litros),
-      valor: parseNum(fuel.valor),
-      combustivel: fuel.combustivel,
-      posto: fuel.posto,
-      nota_fiscal: fuel.nota_fiscal,
-    });
-    resetForm();
-    setOpen(false);
+    const url = editing ? `/fleet/fuel-logs/${editing.id}` : `/fleet/fuel-logs`;
+    const method = editing ? "put" : "post";
+    await api[method](url, payload);
+    setFuel({ vehicle_id:"", date:"", liters:"", price_per_liter:"", total:"", odometer:"", station:"", driver:"", notes:"" });
+    setEditing(null);
     fuels.reload();
   };
 
+  const edit=(row)=>{ setEditing(row); setFuel({
+    vehicle_id: row.vehicle_id||"",
+    date: row.date||"",
+    liters: String(row.liters ?? ""),
+    price_per_liter: String(row.price_per_liter ?? ""),
+    total: String(row.total ?? ""),
+    odometer: String(row.odometer ?? ""),
+    station: row.station||"",
+    driver: row.driver||"",
+    notes: row.notes||""
+  }); };
+
+  const del=async(row)=>{ if(!confirm("Excluir abastecimento?")) return; await api.delete(`/fleet/fuel-logs/${row.id}`); fuels.reload(); };
+
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle>Frota • Abastecimentos</CardTitle>
-        <div className="flex gap-2">
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button type="button">Lançar abastecimento</Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-3xl">
-              <DialogHeader>
-                <DialogTitle>Novo abastecimento</DialogTitle>
-                <DialogDescription>Preencha os dados e clique em Salvar.</DialogDescription>
-              </DialogHeader>
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">Frota – Abastecimentos</h1>
 
-              {/* FORM */}
-              <div className="grid gap-3 md:grid-cols-12">
-                {/* Carro (texto com sugestões) */}
-                <div className="md:col-span-6">
-                  <Input
-                    autoComplete="off"
-                    list="dl-carros"
-                    placeholder="Carro..."
-                    value={fuel.carro}
-                    onChange={e=>setFuel(s=>({...s,carro:e.target.value}))}
-                  />
-                  <datalist id="dl-carros">
-                    {vehicles.data.map(v=>(
-                      <option key={v.id} value={`${v.placa} - ${v.modelo} (${v.marca||""})`} />
-                    ))}
-                  </datalist>
-                </div>
+      <Card className="mb-4">
+        <CardHeader><CardTitle>Novo Abastecimento</CardTitle></CardHeader>
+        <CardContent>
+          <form onSubmit={submit} className="grid md:grid-cols-4 gap-3">
+            <select name="vehicle_id" value={fuel.vehicle_id} onChange={onChange} className="border rounded px-3 py-2" required>
+              <option value="">Selecione o veículo</option>
+              {(vehicles.data||[]).map(v => <option key={v.id} value={v.id}>{v.placa || v.modelo || v.id}</option>)}
+            </select>
+            <Input name="date" value={fuel.date} onChange={onChange} placeholder="Data (YYYY-MM-DD)" required />
+            <Input name="liters" value={fuel.liters} onChange={onChange} placeholder="Litros" />
+            <Input name="price_per_liter" value={fuel.price_per_liter} onChange={onChange} placeholder="Preço/Litro" />
+            <Input name="total" value={fuel.total || totalCalc} onChange={onChange} placeholder="Total" />
+            <Input name="odometer" value={fuel.odometer} onChange={onChange} placeholder="Odômetro" />
+            <Input name="station" value={fuel.station} onChange={onChange} placeholder="Posto" />
+            <Input name="driver" value={fuel.driver} onChange={onChange} placeholder="Motorista" />
+            <Input name="notes" value={fuel.notes} onChange={onChange} placeholder="Observações" className="md:col-span-3" />
+            <Button type="submit">{editing? "Salvar" : "Adicionar"}</Button>
+          </form>
+        </CardContent>
+      </Card>
 
-                {/* Motorista (texto com sugestões) */}
-                <div className="md:col-span-6">
-                  <Input
-                    autoComplete="off"
-                    list="dl-motoristas"
-                    placeholder="Motorista..."
-                    value={fuel.motorista}
-                    onChange={e=>setFuel(s=>({...s,motorista:e.target.value}))}
-                  />
-                  <datalist id="dl-motoristas">
-                    {drivers.data.map(d=>(
-                      <option key={d.id} value={d.nome} />
-                    ))}
-                  </datalist>
-                </div>
-
-                <Input className="md:col-span-3" autoComplete="off" placeholder="Placa"
-                  value={fuel.placa} onChange={e=>setFuel(s=>({...s,placa:e.target.value}))}/>
-
-                {/* Data com máscara dd/mm/aa */}
-                <Input className="md:col-span-3" autoComplete="off" placeholder="dd/mm/aa"
-                  value={fuel.data}
-                  onChange={e=>setFuel(s=>({...s,data: maskDateAA(e.target.value)}))}
-                  maxLength={8}
-                />
-
-                {/* KM com milhar */}
-                <Input className="md:col-span-2" autoComplete="off" placeholder="KM"
-                  value={fuel.km}
-                  onChange={e=>setFuel(s=>({...s,km: maskKM(e.target.value)}))}
-                />
-
-                <Input className="md:col-span-2" autoComplete="off" placeholder="Litros"
-                  value={fuel.litros} onChange={e=>setFuel(s=>({...s,litros:e.target.value}))}/>
-
-                {/* Valor (único) */}
-                <Input className="md:col-span-2" autoComplete="off" placeholder="Valor"
-                  value={fuel.valor}
-                  onChange={e=>setFuel(s=>({...s,valor:e.target.value}))}
-                  onBlur={e=>setFuel(s=>({...s,valor: formatValorOnBlur(e.target.value)}))}
-                />
-
-                <select className="md:col-span-3 border rounded-xl px-3 py-2"
-                  value={fuel.combustivel}
-                  onChange={e=>setFuel(s=>({...s,combustivel:e.target.value}))}>
-                  <option>Gasolina</option><option>Etanol</option><option>Diesel</option>
-                </select>
-
-                <Input className="md:col-span-6" autoComplete="off" placeholder="Posto"
-                  value={fuel.posto} onChange={e=>setFuel(s=>({...s,posto:e.target.value}))}/>
-                <Input className="md:col-span-3" autoComplete="off" placeholder="NF-e"
-                  value={fuel.nota_fiscal} onChange={e=>setFuel(s=>({...s,nota_fiscal:e.target.value}))}/>
-              </div>
-
-              <DialogFooter className="mt-2">
-                <Button type="button" variant="secondary" onClick={()=>{ resetForm(); setOpen(false); }}>Cancelar</Button>
-                <Button type="button" onClick={submitFuel}>Salvar</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Button type="button" variant="secondary" onClick={fuels.reload}>Atualizar</Button>
-        </div>
-      </CardHeader>
-
-      <CardContent>
-        {/* Filtros */}
-        <div className="grid gap-3 md:grid-cols-12 mb-4">
-          <Input className="md:col-span-4" placeholder="Buscar (placa / posto / NF / carro / motorista)"
-            value={flt.q} onChange={e=>setFlt(s=>({...s,q:e.target.value}))}/>
-          <Input className="md:col-span-2" placeholder="Placa"
-            value={flt.placa} onChange={e=>setFlt(s=>({...s,placa:e.target.value}))}/>
-          <Input className="md:col-span-2" placeholder="Posto"
-            value={flt.posto} onChange={e=>setFlt(s=>({...s,posto:e.target.value}))}/>
-          <select className="md:col-span-2 border rounded-xl px-3 py-2"
-            value={flt.combustivel} onChange={e=>setFlt(s=>({...s,combustivel:e.target.value}))}>
-            <option value="">Combustível</option>
-            <option>Gasolina</option><option>Etanol</option><option>Diesel</option>
-          </select>
-          <Input className="md:col-span-1" placeholder="De (dd/mm/aa)"
-            value={flt.de} onChange={e=>setFlt(s=>({...s,de: maskDateAA(e.target.value)}))} maxLength={8}/>
-          <Input className="md:col-span-1" placeholder="Até (dd/mm/aa)"
-            value={flt.ate} onChange={e=>setFlt(s=>({...s,ate: maskDateAA(e.target.value)}))} maxLength={8}/>
-        </div>
-
-        {/* Tabela */}
-        <div className="overflow-auto">
-          <Table>
+      <Card>
+        <CardHeader><CardTitle>Registros</CardTitle></CardHeader>
+        <CardContent className="overflow-auto">
+          <Table className="min-w-full text-sm">
             <TableHeader>
               <TableRow>
                 <TableHead>Data</TableHead>
-                <TableHead>Carro</TableHead>
-                <TableHead>Motorista</TableHead>
-                <TableHead>Placa</TableHead>
-                <TableHead>KM</TableHead>
+                <TableHead>Veículo</TableHead>
                 <TableHead>Litros</TableHead>
-                <TableHead>Valor</TableHead>
-                <TableHead>Comb.</TableHead>
+                <TableHead>Pç/L</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>Odômetro</TableHead>
                 <TableHead>Posto</TableHead>
-                <TableHead>NF-e</TableHead>
+                <TableHead>Motorista</TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(f=>(
-                <TableRow key={f.id}>
-                  <TableCell>{toBR(f.data)}</TableCell>
-                  <TableCell>{f.carro || "-"}</TableCell>
-                  <TableCell>{f.motorista || "-"}</TableCell>
-                  <TableCell>{f.placa}</TableCell>
-                  <TableCell>{(Number(f.km)||0).toLocaleString("pt-BR")}</TableCell>
-                  <TableCell>{f.litros}</TableCell>
-                  <TableCell>{BRL(f.valor ?? f.valor_total)}</TableCell>
-                  <TableCell>{f.combustivel}</TableCell>
-                  <TableCell>{f.posto}</TableCell>
-                  <TableCell>{f.nota_fiscal}</TableCell>
-                </TableRow>
+              {(fuels.data||[]).map(row=>(
+                <tr key={row.id} className="border-t">
+                  <TableCell>{row.date}</TableCell>
+                  <TableCell>{row.vehicle_id}</TableCell>
+                  <TableCell>{row.liters}</TableCell>
+                  <TableCell>{BRL(row.price_per_liter)}</TableCell>
+                  <TableCell>{BRL(row.total)}</TableCell>
+                  <TableCell>{row.odometer}</TableCell>
+                  <TableCell>{row.station}</TableCell>
+                  <TableCell>{row.driver}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="secondary" onClick={()=>edit(row)} className="mr-2">Editar</Button>
+                    <Button variant="destructive" onClick={()=>del(row)}>Excluir</Button>
+                  </TableCell>
+                </tr>
               ))}
-              {filtered.length===0 && (
-                <TableRow><TableCell colSpan={10} className="text-center text-sm text-muted-foreground">Sem resultados.</TableCell></TableRow>
-              )}
             </TableBody>
           </Table>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

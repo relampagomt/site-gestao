@@ -1,119 +1,144 @@
-# relampago/backend/src/routes/commercial.py
-import os, json
-import requests
+# backend/src/routes/commercial.py
 from flask import Blueprint, request, jsonify
 from datetime import datetime
+from typing import Any, Dict
+from src.services.firestore_service import firestore_service as fs
 
 commercial_bp = Blueprint("commercial", __name__)
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-os.makedirs(DATA_DIR, exist_ok=True)
+COL_CLIENTS = "commercial_clients"
+COL_RECORDS = "commercial_records"
+COL_ORDERS  = "commercial_orders"
 
-def _path(n): return os.path.join(DATA_DIR, f"{n}.json")
-def _load(n, default=None):
-    try:
-        with open(_path(n), "r", encoding="utf-8") as f: return json.load(f)
-    except: return [] if default is None else default
-def _save(n, items):
-    with open(_path(n), "w", encoding="utf-8") as f: json.dump(items, f, ensure_ascii=False, indent=2)
-def _now(): return datetime.utcnow().strftime("%Y-%m-%d")
-def _next_id(items): return (max([int(i.get("id", 0)) for i in items] or [0]) + 1)
+def _iso_now(): return datetime.utcnow().isoformat()
 
-VALID = ["Esperando","Atendido","Retornar","Cancelado"]
+def _parse_date(v: Any) -> str:
+    if not v: return ""
+    s = str(v).strip()
+    from datetime import datetime
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    return ""
 
-def _alert(tipo, payload):
-    items = _load("alerts")
-    item = {"id": _next_id(items), "tipo": tipo, "payload": payload, "created_at": _now(), "lido": False}
-    items.append(item); _save("alerts", items); return item
-
-def _whatsapp(text):
-    url = os.getenv("WHATSAPP_WEBHOOK_URL", "").strip()
-    if not url: return {"ok": False, "reason": "WHATSAPP_WEBHOOK_URL não configurada"}
-    try:
-        r = requests.post(url, json={"message": text}, timeout=5)
-        return {"ok": r.ok, "status": r.status_code}
-    except Exception as e:
-        return {"ok": False, "reason": str(e)}
-
-# ---- Clientes
+# ---------- Clients ----------
 @commercial_bp.get("/commercial/clients")
-def clients_list(): return jsonify(_load("clients"))
+def clients_list():
+    return jsonify(fs.get_all_documents(COL_CLIENTS) or [])
 
 @commercial_bp.post("/commercial/clients")
 def clients_create():
-    items = _load("clients")
-    b = request.get_json(force=True)
-    st = b.get("status") if b.get("status") in VALID else "Esperando"
-    item = {
-        "id": _next_id(items),
-        "nome": (b.get("nome") or "").strip(),
-        "telefone": (b.get("telefone") or "").strip(),
+    b = request.get_json(force=True) or {}
+    data = {
+        "nome": (b.get("nome") or b.get("name") or "").strip(),
+        "empresa": (b.get("empresa") or b.get("company") or "").strip(),
+        "telefone": (b.get("telefone") or b.get("phone") or "").strip(),
         "email": (b.get("email") or "").strip(),
-        "empresa": (b.get("empresa") or "").strip(),
-        "segmento": (b.get("segmento") or "").strip(),
-        "origem": (b.get("origem") or "Orgânico").strip(),
-        "status": st,
-        "obs": (b.get("obs") or "").strip(),
-        "created_at": _now(),
+        "created_at": _iso_now(),
+        "updated_at": _iso_now(),
     }
-    items.append(item); _save("clients", items)
-    alert = _alert("Novo Cliente", {"client_id": item["id"], "nome": item["nome"], "status": item["status"]})
-    notify = _whatsapp(f"Novo cliente: {item['nome']} | Status: {item['status']} | Tel: {item['telefone']}")
-    return jsonify({"client": item, "alert": alert, "notify": notify}), 201
+    doc_id, _ = fs.add_document(COL_CLIENTS, data)
+    return jsonify(fs.get_document(COL_CLIENTS, doc_id)), 201
 
-@commercial_bp.patch("/commercial/clients/<int:cid>/status")
-def clients_status(cid):
-    items = _load("clients")
-    b = request.get_json(force=True); st = b.get("status")
-    if st not in VALID: return jsonify({"error":"Status inválido"}), 400
-    found = None
-    for c in items:
-        if c["id"] == cid:
-            c["status"] = st; found = c; break
-    if not found: return jsonify({"error":"Cliente não encontrado"}), 404
-    _save("clients", items)
-    alert = _alert("Status", {"client_id": cid, "status": st})
-    notify = _whatsapp(f"Status atualizado: {found['nome']} → {st}")
-    return jsonify({"client": found, "alert": alert, "notify": notify})
+@commercial_bp.put("/commercial/clients/<id>")
+def clients_update(id):
+    b = request.get_json(force=True) or {}
+    b["updated_at"] = _iso_now()
+    fs.update_document(COL_CLIENTS, id, b)
+    saved = fs.get_document(COL_CLIENTS, id)
+    if not saved: return jsonify({"error":"não encontrado"}), 404
+    return jsonify(saved)
 
-# ---- Alertas
-@commercial_bp.get("/commercial/alerts")
-def alerts_list(): return jsonify(_load("alerts"))
+@commercial_bp.delete("/commercial/clients/<id>")
+def clients_delete(id):
+    fs.delete_document(COL_CLIENTS, id)
+    return jsonify({"ok": True})
 
-@commercial_bp.patch("/commercial/alerts/<int:aid>/read")
-def alerts_read(aid):
-    items = _load("alerts")
-    for a in items:
-        if a["id"] == aid:
-            a["lido"] = True; _save("alerts", items); return jsonify(a)
-    return jsonify({"error":"Alerta não encontrado"}), 404
+# ---------- Records (Leads/CRM) ----------
+@commercial_bp.get("/commercial/records")
+def records_list():
+    items = fs.get_all_documents(COL_RECORDS) or []
+    items.sort(key=lambda x: x.get("created_at",""), reverse=True)
+    return jsonify(items)
 
-# ---- Ordens de Serviço
+@commercial_bp.post("/commercial/records")
+def records_create():
+    b = request.get_json(force=True) or {}
+    data = {
+        "name": (b.get("name") or "").strip(),
+        "company": (b.get("company") or "").strip(),
+        "phone": (b.get("phone") or "").strip(),
+        "stage": (b.get("stage") or "Novo").strip(),
+        "value": float(b.get("value") or 0),
+        "source": (b.get("source") or "").strip(),
+        "notes": (b.get("notes") or "").strip(),
+        "created_at": _iso_now(),
+        "updated_at": _iso_now(),
+    }
+    doc_id, _ = fs.add_document(COL_RECORDS, data)
+    return jsonify(fs.get_document(COL_RECORDS, doc_id)), 201
+
+@commercial_bp.put("/commercial/records/<id>")
+def records_update(id):
+    b = request.get_json(force=True) or {}
+    b["updated_at"] = _iso_now()
+    fs.update_document(COL_RECORDS, id, b)
+    saved = fs.get_document(COL_RECORDS, id)
+    if not saved: return jsonify({"error":"não encontrado"}), 404
+    return jsonify(saved)
+
+@commercial_bp.delete("/commercial/records/<id>")
+def records_delete(id):
+    fs.delete_document(COL_RECORDS, id)
+    return jsonify({"ok": True})
+
+# ---------- Orders ----------
 @commercial_bp.get("/commercial/orders")
-def orders_list(): return jsonify(_load("orders"))
+def orders_list():
+    items = fs.get_all_documents(COL_ORDERS) or []
+    items.sort(key=lambda x: (x.get("date") or x.get("data") or "", x.get("created_at","")), reverse=True)
+    return jsonify(items)
 
 @commercial_bp.post("/commercial/orders")
 def orders_create():
-    items = _load("orders")
-    b = request.get_json(force=True)
-    itens = []
-    for it in (b.get("itens") or []):
-        qtd = float(it.get("quantidade") or 1)
-        vu  = float(it.get("valor_unit") or 0)
-        itens.append({"tipo": it.get("tipo") or "ação", "nome": (it.get("nome") or "").strip(),
-                      "quantidade": qtd, "valor_unit": vu, "valor_total": qtd*vu})
-    total = sum(i["valor_total"] for i in itens)
-    item = {
-        "id": _next_id(items),
-        "client_id": b.get("client_id"),
-        "titulo": (b.get("titulo") or "Ordem de Serviço"),
-        "descricao": (b.get("descricao") or "").strip(),
-        "status": (b.get("status") or "Aberta"),
-        "data": b.get("data") or _now(),
-        "itens": itens,
-        "valor_total": total,
-        "created_at": _now(),
+    b = request.get_json(force=True) or {}
+    items = b.get("itens") or b.get("items") or []
+    # converte numeros
+    def to_num(v):
+        s = str(v).replace(".","").replace(",",".")
+        try: return float(s)
+        except: return 0.0
+    total = b.get("valor_total") or b.get("total") or 0.0
+    if not total:
+        total = sum((to_num(i.get("quantidade",1))*to_num(i.get("valor_unit",0)) for i in items))
+    data = {
+        "cliente": b.get("cliente") or b.get("client"),
+        "titulo": b.get("titulo") or "Ordem de Serviço",
+        "descricao": b.get("descricao") or "",
+        "status": b.get("status") or "Aberta",
+        "data": _parse_date(b.get("data") or ""),
+        "itens": items,
+        "valor_total": float(total),
+        "created_at": _iso_now(),
+        "updated_at": _iso_now(),
     }
-    items.append(item); _save("orders", items)
-    alert = _alert("OS", {"order_id": item["id"], "client_id": item["client_id"], "valor_total": total})
-    return jsonify({"order": item, "alert": alert}), 201
+    doc_id, _ = fs.add_document(COL_ORDERS, data)
+    return jsonify(fs.get_document(COL_ORDERS, doc_id)), 201
+
+@commercial_bp.put("/commercial/orders/<id>")
+def orders_update(id):
+    b = request.get_json(force=True) or {}
+    if "data" in b:
+        b["data"] = _parse_date(b["data"])
+    b["updated_at"] = _iso_now()
+    fs.update_document(COL_ORDERS, id, b)
+    saved = fs.get_document(COL_ORDERS, id)
+    if not saved: return jsonify({"error":"não encontrado"}), 404
+    return jsonify(saved)
+
+@commercial_bp.delete("/commercial/orders/<id>")
+def orders_delete(id):
+    fs.delete_document(COL_ORDERS, id)
+    return jsonify({"ok": True})

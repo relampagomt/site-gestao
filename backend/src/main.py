@@ -43,10 +43,9 @@ def create_app():
     # CORS
     # -----------------------
     allowed_origins = [
-        "*",
-        "https://site-gestao-mu.vercel.app",
-        "http://localhost:5173",
         "http://localhost:3000",
+        "http://localhost:5173",
+        "https://www.panfletagemrelampago.com.br",
     ]
     CORS(
         app,
@@ -78,9 +77,9 @@ def create_app():
     from src.routes.commercial import commercial_bp
 
     # -----------------------
-    # Blueprints
+    # Registrando blueprints
     # -----------------------
-    app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    app.register_blueprint(auth_bp, url_prefix="/api")
     app.register_blueprint(client_bp, url_prefix="/api")
     app.register_blueprint(material_bp, url_prefix="/api")
     app.register_blueprint(action_bp, url_prefix="/api")
@@ -88,11 +87,11 @@ def create_app():
     app.register_blueprint(metrics_bp, url_prefix="/api/metrics")
     app.register_blueprint(upload_bp, url_prefix="/api")
     app.register_blueprint(user_bp, url_prefix="/api")
-    app.register_blueprint(finance_bp, url_prefix="/api")  # /api/finance/* e /api/transactions
+    app.register_blueprint(finance_bp, url_prefix="/api")  # /api/transactions
 
     # >>> ADIÇÕES: registros dos novos blueprints
-    app.register_blueprint(fleet_bp, url_prefix="/api")
-    app.register_blueprint(commercial_bp, url_prefix="/api")
+    app.register_blueprint(fleet_bp, url_prefix="/api")       # /api/fleet/...
+    app.register_blueprint(commercial_bp, url_prefix="/api")  # /api/commercial/...
 
     # -----------------------
     # Healthcheck
@@ -101,10 +100,14 @@ def create_app():
     def healthcheck_root():
         return jsonify({"status": "ok"}), 200
 
-    # >>> adição: healthcheck dentro de /api <<<
     @app.route("/api/healthcheck", methods=["GET", "HEAD", "OPTIONS"])
     def healthcheck_api():
         return jsonify({"status": "ok"}), 200
+
+    # --- Alias para corrigir chamadas /api/api/* vindas do front (redireciona mantendo método) ---
+    @app.route("/api/api/<path:rest>", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+    def alias_double_api(rest):
+        return redirect(f"/api/{rest}", code=307)
 
     # >>> aliases para compatibilizar chamadas do front <<<
     # mantém método com 307 (POST continua POST, GET continua GET)
@@ -124,12 +127,8 @@ def create_app():
         return ("", 204)
 
     # -----------------------
-    # Error Handlers (JSON)
+    # Handlers de erro
     # -----------------------
-    @app.errorhandler(404)
-    def handle_404(e):
-        return jsonify(error="not_found"), 404
-
     @app.errorhandler(RequestEntityTooLarge)
     def handle_file_too_large(e):
         return jsonify(error="file_too_large", max_bytes=app.config["MAX_CONTENT_LENGTH"]), 413

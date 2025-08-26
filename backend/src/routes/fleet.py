@@ -1,233 +1,272 @@
-# relampago/backend/src/routes/fleet.py
+# backend/src/routes/fleet.py
 from flask import Blueprint, request, jsonify
 from datetime import datetime
-import os, json
+from typing import Any, Dict
+import math
+
+from src.services.firestore_service import firestore_service as fs
 
 fleet_bp = Blueprint("fleet", __name__)
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-os.makedirs(DATA_DIR, exist_ok=True)
+COL_VEH = "fleet_vehicles"
+COL_DRV = "fleet_drivers"
+COL_ASG = "fleet_assignments"
+COL_FUEL = "fleet_fuel_logs"
+COL_KM   = "fleet_km_logs"
+COL_TX   = "finance_transactions"  # para lançamentos de pagar (combustível)
 
-def _path(name): return os.path.join(DATA_DIR, f"{name}.json")
-def _load(name, default=None):
+def _iso_now():
+    return datetime.utcnow().isoformat()
+
+def _parse_date(v: Any) -> str:
+    if not v: return ""
+    s = str(v).strip()
     try:
-        with open(_path(name), "r", encoding="utf-8") as f: return json.load(f)
-    except: return [] if default is None else default
-def _save(name, items):
-    with open(_path(name), "w", encoding="utf-8") as f: json.dump(items, f, ensure_ascii=False, indent=2)
-def _now(): return datetime.utcnow().strftime("%Y-%m-%d")
-def _next_id(items): return (max([int(i.get("id", 0)) for i in items] or [0]) + 1)
+        datetime.strptime(s, "%Y-%m-%d"); return s
+    except Exception:
+        try:
+            d = datetime.strptime(s, "%d/%m/%Y"); return d.strftime("%Y-%m-%d")
+        except Exception:
+            return ""
 
-# ---- Veículos
+def _num(v: Any, default: float=0.0) -> float:
+    if v is None or v == "": return default
+    if isinstance(v, (int,float)) and math.isfinite(float(v)): return float(v)
+    s = str(v).strip().replace(".", "").replace(",", ".")
+    try:
+        n = float(s); return n if math.isfinite(n) else default
+    except Exception:
+        return default
+
+# ---------------- Vehicles ----------------
 @fleet_bp.get("/fleet/vehicles")
-def vehicles_list(): return jsonify(_load("vehicles"))
+def vehicles_list():
+    return jsonify(fs.get_all_documents(COL_VEH) or [])
 
 @fleet_bp.post("/fleet/vehicles")
 def vehicles_create():
-    items = _load("vehicles")
-    body = request.get_json(force=True)
-    item = {
-        "id": _next_id(items),
-        "placa": (body.get("placa") or "").upper().strip(),
-        "modelo": (body.get("modelo") or "").strip(),
-        "marca": (body.get("marca") or "").strip(),
-        "ano": (body.get("ano") or "").strip(),
-        "ativo": bool(body.get("ativo", True)),
-        "created_at": _now(),
+    b = request.get_json(force=True) or {}
+    data = {
+        "placa": (b.get("placa") or "").upper().strip(),
+        "modelo": (b.get("modelo") or "").strip(),
+        "marca": (b.get("marca") or "").strip(),
+        "ano": (b.get("ano") or "").strip(),
+        "ativo": bool(b.get("ativo", True)),
+        "created_at": _iso_now(),
+        "updated_at": _iso_now(),
     }
-    items.append(item); _save("vehicles", items)
-    return jsonify(item), 201
+    doc_id, _ = fs.add_document(COL_VEH, data)
+    saved = fs.get_document(COL_VEH, doc_id)
+    return jsonify(saved), 201
 
-# ---- Motoristas
+@fleet_bp.put("/fleet/vehicles/<id>")
+def vehicles_update(id):
+    b = request.get_json(force=True) or {}
+    b["updated_at"] = _iso_now()
+    fs.update_document(COL_VEH, id, b)
+    saved = fs.get_document(COL_VEH, id)
+    if not saved: return jsonify({"error": "não encontrado"}), 404
+    return jsonify(saved)
+
+@fleet_bp.delete("/fleet/vehicles/<id>")
+def vehicles_delete(id):
+    fs.delete_document(COL_VEH, id)
+    return jsonify({"ok": True})
+
+# ---------------- Drivers ----------------
 @fleet_bp.get("/fleet/drivers")
-def drivers_list(): return jsonify(_load("drivers"))
+def drivers_list():
+    return jsonify(fs.get_all_documents(COL_DRV) or [])
 
 @fleet_bp.post("/fleet/drivers")
 def drivers_create():
-    items = _load("drivers")
-    body = request.get_json(force=True)
-    item = {
-        "id": _next_id(items),
-        "nome": (body.get("nome") or "").strip(),
-        "documento": (body.get("documento") or "").strip(),
-        "ativo": bool(body.get("ativo", True)),
-        "created_at": _now(),
+    b = request.get_json(force=True) or {}
+    data = {
+        "nome": (b.get("nome") or b.get("name") or "").strip(),
+        "cnh": (b.get("cnh") or "").strip(),
+        "ativo": bool(b.get("ativo", True)),
+        "created_at": _iso_now(),
+        "updated_at": _iso_now(),
     }
-    items.append(item); _save("drivers", items)
-    return jsonify(item), 201
+    doc_id, _ = fs.add_document(COL_DRV, data)
+    return jsonify(fs.get_document(COL_DRV, doc_id)), 201
 
-# ---- Vínculos placa/veículo/motorista
+@fleet_bp.put("/fleet/drivers/<id>")
+def drivers_update(id):
+    b = request.get_json(force=True) or {}
+    b["updated_at"] = _iso_now()
+    fs.update_document(COL_DRV, id, b)
+    saved = fs.get_document(COL_DRV, id)
+    if not saved: return jsonify({"error": "não encontrado"}), 404
+    return jsonify(saved)
+
+@fleet_bp.delete("/fleet/drivers/<id>")
+def drivers_delete(id):
+    fs.delete_document(COL_DRV, id)
+    return jsonify({"ok": True})
+
+# -------------- Assignments --------------
 @fleet_bp.get("/fleet/assignments")
-def asg_list(): return jsonify(_load("assignments"))
+def asg_list():
+    return jsonify(fs.get_all_documents(COL_ASG) or [])
 
 @fleet_bp.post("/fleet/assignments")
 def asg_create():
-    items = _load("assignments")
-    body = request.get_json(force=True)
-    item = {
-        "id": _next_id(items),
-        "vehicle_id": body.get("vehicle_id"),
-        "driver_id": body.get("driver_id"),
-        "placa": (body.get("placa") or "").upper().strip(),
-        "inicio": (body.get("inicio") or _now()),
-        "fim": body.get("fim") or None,
-        "observacao": (body.get("observacao") or "").strip(),
-        "created_at": _now(),
-    }
-    items.append(item); _save("assignments", items)
-    return jsonify(item), 201
-
-# ---- Integração Finance (Contas a Pagar, reaproveita arquivo de transactions)
-def _finance_add_payable(data_iso, descricao, categoria, valor, ref):
-    tx = _load("transactions")  # mesmo arquivo do finance.py
-    new_id = _next_id(tx)
-    tx.append({
-        "id": str(new_id),
-        "tipo": "pagar",
-        "data": data_iso,
-        "descricao": descricao,
-        "categoria": categoria,
-        "valor": float(valor or 0),
-        "status": "Pendente",
-        "created_at": _now(),
-        "ref": ref,
-    })
-    _save("transactions", tx)
-    return new_id
-
-# ---- Abastecimentos
-@fleet_bp.get("/fleet/fuel-logs")
-def fuel_list(): return jsonify(_load("fuel_logs"))
-
-@fleet_bp.post("/fleet/fuel-logs")
-def fuel_create():
-    items = _load("fuel_logs")
-    b = request.get_json(force=True)
-    item = {
-        "id": _next_id(items),
+    b = request.get_json(force=True) or {}
+    data = {
         "vehicle_id": b.get("vehicle_id"),
         "driver_id": b.get("driver_id"),
         "placa": (b.get("placa") or "").upper().strip(),
-        "data": b.get("data"),  # ISO YYYY-MM-DD
-        "km": int(b.get("km") or 0),
-        "litros": float(b.get("litros") or 0),
-        "valor_unit": float(b.get("valor_unit") or 0),
-        "valor_total": float(b.get("valor_total") or 0),
-        "combustivel": (b.get("combustivel") or "Gasolina").strip(),
-        "posto": (b.get("posto") or "").strip(),
-        "nota_fiscal": (b.get("nota_fiscal") or "").strip(),
-        "created_at": _now(),
+        "inicio": _parse_date(b.get("inicio") or _iso_now()[:10]) or _iso_now()[:10],
+        "fim": _parse_date(b.get("fim") or "") or None,
+        "observacao": (b.get("observacao") or b.get("obs") or "").strip(),
+        "created_at": _iso_now(),
+        "updated_at": _iso_now(),
     }
-    items.append(item); _save("fuel_logs", items)
+    doc_id, _ = fs.add_document(COL_ASG, data)
+    return jsonify(fs.get_document(COL_ASG, doc_id)), 201
 
-    # Contas a pagar automática
-    payable_id = _finance_add_payable(
-        item["data"],
-        f"Combustível {item['placa']}",
-        "Combustível",
-        item["valor_total"],
-        {"type": "fuel_log", "id": item["id"]}
-    )
-    return jsonify({"fuel": item, "payable_id": payable_id}), 201
+@fleet_bp.put("/fleet/assignments/<id>")
+def asg_update(id):
+    b = request.get_json(force=True) or {}
+    if "inicio" in b: b["inicio"] = _parse_date(b["inicio"]) or _iso_now()[:10]
+    if "fim" in b: b["fim"] = _parse_date(b["fim"]) or None
+    b["updated_at"] = _iso_now()
+    fs.update_document(COL_ASG, id, b)
+    saved = fs.get_document(COL_ASG, id)
+    if not saved: return jsonify({"error": "não encontrado"}), 404
+    return jsonify(saved)
 
-# ---- KM
+@fleet_bp.delete("/fleet/assignments/<id>")
+def asg_delete(id):
+    fs.delete_document(COL_ASG, id)
+    return jsonify({"ok": True})
+
+# ---------------- Fuel logs ----------------
+@fleet_bp.get("/fleet/fuel-logs")
+def fuel_list():
+    items = fs.get_all_documents(COL_FUEL) or []
+    # ordenar por date desc, created_at desc
+    items.sort(key=lambda x: (x.get("date",""), x.get("created_at","")), reverse=True)
+    return jsonify(items)
+
+def _finance_add_payable(date_iso: str, descricao: str, categoria: str, valor: float, ref_doc: Dict[str, str]):
+    """Cria um lançamento em finance_transactions vinculado ao abastecimento."""
+    data = {
+        "tipo": "pagar",
+        "descricao": descricao,
+        "categoria": categoria or "Combustível",
+        "date": date_iso,
+        "status": "Pendente",
+        "valor": float(valor or 0.0),
+        "refs": [ref_doc],
+        "created_at": _iso_now(),
+        "updated_at": _iso_now(),
+    }
+    tx_id, _ = fs.add_document(COL_TX, data)
+    return tx_id
+
+@fleet_bp.post("/fleet/fuel-logs")
+def fuel_create():
+    b = request.get_json(force=True) or {}
+
+    liters = _num(b.get("liters"))
+    ppl = _num(b.get("price_per_liter"))
+    total = _num(b.get("total"), liters * ppl)
+
+    date_iso = _parse_date(b.get("date"))
+    if not date_iso:
+        return jsonify({"error": "date é obrigatório (YYYY-MM-DD ou DD/MM/AAAA)"}), 400
+
+    data = {
+        "vehicle_id": b.get("vehicle_id"),
+        "date": date_iso,
+        "liters": liters,
+        "price_per_liter": ppl,
+        "total": total,
+        "odometer": _num(b.get("odometer")),
+        "station": (b.get("station") or "").strip(),
+        "driver": (b.get("driver") or "").strip(),
+        "notes": (b.get("notes") or "").strip(),
+        "created_at": _iso_now(),
+        "updated_at": _iso_now(),
+    }
+    doc_id, _ = fs.add_document(COL_FUEL, data)
+    saved = fs.get_document(COL_FUEL, doc_id)
+
+    # vincula em finanças (opcional)
+    should_fin = b.get("create_payable", True)
+    if should_fin:
+        desc = data["station"] or "Abastecimento"
+        placa = (b.get("placa") or "").upper().strip()
+        descricao = f"Combustível {placa} - {desc}".strip(" -")
+        payable_id = _finance_add_payable(date_iso, descricao, "Combustível", total, {"type": "fuel_log", "id": doc_id})
+        saved["payable_id"] = payable_id
+
+    return jsonify(saved), 201
+
+@fleet_bp.put("/fleet/fuel-logs/<id>")
+def fuel_update(id):
+    b = request.get_json(force=True) or {}
+    upd = dict(b)
+    if "liters" in upd: upd["liters"] = _num(upd["liters"])
+    if "price_per_liter" in upd: upd["price_per_liter"] = _num(upd["price_per_liter"])
+    if "total" in upd: upd["total"] = _num(upd["total"])
+    if "date" in upd:
+        d = _parse_date(upd["date"])
+        if not d: return jsonify({"error": "date inválida"}), 400
+        upd["date"] = d
+    upd["updated_at"] = _iso_now()
+    fs.update_document(COL_FUEL, id, upd)
+    saved = fs.get_document(COL_FUEL, id)
+    if not saved: return jsonify({"error": "não encontrado"}), 404
+    return jsonify(saved)
+
+@fleet_bp.delete("/fleet/fuel-logs/<id>")
+def fuel_delete(id):
+    fs.delete_document(COL_FUEL, id)
+    return jsonify({"ok": True})
+
+# ---------------- KM logs ----------------
 @fleet_bp.get("/fleet/km-logs")
-def km_list(): return jsonify(_load("km_logs"))
+def km_list():
+    items = fs.get_all_documents(COL_KM) or []
+    items.sort(key=lambda x: (x.get("date",""), x.get("created_at","")), reverse=True)
+    return jsonify(items)
 
 @fleet_bp.post("/fleet/km-logs")
 def km_create():
-    items = _load("km_logs")
-    b = request.get_json(force=True)
-    item = {
-        "id": _next_id(items),
+    b = request.get_json(force=True) or {}
+    date_iso = _parse_date(b.get("date"))
+    if not date_iso:
+        return jsonify({"error":"date é obrigatório"}), 400
+    data = {
         "vehicle_id": b.get("vehicle_id"),
-        "placa": (b.get("placa") or "").upper().strip(),
-        "data": b.get("data"),
-        "km": int(b.get("km") or 0),
-        "tipo": (b.get("tipo") or "leitura"),
-        "origem": (b.get("origem") or "").strip(),
-        "destino": (b.get("destino") or "").strip(),
-        "observacao": (b.get("observacao") or "").strip(),
-        "created_at": _now(),
+        "date": date_iso,
+        "km": _num(b.get("km")),
+        "notes": (b.get("notes") or "").strip(),
+        "created_at": _iso_now(),
+        "updated_at": _iso_now(),
     }
-    items.append(item); _save("km_logs", items)
-    return jsonify(item), 201
+    doc_id, _ = fs.add_document(COL_KM, data)
+    return jsonify(fs.get_document(COL_KM, doc_id)), 201
 
-# ---- Limpeza
-@fleet_bp.get("/fleet/cleanings")
-def clean_list(): return jsonify(_load("cleanings"))
+@fleet_bp.put("/fleet/km-logs/<id>")
+def km_update(id):
+    b = request.get_json(force=True) or {}
+    if "date" in b:
+        d = _parse_date(b["date"])
+        if not d: return jsonify({"error":"date inválida"}), 400
+        b["date"] = d
+    if "km" in b:
+        b["km"] = _num(b["km"])
+    b["updated_at"] = _iso_now()
+    fs.update_document(COL_KM, id, b)
+    saved = fs.get_document(COL_KM, id)
+    if not saved: return jsonify({"error":"não encontrado"}), 404
+    return jsonify(saved)
 
-@fleet_bp.post("/fleet/cleanings")
-def clean_create():
-    items = _load("cleanings")
-    b = request.get_json(force=True)
-    item = {
-        "id": _next_id(items),
-        "vehicle_id": b.get("vehicle_id"),
-        "placa": (b.get("placa") or "").upper().strip(),
-        "data": b.get("data"),
-        "tipo": (b.get("tipo") or "Lavagem Completa"),
-        "valor": float(b.get("valor") or 0),
-        "local": (b.get("local") or "").strip(),
-        "observacao": (b.get("observacao") or "").strip(),
-        "created_at": _now(),
-    }
-    items.append(item); _save("cleanings", items)
-    return jsonify(item), 201
-
-# ---- Fotos (URL – upload feito pelo front)
-@fleet_bp.get("/fleet/photos")
-def photos_list(): return jsonify(_load("photos"))
-
-@fleet_bp.post("/fleet/photos")
-def photos_create():
-    items = _load("photos")
-    b = request.get_json(force=True)
-    item = {
-        "id": _next_id(items),
-        "vehicle_id": b.get("vehicle_id"),
-        "placa": (b.get("placa") or "").upper().strip(),
-        "data": b.get("data"),
-        "tipo": (b.get("tipo") or "Interior"),
-        "url": (b.get("url") or "").strip(),
-        "observacao": (b.get("observacao") or "").strip(),
-        "created_at": _now(),
-    }
-    items.append(item); _save("photos", items)
-    return jsonify(item), 201
-
-# ---- Ocorrências
-@fleet_bp.get("/fleet/occurrences")
-def occ_list(): return jsonify(_load("occurrences"))
-
-@fleet_bp.post("/fleet/occurrences")
-def occ_create():
-    items = _load("occurrences")
-    b = request.get_json(force=True)
-    item = {
-        "id": _next_id(items),
-        "vehicle_id": b.get("vehicle_id"),
-        "placa": (b.get("placa") or "").upper().strip(),
-        "data": b.get("data"),
-        "tipo": (b.get("tipo") or "Multa"),
-        "descricao": (b.get("descricao") or "").strip(),
-        "valor_estimado": float(b.get("valor_estimado") or 0),
-        "responsavel": (b.get("responsavel") or "").strip(),
-        "created_at": _now(),
-    }
-    items.append(item); _save("occurrences", items)
-    return jsonify(item), 201
-
-# ---- Dashboard consolidado
-@fleet_bp.get("/fleet/dashboard")
-def dash():
-    fuels = _load("fuel_logs"); kms = _load("km_logs"); cl = _load("cleanings"); oc = _load("occurrences")
-    kpis = {
-        "gasto_combustivel": sum(f.get("valor_total", 0) for f in fuels),
-        "litros": sum(f.get("litros", 0) for f in fuels),
-        "abastecimentos": len(fuels),
-        "ocorrencias": len(oc),
-        "limpezas": len(cl),
-        "km_total_trajetos": sum(k.get("km", 0) for k in kms if k.get("tipo") == "trajeto"),
-    }
-    return jsonify({"kpis": kpis})
+@fleet_bp.delete("/fleet/km-logs/<id>")
+def km_delete(id):
+    fs.delete_document(COL_KM, id)
+    return jsonify({"ok": True})
