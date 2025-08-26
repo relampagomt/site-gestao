@@ -1,3 +1,4 @@
+// frontend/src/admin/Fleet.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.jsx";
@@ -61,7 +62,7 @@ const maskThousandsBR = (s) => {
 };
 const toInt = (s) => Number(String(s || "").replace(/\D/g, "")) || 0;
 
-function InputOdometerBR({ value, onChange, placeholder="0", ...props }) {
+function InputOdometerBR({ value, onChange, placeholder="Ex.: 56.000", ...props }) {
   return (
     <Input
       inputMode="numeric"
@@ -147,7 +148,6 @@ export default function FleetPage() {
       litros: Number(fuel.litros || 0),
       preco_litro: Number(fuel.preco_litro || 0),
       valor_total: Number(fuel.valor_total || 0),
-      // odômetro sanitizado -> inteiro correto (ex.: "56.000" => 56000)
       odometro: toInt(fuel.odometro),
     };
     await api.post("/fleet/fuel-logs", payload);
@@ -161,7 +161,6 @@ export default function FleetPage() {
     await reloadWithFilters();
   };
 
-  /* --------- Fallback do "veículo" pelo cadastro --------- */
   const modelByPlaca = useMemo(()=>{
     const map = {};
     (vehicles.data || []).forEach(v=>{
@@ -216,12 +215,14 @@ export default function FleetPage() {
             <Input placeholder="Preço/Litro" value={fuel.preco_litro}
                    onChange={(e)=>setFuel(p=>({...p, preco_litro:e.target.value}))} />
 
-            {/* Odômetro com máscara 56.000 */}
-            <InputOdometerBR
-              placeholder="0"
-              value={fuel.odometro}
-              onChange={(val)=>setFuel(p=>({...p, odometro: val}))}
-            />
+            {/* Odômetro com legenda e máscara */}
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Odômetro</span>
+              <InputOdometerBR
+                value={fuel.odometro}
+                onChange={(val)=>setFuel(p=>({...p, odometro: val}))}
+              />
+            </div>
 
             <Input placeholder="Posto" value={fuel.posto}
                    onChange={(e)=>setFuel(p=>({...p, posto:e.target.value}))} />
@@ -269,13 +270,20 @@ export default function FleetPage() {
           </select>
           <Input placeholder="Posto" value={filters.posto}
                  onChange={(e)=>setFilters(f=>({...f, posto:e.target.value}))} />
-          <div className="flex gap-2">
-            <Input type="number" placeholder="Preço mín." value={filters.precoMin}
+
+          {/* Preço mín/máx com legendas */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Preço mín.</span>
+            <Input type="number" placeholder="0" value={filters.precoMin}
                    onChange={(e)=>setFilters(f=>({...f, precoMin:e.target.value}))} />
-            <Input type="number" placeholder="Preço máx." value={filters.precoMax}
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Preço máx.</span>
+            <Input type="number" placeholder="0" value={filters.precoMax}
                    onChange={(e)=>setFilters(f=>({...f, precoMax:e.target.value}))} />
           </div>
 
+          {/* Datas com legendas De/Até */}
           <div className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">De</span>
             <InputDateBR value={filters.de} onChange={(val)=>setFilters(f=>({...f, de: val}))} />
