@@ -1,8 +1,9 @@
 # backend/src/routes/fleet.py
-# Firestore CRUD (Veículos + Abastecimentos) com:
-# - normalização de DATA (aceita "DD/MM/AAAA", "DDMMAAAA" e "AAAA-MM-DD")
-# - filtros por placa, veiculo (carro), motorista, combustivel, posto, preço (min/max) e datas (de/ate)
-# - sem inicialização de credencial aqui (usa app já inicializado)
+# Firestore CRUD (Veículos + Abastecimentos)
+# -> Corrige: registros “sumidos”
+#    - NÃO usa order_by no Firestore (evita índice/ordenação vazia); busca tudo e ordena em memória
+#    - Normaliza datas e aplica filtros em memória
+# -> Mantém fallback do "carro" (modelo pela placa)
 
 from flask import Blueprint, request, jsonify
 from datetime import datetime
@@ -14,7 +15,7 @@ fleet_bp = Blueprint("fleet", __name__)
 COL_VEHICLES  = "fleet_vehicles"
 COL_FUEL_LOGS = "fleet_fuel_logs"
 
-# ----------------- helpers comuns -----------------
+# ----------------- helpers -----------------
 def _now_iso():
     return datetime.utcnow().isoformat(timespec="seconds") + "Z"
 
@@ -27,7 +28,6 @@ def _get_db():
     try:
         firebase_admin.get_app()
     except ValueError:
-        # fallback leve (ADC), não quebra se já houver app
         firebase_admin.initialize_app()
     return firestore.client()
 
@@ -51,14 +51,7 @@ def _parse_int(v, default=0):
         return int(default)
 
 def _normalize_date(s: str) -> str:
-    """
-    Converte para 'AAAA-MM-DD'.
-    Aceita:
-      - 'AAAA-MM-DD'  -> retorna igual
-      - 'DD/MM/AAAA'  -> converte
-      - 'DDMMAAAA'    -> converte
-      - caso não reconheça, devolve os 10 primeiros chars
-    """
+    """Converte para 'AAAA-MM-DD' (aceita 'AAAA-MM-DD', 'DD/MM/AAAA', 'DDMMAAAA')."""
     if not s:
         return ""
     s = str(s).strip()
@@ -84,8 +77,10 @@ def _contains(val: str, term: str) -> bool:
 @fleet_bp.get("/fleet/vehicles")
 def vehicles_list():
     db = _get_db()
-    q = db.collection(COL_VEHICLES).order_by("created_at")
-    return jsonify([_doc(doc) for doc in q.stream()]), 200
+    items = [_doc(doc) for doc in db.collection(COL_VEHICLES).stream()]
+    # ordena por criação (se houver) só para ficar estável
+    items.sort(key=lambda x: x.get("created_at", ""))
+    return jsonify(items), 200
 
 @fleet_bp.post("/fleet/vehicles")
 def vehicles_create():
@@ -141,8 +136,7 @@ def fuel_list():
     """
     Filtros (querystring):
       placa, veiculo (carro), motorista, combustivel, posto,
-      precoMin, precoMax  (preço por litro)
-      de, ate             (datas 'AAAA-MM-DD' ou 'DD/MM/AAAA' ou 'DDMMAAAA')
+      precoMin, precoMax, de, ate
     """
     db = _get_db()
     args = request.args
@@ -157,34 +151,36 @@ def fuel_list():
     de          = _normalize_date(args.get("de") or args.get("dataDe") or "")
     ate         = _normalize_date(args.get("ate") or args.get("dataAte") or "")
 
-    # Busca base ordenada por data; aplicamos filtros em memória para evitar índices compostos
-    q = db.collection(COL_FUEL_LOGS).order_by("data")
-    items = [_doc(doc) for doc in q.stream()]
+    # Busca TUDO e filtra/ordena em memória -> evita problemas de índice/comparação
+    items = [_doc(doc) for doc in db.collection(COL_FUEL_LOGS).stream()]
 
-    def keep(it):
+    # normaliza data e aplica filtros
+    norm = []
+    for it in items:
+        it["data"] = _normalize_date(it.get("data"))
         if placa and (it.get("placa") or "").upper() != placa:
-            return False
+            continue
         if veiculo and not _contains(it.get("carro"), veiculo):
-            return False
+            continue
         if motorista and not _contains(it.get("motorista"), motorista):
-            return False
+            continue
         if combustivel and (it.get("combustivel") or "").lower() != combustivel.lower():
-            return False
+            continue
         if posto and not _contains(it.get("posto"), posto):
-            return False
+            continue
         if preco_min is not None and _parse_float(it.get("preco_litro")) < preco_min:
-            return False
+            continue
         if preco_max is not None and _parse_float(it.get("preco_litro")) > preco_max:
-            return False
-        d = _normalize_date(it.get("data"))
-        if de and d < de:
-            return False
-        if ate and d > ate:
-            return False
-        return True
+            continue
+        if de and it["data"] and it["data"] < de:
+            continue
+        if ate and it["data"] and it["data"] > ate:
+            continue
+        norm.append(it)
 
-    items = [it for it in items if keep(it)]
-    return jsonify(items), 200
+    # ordena por data asc (ou troque para reverse=True se preferir mais recente primeiro)
+    norm.sort(key=lambda x: x.get("data", ""))
+    return jsonify(norm), 200
 
 @fleet_bp.post("/fleet/fuel-logs")
 def fuel_create():
@@ -209,7 +205,7 @@ def fuel_create():
     if not data["valor_total"]:
         data["valor_total"] = round(data["litros"] * (data["preco_litro"] or 0), 2)
 
-    # snapshot do modelo pela placa (se houver)
+    # snapshot do modelo pela placa (se não enviado)
     if data["placa"] and not data["carro"]:
         vq = db.collection(COL_VEHICLES).where("placa", "==", data["placa"]).limit(1).stream()
         for vdoc in vq:
