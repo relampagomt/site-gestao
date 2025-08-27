@@ -276,7 +276,7 @@ export default function Orders() {
               checked={showAvgUnit}
               onChange={(e) => setShowAvgUnit(e.target.checked)}
             />
-            Valor médio (multi-itens)
+            Valor médio
           </label>
           <Button
             onClick={() => {
