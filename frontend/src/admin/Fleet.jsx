@@ -1,5 +1,5 @@
 // frontend/src/admin/Fleet.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
@@ -20,11 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog.jsx";
-
-/* ====== CONFIG: endpoint de upload ====== */
-// Troque para o endpoint do seu backend que receba multipart/form-data e
-// responda com um JSON contendo a URL pública do arquivo (ex.: { url: "https://..." }).
-const UPLOAD_ENDPOINT = "/upload";
 
 const BRL = (n) =>
   Number(n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -95,96 +90,6 @@ function InputOdometerBR({ value, onChange, placeholder = "Ex.: 56.000", ...prop
   );
 }
 
-/* ====== Campo reutilizável: Foto da NF (upload/preview) ====== */
-function NFPhotoField({ value, onChange }) {
-  const [uploading, setUploading] = useState(false);
-  const inputRef = useRef(null);
-
-  const onSelect = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      alert("Envie uma imagem (JPG/PNG).");
-      e.target.value = "";
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Arquivo maior que 5MB.");
-      e.target.value = "";
-      return;
-    }
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const { data } = await api.post(UPLOAD_ENDPOINT, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      const url =
-        data?.url || data?.path || data?.Location || (Array.isArray(data) && (data[0]?.url || data[0]?.path));
-      if (!url) throw new Error("Resposta sem URL");
-      onChange(url);
-    } catch (err) {
-      console.error(err);
-      alert("Falha ao enviar a foto da NF.");
-    } finally {
-      setUploading(false);
-      e.target.value = "";
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-xs text-muted-foreground">Foto da NF</span>
-      <div className="flex items-start gap-3">
-        <div className="h-24 w-24 border rounded-md overflow-hidden bg-muted flex items-center justify-center">
-          {value ? (
-            <img src={value} alt="NF" className="h-full w-full object-cover" />
-          ) : (
-            <span className="text-[11px] text-muted-foreground px-2 text-center">Prévia</span>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={onSelect}
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => inputRef.current?.click()}
-              disabled={uploading}
-            >
-              {uploading ? "Enviando..." : value ? "Trocar foto" : "Enviar foto"}
-            </Button>
-            {value && (
-              <>
-                <Button type="button" variant="outline" onClick={() => onChange("")}>
-                  Remover
-                </Button>
-                <a
-                  href={value}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="border rounded-md px-3 py-2 text-sm"
-                >
-                  Abrir
-                </a>
-              </>
-            )}
-          </div>
-          <p className="text-[11px] text-muted-foreground">JPG/PNG até 5MB.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ------------ Hook GET simples ------------ */
 const useList = (path) => {
   const [data, setData] = useState([]);
@@ -224,7 +129,6 @@ export default function FleetPage() {
     motorista: "",
     combustivel: "Gasolina",
     nota_fiscal: "",
-    nf_foto_url: "", // <== nova propriedade
     observacoes: "",
   });
 
@@ -247,7 +151,6 @@ export default function FleetPage() {
       motorista: "",
       combustivel: "Gasolina",
       nota_fiscal: "",
-      nf_foto_url: "",
       observacoes: "",
     });
 
@@ -313,8 +216,6 @@ export default function FleetPage() {
       preco_litro: Number(fuel.preco_litro || 0),
       valor_total: Number(fuel.valor_total || 0),
       odometro: toInt(fuel.odometro),
-      // nf_foto_url será enviado como string (URL). Se seu backend usar outro nome,
-      // troque aqui e no "saveEdit".
     };
     await api.post("/fleet/fuel-logs", payload);
     resetFuel();
@@ -350,7 +251,6 @@ export default function FleetPage() {
       valor_total: String(row.valor_total ?? ""),
       placa: row.placa || "",
       combustivel: row.combustivel || "Gasolina",
-      nf_foto_url: row.nf_foto_url || row.nota_fiscal_foto || row.nfFotoUrl || "", // tenta mapear nomes comuns
     });
     setEditOpen(true);
   };
@@ -377,7 +277,6 @@ export default function FleetPage() {
       nota_fiscal: editing.nota_fiscal,
       observacoes: editing.observacoes,
       combustivel: editing.combustivel || "Gasolina",
-      nf_foto_url: editing.nf_foto_url || "",
     };
     await api.put(`/fleet/fuel-logs/${editing.id}`, payload);
     setEditOpen(false);
@@ -583,22 +482,13 @@ export default function FleetPage() {
               />
             </div>
 
-            {/* Nota fiscal (número) */}
-            <div className="md:col-span-6 flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">Nota fiscal (número)</span>
+            <div className="md:col-span-12 flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Nota fiscal</span>
               <Input
                 placeholder="Nota fiscal"
                 value={fuel.nota_fiscal}
                 onChange={(e) => setFuel((p) => ({ ...p, nota_fiscal: e.target.value }))}
                 className="h-11 w-full"
-              />
-            </div>
-
-            {/* Foto da NF */}
-            <div className="md:col-span-6">
-              <NFPhotoField
-                value={fuel.nf_foto_url}
-                onChange={(url) => setFuel((p) => ({ ...p, nf_foto_url: url }))}
               />
             </div>
 
@@ -855,9 +745,8 @@ export default function FleetPage() {
                 />
               </div>
 
-              {/* Nota fiscal (número) */}
-              <div className="md:col-span-6 flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Nota fiscal (número)</span>
+              <div className="md:col-span-12 flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Nota fiscal</span>
                 <Input
                   className="h-11 w-full"
                   value={editing.nota_fiscal || ""}
@@ -867,11 +756,14 @@ export default function FleetPage() {
                 />
               </div>
 
-              {/* Foto da NF */}
-              <div className="md:col-span-6">
-                <NFPhotoField
-                  value={editing.nf_foto_url || ""}
-                  onChange={(url) => setEditing((p) => ({ ...p, nf_foto_url: url }))}
+              <div className="md:col-span-12 flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Observações</span>
+                <Input
+                  value={editing.observacoes || ""}
+                  onChange={(e) =>
+                    setEditing((p) => ({ ...p, observacoes: e.target.value }))
+                  }
+                  className="w-full"
                 />
               </div>
 
