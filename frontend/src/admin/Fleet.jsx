@@ -363,7 +363,7 @@ export default function FleetPage() {
         </CardContent>
       </Card>
 
-      {/* MODAL: NOVO ABASTECIMENTO (FULL WIDTH VIEWPORT) */}
+      {/* MODAL: NOVO ABASTECIMENTO (retângulo centralizado) */}
       <Dialog
         open={newOpen}
         onOpenChange={(o) => {
@@ -371,7 +371,7 @@ export default function FleetPage() {
           if (!o) resetFuel();
         }}
       >
-        <DialogContent className="w-[98vw] sm:max-w-none sm:p-8">
+        <DialogContent className="w-[92vw] sm:max-w-[1100px] sm:p-8 rounded-2xl">
           <DialogHeader>
             <DialogTitle>Novo Abastecimento</DialogTitle>
           </DialogHeader>
@@ -428,7 +428,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[176px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[176px]">
               <span className="text-xs text-muted-foreground">Preço/Litro</span>
               <Input
                 placeholder="Preço/Litro"
@@ -453,7 +453,7 @@ export default function FleetPage() {
               </select>
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
+            <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
               <span className="text-xs text-muted-foreground">Odômetro</span>
               <InputOdometerBR
                 value={fuel.odometro}
@@ -462,7 +462,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
+            <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
               <span className="text-xs text-muted-foreground">Posto</span>
               <Input
                 placeholder="Posto"
@@ -472,7 +472,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
+            <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
               <span className="text-xs text-muted-foreground">Motorista</span>
               <Input
                 placeholder="Motorista"
@@ -482,7 +482,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
+            <div className="md:col-span-12 flex flex-col gap-1">
               <span className="text-xs text-muted-foreground">Nota fiscal</span>
               <Input
                 placeholder="Nota fiscal"
@@ -523,16 +523,15 @@ export default function FleetPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: FILTROS AVANÇADOS (FULL WIDTH VIEWPORT) */}
+      {/* MODAL: FILTROS (retângulo centralizado) */}
       <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
-        <DialogContent className="w-[98vw] sm:max-w-none sm:p-8">
+        <DialogContent className="w-[92vw] sm:max-w-[1100px] sm:p-8 rounded-2xl">
           <DialogHeader>
             <DialogTitle>Filtros</DialogTitle>
           </DialogHeader>
 
           <div className="grid md:grid-cols-12 gap-4">
-            {/* 1ª linha */}
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[160px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
               <span className="text-xs text-muted-foreground">Placa</span>
               <Input
                 placeholder="Placa"
@@ -562,7 +561,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[190px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
               <span className="text-xs text-muted-foreground">Combustível</span>
               <select
                 className="border rounded px-3 h-11 w-full"
@@ -578,7 +577,7 @@ export default function FleetPage() {
               </select>
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[190px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
               <span className="text-xs text-muted-foreground">Posto</span>
               <Input
                 placeholder="Posto"
@@ -588,8 +587,7 @@ export default function FleetPage() {
               />
             </div>
 
-            {/* 2ª linha */}
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[160px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[160px]">
               <span className="text-xs text-muted-foreground">Preço</span>
               <Input
                 type="number"
@@ -601,7 +599,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[160px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[160px]">
               <span className="text-xs text-muted-foreground">De</span>
               <InputDateBR
                 value={filters.de}
@@ -610,7 +608,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[160px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[160px]">
               <span className="text-xs text-muted-foreground">Até</span>
               <InputDateBR
                 value={filters.ate}
@@ -646,9 +644,9 @@ export default function FleetPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL DE EDIÇÃO (FULL WIDTH VIEWPORT) */}
+      {/* MODAL DE EDIÇÃO (retângulo centralizado) */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="w-[98vw] sm:max-w-none sm:p-8">
+        <DialogContent className="w-[92vw] sm:max-w-[1100px] sm:p-8 rounded-2xl">
           <DialogHeader>
             <DialogTitle>Editar Abastecimento</DialogTitle>
           </DialogHeader>
@@ -718,7 +716,7 @@ export default function FleetPage() {
                 </select>
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
+              <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
                 <span className="text-xs text-muted-foreground">Posto</span>
                 <Input
                   className="h-11 w-full"
@@ -727,7 +725,7 @@ export default function FleetPage() {
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
+              <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
                 <span className="text-xs text-muted-foreground">Motorista</span>
                 <Input
                   className="h-11 w-full"
@@ -738,7 +736,7 @@ export default function FleetPage() {
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
+              <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
                 <span className="text-xs text-muted-foreground">Odômetro</span>
                 <InputOdometerBR
                   className="h-11 w-full"
@@ -747,7 +745,7 @@ export default function FleetPage() {
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
+              <div className="md:col-span-12 flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground">Nota fiscal</span>
                 <Input
                   className="h-11 w-full"
