@@ -1,5 +1,5 @@
 // frontend/src/admin/Orders.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
@@ -13,652 +13,496 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
 
-/* ===================== Utils / Helpers ===================== */
-const fmtCurrency = (n) =>
-  (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-const parseCurrency = (s) => {
-  if (typeof s === "number") return s;
+/* ---------- Helpers ---------- */
+const parseFlex = (v) => {
+  if (v === null || v === undefined || v === "") return 0;
+  if (typeof v === "number") return v;
+  let s = String(v).trim();
   if (!s) return 0;
-  const v = s.toString().replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", ".");
-  const n = parseFloat(v);
-  return isNaN(n) ? 0 : n;
+  // Se contém vírgula e ponto, assume BR: . milhar, , decimal
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", "."); // somente vírgula = decimal
+  // senão, apenas ponto já é decimal
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
 };
 
-const fmtDateBR = (val) => {
-  if (!val) return "";
-  try {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
-      const [y, m, d] = val.split("-").map(Number);
-      const dt = new Date(y, m - 1, d);
-      return isNaN(dt) ? val : dt.toLocaleDateString("pt-BR");
-    }
-    const d = new Date(val);
-    return isNaN(d) ? String(val) : d.toLocaleDateString("pt-BR");
-  } catch {
-    return String(val);
+const BRL = (v) => {
+  const n = parseFlex(v);
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+};
+
+/* Datas: máscara BR + conversores BR <-> ISO */
+const maskDateBR = (s) => {
+  const d = String(s || "").replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+};
+const toISO = (s) => {
+  const str = String(s || "").trim();
+  if (!str) return "";
+  if (str.length >= 10 && str[2] === "/" && str[5] === "/") {
+    const [dd, mm, yy] = str.slice(0, 10).split("/");
+    return `${yy}-${mm}-${dd}`;
   }
-};
-
-const toYYYYMMDD = (value) => {
-  if (!value) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  try {
-    const d = new Date(value);
-    if (isNaN(d)) return "";
-    return d.toISOString().slice(0, 10);
-  } catch {
-    return "";
+  if (/^\d{8}$/.test(str)) {
+    const dd = str.slice(0, 2), mm = str.slice(2, 4), yy = str.slice(4, 8);
+    return `${yy}-${mm}-${dd}`;
   }
+  return str.slice(0, 10);
+};
+const fmtBRDate = (iso) => {
+  if (!iso) return "";
+  const s = String(iso);
+  if (s.length >= 10 && s[4] === "-" && s[7] === "-") {
+    const [yy, mm, dd] = s.slice(0, 10).split("-");
+    return `${dd}/${mm}/${yy}`;
+  }
+  if (s.length === 8 && /^\d{8}$/.test(s))
+    return `${s.slice(0, 2)}/${s.slice(2, 4)}/${s.slice(4, 8)}`;
+  if (s.length >= 10 && s[2] === "/" && s[5] === "/") return s.slice(0, 10);
+  return s;
 };
 
-const sum = (arr) => arr.reduce((a, b) => a + (Number(b) || 0), 0);
-const uid = () => Math.random().toString(36).slice(2, 10);
+function InputDateBR({ value, onChange, placeholder = "dd/mm/aaaa", ...props }) {
+  return (
+    <Input
+      inputMode="numeric"
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onChange(maskDateBR(e.target.value))}
+      {...props}
+    />
+  );
+}
 
-/* ===================== Component ===================== */
+/* Valor unit. para exibir na lista:
+   - se tiver apenas 1 item, mostra
+   - se todos os itens tiverem o MESMO valor unit., mostra
+   - caso contrário, retorna null (mostra "—")
+*/
+const orderUnitValue = (o) => {
+  const itens = Array.isArray(o.itens) ? o.itens : [];
+  if (!itens.length) return null;
+
+  const vals = itens.map((i) => parseFlex(i.valor_unit)).filter(Number.isFinite);
+  if (!vals.length) return null;
+
+  const uniq = new Set(vals.map((v) => v.toFixed(2)));
+  return uniq.size === 1 ? vals[0] : null;
+};
+
+const emptyOrder = () => ({
+  cliente: "",
+  titulo: "",
+  descricao: "",
+  status: "Aberta",
+  data: "",            // BR no formulário
+  itens: [],
+  valor_total: "",
+});
+
 export default function Orders() {
   const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
 
-  // Preferência (valor médio em multi-itens)
-  const STORAGE_KEY = "rel_showAvgUnit";
-  const [showAvgUnit, setShowAvgUnit] = useState(true);
-  const savePrefTimer = useRef(null);
-
-  // Modal CRUD
-  const [isOpen, setIsOpen] = useState(false);
+  const [form, setForm] = useState(emptyOrder());
   const [editingId, setEditingId] = useState(null);
+  const [open, setOpen] = useState(false);
 
-  // Modal Itens
-  const [itemsModalOpen, setItemsModalOpen] = useState(false);
-  const [itemsModalOrder, setItemsModalOrder] = useState(null);
-
-  // Form
-  const emptyForm = {
-    data: "",
-    cliente: "",
-    empresa: "",
+  const [newItem, setNewItem] = useState({
     descricao: "",
-    status: "Aberta",
-    valorUnit: "",
     quantidade: "",
-  };
-  const [form, setForm] = useState(emptyForm);
+    valor_unit: "",
+  });
 
-  /* ===== Preferências (backend + fallback localStorage) ===== */
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const { data } = await api.get("/users/me/prefs"); // ajuste se necessário
-        if (mounted && data && typeof data.showAvgUnit === "boolean") {
-          setShowAvgUnit(data.showAvgUnit);
-          try { localStorage.setItem(STORAGE_KEY, data.showAvgUnit ? "1" : "0"); } catch {}
-          return;
-        }
-        try {
-          const saved = localStorage.getItem(STORAGE_KEY);
-          if (mounted && saved !== null) setShowAvgUnit(saved === "1");
-        } catch {}
-      } catch {
-        try {
-          const saved = localStorage.getItem(STORAGE_KEY);
-          if (mounted && saved !== null) setShowAvgUnit(saved === "1");
-        } catch {}
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
-  useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, showAvgUnit ? "1" : "0"); } catch {}
-    if (savePrefTimer.current) clearTimeout(savePrefTimer.current);
-    savePrefTimer.current = setTimeout(async () => {
-      try { await api.put("/users/me/prefs", { showAvgUnit }); } catch {}
-    }, 400);
-    return () => { if (savePrefTimer.current) clearTimeout(savePrefTimer.current); };
-  }, [showAvgUnit]);
-
-  /* ===================== Fetch Orders (robusto) ===================== */
-  async function fetchOrders() {
+  /* ---------- Load ---------- */
+  const load = async () => {
     setLoading(true);
+    setErr("");
     try {
-      const resp = await api.get("/orders");
-      const arr = Array.isArray(resp?.data) ? resp.data : [];
-
-      const normalized = arr.map((raw, index) => {
-        const id = raw.id ?? raw._id ?? `ord_${index}_${uid()}`;
-
-        const dateRaw = raw.date ?? raw.data ?? "";
-        const dateForInput = (() => {
-          if (!dateRaw) return "";
-          if (/^\d{4}-\d{2}-\d{2}$/.test(String(dateRaw))) return String(dateRaw);
-          try {
-            const d = new Date(dateRaw);
-            return isNaN(d) ? "" : d.toISOString().slice(0, 10);
-          } catch { return ""; }
-        })();
-
-        const clientName = raw.clientName ?? raw.cliente ?? "";
-        const companyName = raw.companyName ?? raw.empresa ?? "";
-        const description = raw.description ?? raw.descricao ?? "";
-        const status = raw.status ?? "Aberta";
-
-        const items = Array.isArray(raw.items) ? raw.items : [];
-        const safeItems = items.map((it) => ({
-          description: it.description ?? it.descricao ?? "",
-          unitPrice: Number(it.unitPrice ?? it.valorUnit ?? 0),
-          quantity: Number(it.quantity ?? it.quantidade ?? 0),
-        }));
-
-        const itemsQty = sum(safeItems.map((it) => it.quantity));
-        const itemsTotal = sum(safeItems.map((it) => it.unitPrice * it.quantity));
-
-        const unitPriceSingle =
-          safeItems.length === 1 ? safeItems[0].unitPrice : Number(raw.unitPrice ?? raw.valorUnit ?? 0);
-
-        const quantity = safeItems.length > 0 ? itemsQty : Number(raw.quantity ?? raw.quantidade ?? 0);
-        const total =
-          raw.total != null ? Number(raw.total)
-            : safeItems.length > 0 ? itemsTotal
-            : Number(unitPriceSingle) * Number(quantity);
-
-        return {
-          id,
-          dateRaw,
-          dateForInput,
-          clientName,
-          companyName,
-          description,
-          status,
-          unitPrice: unitPriceSingle,
-          quantity,
-          total,
-          items: safeItems,
-        };
-      });
-
-      setOrders(normalized);
+      const { data } = await api.get("/commercial/orders");
+      setOrders(Array.isArray(data) ? data : []);
     } catch (e) {
-      console.error("Erro ao buscar orders:", e);
+      setErr("Falha ao carregar ordens.");
     } finally {
       setLoading(false);
     }
-  }
+  };
+  useEffect(() => { load(); }, []);
 
-  useEffect(() => { fetchOrders(); }, []);
+  /* ---------- Handlers ---------- */
+  const onFormChange = (e) => {
+    const { name, value } = e.target;
+    setForm((p) => ({ ...p, [name]: value }));
+  };
+  const onNewItemChange = (e) => {
+    const { name, value } = e.target;
+    setNewItem((p) => ({ ...p, [name]: value }));
+  };
 
-  /* ===================== Handlers ===================== */
-  function openNew() {
-    setEditingId(null);
-    setForm({ ...emptyForm, data: new Date().toISOString().slice(0, 10) });
-    setIsOpen(true);
-  }
-
-  function openEdit(order) {
-    setEditingId(order.id);
-    setForm({
-      data: order.dateForInput || new Date().toISOString().slice(0, 10),
-      cliente: order.clientName || "",
-      empresa: order.companyName || "",
-      descricao: order.description || "",
-      status: order.status || "Aberta",
-      valorUnit: (order.unitPrice ?? 0).toLocaleString("pt-BR"),
-      quantidade: String(order.quantity ?? 0),
-    });
-    setIsOpen(true);
-  }
-
-  async function handleDelete(id) {
-    if (!confirm("Excluir esta ordem?")) return;
-    try {
-      await api.delete(`/orders/${id}`);
-      setOrders((prev) => prev.filter((o) => o.id !== id));
-    } catch (e) {
-      console.error("Erro ao excluir:", e);
-      alert("Não foi possível excluir. Verifique a conexão/servidor.");
-    }
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    const dateStr = toYYYYMMDD(form.data);
-    const payload = {
-      date: dateStr,
-      data: dateStr,
-      clientName: form.cliente,
-      companyName: form.empresa,
-      description: form.descricao,
-      status: form.status,
-      unitPrice: parseCurrency(form.valorUnit),
-      quantity: Number(String(form.quantidade).replace(/[^\d]/g, "")) || 0,
+  const addItem = () => {
+    if (!newItem.descricao?.trim()) return;
+    const item = {
+      descricao: newItem.descricao.trim(),
+      quantidade: parseFlex(newItem.quantidade || 1),
+      valor_unit: parseFlex(newItem.valor_unit || 0),
     };
-    payload.total = Number(payload.unitPrice) * Number(payload.quantity);
+    setForm((p) => ({ ...p, itens: [...(p.itens || []), item] }));
+    setNewItem({ descricao: "", quantidade: "", valor_unit: "" });
+  };
+  const removeItem = (idx) => {
+    setForm((p) => ({ ...p, itens: p.itens.filter((_, i) => i !== idx) }));
+  };
+  const updateItemField = (idx, field, value) => {
+    setForm((p) => ({
+      ...p,
+      itens: p.itens.map((it, i) => (i === idx ? { ...it, [field]: value } : it)),
+    }));
+  };
 
-    try {
-      if (editingId) {
-        await api.put(`/orders/${editingId}`, payload);
-        setOrders((prev) =>
-          prev.map((o) =>
-            o.id === editingId
-              ? {
-                  ...o,
-                  dateRaw: payload.date,
-                  dateForInput: payload.date,
-                  clientName: payload.clientName,
-                  companyName: payload.companyName,
-                  description: payload.description,
-                  status: payload.status,
-                  unitPrice: payload.unitPrice,
-                  quantity: payload.quantity,
-                  total: payload.total,
-                  items: [],
-                }
-              : o
-          )
-        );
-      } else {
-        const res = await api.post("/orders", payload);
-        const newId = res?.data?.id ?? res?.data?._id ?? `ord_${uid()}`;
-        setOrders((prev) => [
-          ...prev,
-          {
-            id: newId,
-            dateRaw: payload.date,
-            dateForInput: payload.date,
-            clientName: payload.clientName,
-            companyName: payload.companyName,
-            description: payload.description,
-            status: payload.status,
-            unitPrice: payload.unitPrice,
-            quantity: payload.quantity,
-            total: payload.total,
-            items: [],
-          },
-        ]);
-      }
-      setIsOpen(false);
-      setEditingId(null);
-      setForm(emptyForm);
-      fetchOrders();
-    } catch (e) {
-      console.error("Erro ao salvar:", e);
-      alert("Não foi possível salvar. Verifique os campos e o servidor.");
-    }
-  }
+  const total = useMemo(() => {
+    return (form.itens || []).reduce(
+      (acc, i) => acc + parseFlex(i.quantidade) * parseFlex(i.valor_unit),
+      0
+    );
+  }, [JSON.stringify(form.itens)]);
+  useEffect(() => {
+    setForm((p) => ({ ...p, valor_total: total.toFixed(2) }));
+  }, [total]);
 
-  /* ===================== Totais ===================== */
-  const totalGeral = useMemo(
-    () => orders.reduce((acc, o) => acc + (Number(o.total) || 0), 0),
-    [orders]
-  );
-  const qtdGeral = useMemo(
-    () => orders.reduce((acc, o) => acc + (Number(o.quantity) || 0), 0),
-    [orders]
-  );
+  const resetForm = () => {
+    setForm(emptyOrder());
+    setEditingId(null);
+    setNewItem({ descricao: "", quantidade: "", valor_unit: "" });
+  };
 
-  /* ===================== Render ===================== */
+  /* ---------- Submit ---------- */
+  const submit = async (e) => {
+    e.preventDefault();
+
+    // Recalcula o total a partir dos itens (fonte da verdade)
+    const payloadTotal = (form.itens || []).reduce(
+      (acc, i) => acc + parseFlex(i.quantidade) * parseFlex(i.valor_unit),
+      0
+    );
+
+    const payload = {
+      ...form,
+      data: toISO(form.data), // BR -> ISO
+      itens: (form.itens || []).map((i) => ({
+        descricao: i.descricao,
+        quantidade: parseFlex(i.quantidade),
+        valor_unit: parseFlex(i.valor_unit),
+      })),
+      valor_total: Number(payloadTotal.toFixed(2)),
+    };
+
+    const url = editingId
+      ? `/commercial/orders/${editingId}`
+      : `/commercial/orders`;
+    const method = editingId ? "put" : "post";
+
+    await api[method](url, payload);
+    resetForm();
+    setOpen(false);
+    load();
+  };
+
+  const edit = (o) => {
+    setEditingId(o.id);
+    setForm({
+      cliente: o.cliente || "",
+      titulo: o.titulo || "",
+      descricao: o.descricao || "",
+      status: o.status || "Aberta",
+      data: fmtBRDate(o.data || ""), // ISO -> BR
+      itens: (o.itens || []).map((i) => ({
+        descricao: i.descricao || "",
+        quantidade: parseFlex(i.quantidade),
+        valor_unit: parseFlex(i.valor_unit),
+      })),
+      valor_total: String(o.valor_total ?? ""),
+    });
+    setOpen(true);
+  };
+
+  const del = async (o) => {
+    if (!confirm("Excluir esta ordem?")) return;
+    await api.delete(`/commercial/orders/${o.id}`);
+    load();
+  };
+
+  /* ---------- UI ---------- */
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Ordens</h1>
-        <div className="flex items-center gap-3">
-          <label className="text-sm text-gray-600 flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={showAvgUnit}
-              onChange={(e) => setShowAvgUnit(e.target.checked)}
-            />
-            Valor médio (multi-itens)
-          </label>
-          <Button onClick={openNew} className="bg-black text-white hover:opacity-90">
-            Nova Ordem
-          </Button>
-        </div>
+        <Button
+          onClick={() => {
+            resetForm();
+            setOpen(true);
+          }}
+        >
+          Nova Ordem
+        </Button>
       </div>
 
+      {err && (
+        <div className="bg-red-50 text-red-700 border border-red-200 px-3 py-2 rounded mb-4">
+          {err}
+        </div>
+      )}
+
+      {/* Tabela de ordens */}
       <Card>
         <CardHeader>
           <CardTitle>Ordens cadastradas</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
+        <CardContent className="overflow-auto">
+          {loading ? (
+            <div className="text-sm text-gray-500">Carregando...</div>
+          ) : (
+            <Table className="min-w-full text-sm">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Empresa</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Qtd</TableHead>
-                  <TableHead>Valor Unit.</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead className="text-center">Data</TableHead>
+                  <TableHead className="text-center">Cliente</TableHead>
+                  <TableHead className="text-center">Título</TableHead>
+                  <TableHead className="text-center">Descrição</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">Valor Unit.</TableHead>
+                  <TableHead className="text-center">Total</TableHead>
+                  <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading && (
-                  <TableRow>
-                    <TableCell colSpan={9}>Carregando...</TableCell>
-                  </TableRow>
-                )}
-
-                {!loading && orders.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-gray-500">
+                {orders.map((o) => (
+                  <tr key={o.id} className="border-t">
+                    <TableCell className="text-center align-middle">
+                      {fmtBRDate(o.data)}
+                    </TableCell>
+                    <TableCell className="text-center align-middle">{o.cliente}</TableCell>
+                    <TableCell className="text-center align-middle">{o.titulo}</TableCell>
+                    <TableCell className="text-center align-middle">
+                      {o.descricao || "—"}
+                    </TableCell>
+                    <TableCell className="text-center align-middle">{o.status}</TableCell>
+                    <TableCell className="text-center align-middle">
+                      {orderUnitValue(o) !== null ? BRL(orderUnitValue(o)) : "—"}
+                    </TableCell>
+                    <TableCell className="text-center align-middle">
+                      {BRL(o.valor_total)}
+                    </TableCell>
+                    <TableCell className="text-center align-middle">
+                      <div className="flex justify-center gap-2">
+                        <Button variant="secondary" onClick={() => edit(o)}>
+                          Editar
+                        </Button>
+                        <Button variant="destructive" onClick={() => del(o)}>
+                          Excluir
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </tr>
+                ))}
+                {orders.length === 0 && (
+                  <tr>
+                    <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
                       Nenhuma ordem cadastrada.
                     </TableCell>
-                  </TableRow>
-                )}
-
-                {!loading &&
-                  orders.map((o, idx) => {
-                    const hasItems = Array.isArray(o.items) && o.items.length > 0;
-                    const avgUnit =
-                      Number(o.quantity || 0) > 0
-                        ? Number(o.total || 0) / Number(o.quantity || 1)
-                        : 0;
-
-                    const unitCol =
-                      hasItems && o.items.length > 1
-                        ? showAvgUnit
-                          ? fmtCurrency(avgUnit)
-                          : "—"
-                        : fmtCurrency(o.unitPrice);
-
-                    const rowKey = o.id || `row_${idx}`;
-
-                    return (
-                      <TableRow key={rowKey}>
-                        <TableCell>{fmtDateBR(o.dateRaw || o.dateForInput)}</TableCell>
-                        <TableCell>{o.clientName}</TableCell>
-                        <TableCell>{o.companyName}</TableCell>
-                        <TableCell className="max-w-[280px] truncate">{o.description}</TableCell>
-                        <TableCell>{o.status}</TableCell>
-                        <TableCell>{Number(o.quantity || 0).toLocaleString("pt-BR")}</TableCell>
-                        <TableCell>{unitCol}</TableCell>
-                        <TableCell>{fmtCurrency(o.total)}</TableCell>
-                        <TableCell className="text-right space-x-2">
-                          {hasItems && (
-                            <Button
-                              variant="secondary"
-                              onClick={() => {
-                                setItemsModalOrder(o);
-                                setItemsModalOpen(true);
-                              }}
-                            >
-                              Itens
-                            </Button>
-                          )}
-                          <Button variant="secondary" onClick={() => openEdit(o)}>
-                            Editar
-                          </Button>
-                          <Button variant="destructive" onClick={() => handleDelete(o.id)}>
-                            Excluir
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-
-                {!loading && orders.length > 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} />
-                    <TableCell className="font-semibold">
-                      {qtdGeral.toLocaleString("pt-BR")}
-                    </TableCell>
-                    <TableCell className="font-semibold">
-                      {showAvgUnit && qtdGeral > 0 ? fmtCurrency(totalGeral / qtdGeral) : "—"}
-                    </TableCell>
-                    <TableCell className="font-semibold">
-                      {fmtCurrency(totalGeral)}
-                    </TableCell>
-                    <TableCell />
-                  </TableRow>
+                  </tr>
                 )}
               </TableBody>
             </Table>
-          </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* ===== Modal Criar/Editar ===== */}
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => {
-              setIsOpen(false);
-              setEditingId(null);
-              setForm(emptyForm);
-            }}
-          />
-          <div className="relative w-full max-w-2xl rounded-lg bg-white shadow-lg">
-            <div className="flex items-center justify-between border-b p-4">
-              <h2 className="text-lg font-semibold">
-                {editingId ? "Editar Ordem" : "Nova Ordem"}
-              </h2>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setIsOpen(false);
-                  setEditingId(null);
-                  setForm(emptyForm);
-                }}
-              >
-                ✕
-              </Button>
-            </div>
+      {/* MODAL: Nova/Editar Ordem */}
+      <Dialog
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) resetForm();
+        }}
+      >
+        <DialogContent className="w-[92vw] sm:max-w-[1100px] sm:p-8 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Editar Ordem" : "Nova Ordem"}</DialogTitle>
+          </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="p-4 space-y-3">
-              <div className="grid md:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm font-medium">Data</label>
-                  <Input
-                    type="date"
-                    value={form.data}
-                    onChange={(e) => setForm((f) => ({ ...f, data: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Status</label>
-                  <select
-                    className="w-full border rounded-md h-10 px-3"
-                    value={form.status}
-                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                  >
-                    <option>Aberta</option>
-                    <option>Em Planejamento</option>
-                    <option>Em Execução</option>
-                    <option>Em Validação</option>
-                    <option>Concluída</option>
-                    <option>Faturada</option>
-                    <option>Pausada</option>
-                    <option>Cancelada</option>
-                  </select>
-                </div>
-              </div>
+          <form onSubmit={submit} className="grid md:grid-cols-4 gap-3">
+            <Input
+              name="cliente"
+              value={form.cliente}
+              onChange={onFormChange}
+              placeholder="Cliente"
+              required
+              className="md:col-span-2"
+            />
+            <Input
+              name="titulo"
+              value={form.titulo}
+              onChange={onFormChange}
+              placeholder="Título"
+              className="md:col-span-2"
+            />
 
-              <div className="grid md:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm font-medium">Cliente</label>
-                  <Input
-                    placeholder="Nome do cliente"
-                    value={form.cliente}
-                    onChange={(e) => setForm((f) => ({ ...f, cliente: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Empresa</label>
-                  <Input
-                    placeholder="Nome da empresa"
-                    value={form.empresa}
-                    onChange={(e) => setForm((f) => ({ ...f, empresa: e.target.value }))}
-                  />
-                </div>
-              </div>
+            {/* Data com máscara BR */}
+            <InputDateBR
+              name="data"
+              value={form.data}
+              onChange={(val) => setForm((p) => ({ ...p, data: val }))}
+              placeholder="dd/mm/aaaa"
+            />
+            <select
+              name="status"
+              value={form.status}
+              onChange={onFormChange}
+              className="border rounded px-3 py-2"
+            >
+              <option>Aberta</option>
+              <option>Em Andamento</option>
+              <option>Concluída</option>
+              <option>Cancelada</option>
+            </select>
+            <Textarea
+              name="descricao"
+              value={form.descricao}
+              onChange={onFormChange}
+              placeholder="Descrição"
+              className="md:col-span-4"
+            />
 
-              <div>
-                <label className="text-sm font-medium">Descrição</label>
-                <Textarea
-                  rows={3}
-                  placeholder="Descreva a ordem (ex.: Panfletagem - Arrastão)"
-                  value={form.descricao}
-                  onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))}
+            {/* Itens */}
+            <div className="md:col-span-4 border rounded p-3">
+              <div className="font-medium mb-3">Itens</div>
+
+              {/* Linha de adição */}
+              <div className="grid md:grid-cols-5 gap-2 mb-3">
+                <Input
+                  name="descricao"
+                  value={newItem.descricao}
+                  onChange={onNewItemChange}
+                  placeholder="Descrição do item"
+                  className="md:col-span-2"
                 />
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-sm font-medium">Valor Unit.</label>
-                  <Input
-                    placeholder="0,00"
-                    value={form.valorUnit}
-                    onChange={(e) => setForm((f) => ({ ...f, valorUnit: e.target.value }))}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Aceita “0,30”, “1,50”, etc. (moeda BR)
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Qtd</label>
-                  <Input
-                    placeholder="0"
-                    value={form.quantidade}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        quantidade: e.target.value.replace(/[^\d]/g, ""),
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Total</label>
-                  <div className="h-10 px-3 flex items-center rounded-md bg-green-50 text-green-700 font-semibold">
-                    {fmtCurrency(
-                      parseCurrency(form.valorUnit) * (Number(form.quantidade || 0) || 0)
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setIsOpen(false);
-                    setEditingId(null);
-                    setForm(emptyForm);
-                  }}
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" className="bg-black text-white hover:opacity-90">
-                  Salvar
+                <Input
+                  name="quantidade"
+                  value={newItem.quantidade}
+                  onChange={onNewItemChange}
+                  placeholder="Qtd"
+                />
+                <Input
+                  name="valor_unit"
+                  value={newItem.valor_unit}
+                  onChange={onNewItemChange}
+                  placeholder="Valor unit."
+                />
+                <Button type="button" onClick={addItem}>
+                  + Adicionar
                 </Button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {/* ===== Modal de Itens ===== */}
-      {itemsModalOpen && itemsModalOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => {
-              setItemsModalOpen(false);
-              setItemsModalOrder(null);
-            }}
-          />
-          <div className="relative w-full max-w-3xl rounded-lg bg-white shadow-lg">
-            <div className="flex items-center justify-between border-b p-4">
-              <h2 className="text-lg font-semibold">
-                Itens da Ordem — {itemsModalOrder.clientName}
-              </h2>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setItemsModalOpen(false);
-                  setItemsModalOrder(null);
-                }}
-              >
-                ✕
-              </Button>
-            </div>
-            <div className="p-4">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead className="text-right">Valor Unit.</TableHead>
-                      <TableHead className="text-right">Qtd</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {itemsModalOrder.items.map((it, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="max-w-[420px] truncate">
-                          {it.description || "-"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {fmtCurrency(it.unitPrice || 0)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {(Number(it.quantity || 0)).toLocaleString("pt-BR")}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {fmtCurrency((Number(it.unitPrice || 0)) * (Number(it.quantity || 0)))}
-                        </TableCell>
+              {/* Lista de itens */}
+              {(form.itens || []).length > 0 && (
+                <div className="overflow-auto">
+                  <Table className="min-w-full text-sm">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-center">Descrição</TableHead>
+                        <TableHead className="text-center">Qtd</TableHead>
+                        <TableHead className="text-center">Valor Unit.</TableHead>
+                        <TableHead className="text-center">Total</TableHead>
+                        <TableHead className="text-center">Ações</TableHead>
                       </TableRow>
-                    ))}
-                    <TableRow>
-                      <TableCell className="font-semibold">Totais</TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {(() => {
-                          const q = itemsModalOrder.items.reduce((a, it) => a + (Number(it.quantity || 0)), 0);
-                          const t = itemsModalOrder.items.reduce((a, it) => a + (Number(it.unitPrice || 0) * Number(it.quantity || 0)), 0);
-                          return q > 0 ? fmtCurrency(t / q) : "—";
-                        })()}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {itemsModalOrder.items
-                          .reduce((a, it) => a + (Number(it.quantity || 0)), 0)
-                          .toLocaleString("pt-BR")}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {fmtCurrency(
-                          itemsModalOrder.items.reduce(
-                            (a, it) => a + (Number(it.unitPrice || 0) * Number(it.quantity || 0)),
-                            0
-                          )
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {form.itens.map((i, idx) => {
+                        const rowTotal =
+                          parseFlex(i.quantidade) * parseFlex(i.valor_unit);
+                        return (
+                          <tr key={idx} className="border-t">
+                            <TableCell className="w-[40%] text-center align-middle">
+                              <Input
+                                value={i.descricao}
+                                onChange={(e) =>
+                                  updateItemField(idx, "descricao", e.target.value)
+                                }
+                              />
+                            </TableCell>
+                            <TableCell className="w-[10%] text-center align-middle">
+                              <Input
+                                value={i.quantidade}
+                                onChange={(e) =>
+                                  updateItemField(idx, "quantidade", parseFlex(e.target.value))
+                                }
+                              />
+                            </TableCell>
+                            <TableCell className="w-[20%] text-center align-middle">
+                              <Input
+                                value={i.valor_unit}
+                                onChange={(e) =>
+                                  updateItemField(idx, "valor_unit", parseFlex(e.target.value))
+                                }
+                              />
+                            </TableCell>
+                            <TableCell className="w-[20%] text-center align-middle">
+                              {BRL(rowTotal)}
+                            </TableCell>
+                            <TableCell className="text-center align-middle w-[10%]">
+                              <div className="flex justify-center">
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  onClick={() => removeItem(idx)}
+                                >
+                                  Remover
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </tr>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              <div className="text-right font-semibold mt-3">
+                Total: {BRL(total)}
               </div>
             </div>
-            <div className="flex justify-end gap-2 p-4 border-t">
+
+            <div className="md:col-span-4 flex justify-end gap-2 pt-2">
               <Button
+                type="button"
+                variant="secondary"
                 onClick={() => {
-                  setItemsModalOpen(false);
-                  setItemsModalOrder(null);
+                  resetForm();
+                  setOpen(false);
                 }}
               >
-                Fechar
+                Cancelar
+              </Button>
+              <Button type="submit">
+                {editingId ? "Salvar Alterações" : "Adicionar Ordem"}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
