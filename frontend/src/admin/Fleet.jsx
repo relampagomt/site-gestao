@@ -363,7 +363,7 @@ export default function FleetPage() {
         </CardContent>
       </Card>
 
-      {/* MODAL: NOVO ABASTECIMENTO (LARGO) */}
+      {/* MODAL: NOVO ABASTECIMENTO (FULL WIDTH VIEWPORT) */}
       <Dialog
         open={newOpen}
         onOpenChange={(o) => {
@@ -371,13 +371,13 @@ export default function FleetPage() {
           if (!o) resetFuel();
         }}
       >
-        <DialogContent className="w-[98vw] max-w-[1400px] sm:p-8">
+        <DialogContent className="w-[98vw] sm:max-w-none sm:p-8">
           <DialogHeader>
             <DialogTitle>Novo Abastecimento</DialogTitle>
           </DialogHeader>
 
           <form onSubmit={submitFuel} className="grid md:grid-cols-12 gap-4">
-            {/* Veículo + Cadastrar (mais largura) */}
+            {/* Veículo + Cadastrar */}
             <div className="md:col-span-5 flex items-end gap-3">
               <div className="flex-1 flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground">Veículo</span>
@@ -409,7 +409,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[140px]">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[148px]">
               <span className="text-xs text-muted-foreground">Data</span>
               <InputDateBR
                 value={fuel.data}
@@ -418,7 +418,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[140px]">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[148px]">
               <span className="text-xs text-muted-foreground">Litros</span>
               <Input
                 placeholder="Litros"
@@ -428,7 +428,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[165px]">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[176px]">
               <span className="text-xs text-muted-foreground">Preço/Litro</span>
               <Input
                 placeholder="Preço/Litro"
@@ -438,7 +438,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
               <span className="text-xs text-muted-foreground">Combustível</span>
               <select
                 className="border rounded px-3 h-11 w-full"
@@ -453,7 +453,7 @@ export default function FleetPage() {
               </select>
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
               <span className="text-xs text-muted-foreground">Odômetro</span>
               <InputOdometerBR
                 value={fuel.odometro}
@@ -462,7 +462,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
               <span className="text-xs text-muted-foreground">Posto</span>
               <Input
                 placeholder="Posto"
@@ -472,7 +472,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
               <span className="text-xs text-muted-foreground">Motorista</span>
               <Input
                 placeholder="Motorista"
@@ -482,7 +482,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
               <span className="text-xs text-muted-foreground">Nota fiscal</span>
               <Input
                 placeholder="Nota fiscal"
@@ -523,16 +523,16 @@ export default function FleetPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: FILTROS AVANÇADOS (LARGO) */}
+      {/* MODAL: FILTROS AVANÇADOS (FULL WIDTH VIEWPORT) */}
       <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
-        <DialogContent className="w-[98vw] max-w-[1400px] sm:p-8">
+        <DialogContent className="w-[98vw] sm:max-w-none sm:p-8">
           <DialogHeader>
             <DialogTitle>Filtros</DialogTitle>
           </DialogHeader>
 
           <div className="grid md:grid-cols-12 gap-4">
-            {/* 1ª linha mais folgada: 2 | 3 | 3 | 2 | 2 */}
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[150px]">
+            {/* 1ª linha */}
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[160px]">
               <span className="text-xs text-muted-foreground">Placa</span>
               <Input
                 placeholder="Placa"
@@ -542,7 +542,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[200px]">
               <span className="text-xs text-muted-foreground">Veículo</span>
               <Input
                 placeholder="Veículo"
@@ -552,7 +552,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[200px]">
               <span className="text-xs text-muted-foreground">Motorista</span>
               <Input
                 placeholder="Motorista"
@@ -562,7 +562,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[170px]">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[190px]">
               <span className="text-xs text-muted-foreground">Combustível</span>
               <select
                 className="border rounded px-3 h-11 w-full"
@@ -578,7 +578,7 @@ export default function FleetPage() {
               </select>
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[170px]">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[190px]">
               <span className="text-xs text-muted-foreground">Posto</span>
               <Input
                 placeholder="Posto"
@@ -589,7 +589,7 @@ export default function FleetPage() {
             </div>
 
             {/* 2ª linha */}
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[150px]">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[160px]">
               <span className="text-xs text-muted-foreground">Preço</span>
               <Input
                 type="number"
@@ -601,7 +601,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[150px]">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[160px]">
               <span className="text-xs text-muted-foreground">De</span>
               <InputDateBR
                 value={filters.de}
@@ -610,7 +610,7 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-[150px]">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[160px]">
               <span className="text-xs text-muted-foreground">Até</span>
               <InputDateBR
                 value={filters.ate}
@@ -646,9 +646,9 @@ export default function FleetPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL DE EDIÇÃO (LARGO) */}
+      {/* MODAL DE EDIÇÃO (FULL WIDTH VIEWPORT) */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="w-[98vw] max-w-[1400px] sm:p-8">
+        <DialogContent className="w-[98vw] sm:max-w-none sm:p-8">
           <DialogHeader>
             <DialogTitle>Editar Abastecimento</DialogTitle>
           </DialogHeader>
@@ -672,7 +672,7 @@ export default function FleetPage() {
                 </select>
               </div>
 
-              <div className="md:col-span-2 flex flex-col gap-1 min-w-[140px]">
+              <div className="md:col-span-2 flex flex-col gap-1 min-w-[148px]">
                 <span className="text-xs text-muted-foreground">Data</span>
                 <InputDateBR
                   className="h-11 w-full"
@@ -681,7 +681,7 @@ export default function FleetPage() {
                 />
               </div>
 
-              <div className="md:col-span-2 flex flex-col gap-1 min-w-[140px]">
+              <div className="md:col-span-2 flex flex-col gap-1 min-w-[148px]">
                 <span className="text-xs text-muted-foreground">Litros</span>
                 <Input
                   className="h-11 w-full"
@@ -690,7 +690,7 @@ export default function FleetPage() {
                 />
               </div>
 
-              <div className="md:col-span-2 flex flex-col gap-1 min-w-[165px]">
+              <div className="md:col-span-2 flex flex-col gap-1 min-w-[176px]">
                 <span className="text-xs text-muted-foreground">Preço/Litro</span>
                 <Input
                   className="h-11 w-full"
@@ -701,7 +701,7 @@ export default function FleetPage() {
                 />
               </div>
 
-              <div className="md:col-span-2 flex flex-col gap-1 min-w-[180px]">
+              <div className="md:col-span-2 flex flex-col gap-1 min-w-[190px]">
                 <span className="text-xs text-muted-foreground">Combustível</span>
                 <select
                   className="border rounded px-3 h-11 w-full"
@@ -718,7 +718,7 @@ export default function FleetPage() {
                 </select>
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+              <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
                 <span className="text-xs text-muted-foreground">Posto</span>
                 <Input
                   className="h-11 w-full"
@@ -727,7 +727,7 @@ export default function FleetPage() {
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+              <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
                 <span className="text-xs text-muted-foreground">Motorista</span>
                 <Input
                   className="h-11 w-full"
@@ -738,7 +738,7 @@ export default function FleetPage() {
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+              <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
                 <span className="text-xs text-muted-foreground">Odômetro</span>
                 <InputOdometerBR
                   className="h-11 w-full"
@@ -747,7 +747,7 @@ export default function FleetPage() {
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+              <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
                 <span className="text-xs text-muted-foreground">Nota fiscal</span>
                 <Input
                   className="h-11 w-full"
