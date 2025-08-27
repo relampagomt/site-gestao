@@ -1,3 +1,4 @@
+// frontend/src/admin/Orders.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.jsx";
@@ -21,15 +22,22 @@ import {
 } from "@/components/ui/dialog.jsx";
 
 /* ---------- Helpers ---------- */
-const BRL = (n) =>
-  Number(n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-const toNum = (v) => {
+const parseFlex = (v) => {
   if (v === null || v === undefined || v === "") return 0;
   if (typeof v === "number") return v;
-  const s = String(v).replace(/\./g, "").replace(",", ".");
+  let s = String(v).trim();
+  if (!s) return 0;
+  // Se contém vírgula e ponto, assume BR: . milhar, , decimal
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", "."); // somente vírgula = decimal
+  // senão, apenas ponto já é decimal
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
+};
+
+const BRL = (v) => {
+  const n = parseFlex(v);
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 };
 
 /* Datas: máscara BR + conversores BR <-> ISO */
@@ -42,12 +50,10 @@ const maskDateBR = (s) => {
 const toISO = (s) => {
   const str = String(s || "").trim();
   if (!str) return "";
-  // dd/mm/aaaa
   if (str.length >= 10 && str[2] === "/" && str[5] === "/") {
     const [dd, mm, yy] = str.slice(0, 10).split("/");
     return `${yy}-${mm}-${dd}`;
   }
-  // 8 dígitos: ddmmyyyy
   if (/^\d{8}$/.test(str)) {
     const dd = str.slice(0, 2), mm = str.slice(2, 4), yy = str.slice(4, 8);
     return `${yy}-${mm}-${dd}`;
@@ -79,12 +85,28 @@ function InputDateBR({ value, onChange, placeholder = "dd/mm/aaaa", ...props }) 
   );
 }
 
+/* Valor unit. para exibir na lista:
+   - se tiver apenas 1 item, mostra
+   - se todos os itens tiverem o MESMO valor unit., mostra
+   - caso contrário, retorna null (mostra "—")
+*/
+const orderUnitValue = (o) => {
+  const itens = Array.isArray(o.itens) ? o.itens : [];
+  if (!itens.length) return null;
+
+  const vals = itens.map((i) => parseFlex(i.valor_unit)).filter(Number.isFinite);
+  if (!vals.length) return null;
+
+  const uniq = new Set(vals.map((v) => v.toFixed(2)));
+  return uniq.size === 1 ? vals[0] : null;
+};
+
 const emptyOrder = () => ({
   cliente: "",
   titulo: "",
   descricao: "",
   status: "Aberta",
-  data: "",            // guardamos como BR no formulário
+  data: "",            // BR no formulário
   itens: [],
   valor_total: "",
 });
@@ -133,8 +155,8 @@ export default function Orders() {
     if (!newItem.descricao?.trim()) return;
     const item = {
       descricao: newItem.descricao.trim(),
-      quantidade: toNum(newItem.quantidade || 1),
-      valor_unit: toNum(newItem.valor_unit || 0),
+      quantidade: parseFlex(newItem.quantidade || 1),
+      valor_unit: parseFlex(newItem.valor_unit || 0),
     };
     setForm((p) => ({ ...p, itens: [...(p.itens || []), item] }));
     setNewItem({ descricao: "", quantidade: "", valor_unit: "" });
@@ -151,7 +173,7 @@ export default function Orders() {
 
   const total = useMemo(() => {
     return (form.itens || []).reduce(
-      (acc, i) => acc + Number(i.quantidade || 0) * Number(i.valor_unit || 0),
+      (acc, i) => acc + parseFlex(i.quantidade) * parseFlex(i.valor_unit),
       0
     );
   }, [JSON.stringify(form.itens)]);
@@ -168,15 +190,22 @@ export default function Orders() {
   /* ---------- Submit ---------- */
   const submit = async (e) => {
     e.preventDefault();
+
+    // Recalcula o total a partir dos itens (fonte da verdade)
+    const payloadTotal = (form.itens || []).reduce(
+      (acc, i) => acc + parseFlex(i.quantidade) * parseFlex(i.valor_unit),
+      0
+    );
+
     const payload = {
       ...form,
-      data: toISO(form.data), // BR -> ISO ao enviar
+      data: toISO(form.data), // BR -> ISO
       itens: (form.itens || []).map((i) => ({
         descricao: i.descricao,
-        quantidade: toNum(i.quantidade),
-        valor_unit: toNum(i.valor_unit),
+        quantidade: parseFlex(i.quantidade),
+        valor_unit: parseFlex(i.valor_unit),
       })),
-      valor_total: toNum(form.valor_total),
+      valor_total: Number(payloadTotal.toFixed(2)),
     };
 
     const url = editingId
@@ -197,11 +226,11 @@ export default function Orders() {
       titulo: o.titulo || "",
       descricao: o.descricao || "",
       status: o.status || "Aberta",
-      data: fmtBRDate(o.data || ""), // ISO -> BR ao abrir
+      data: fmtBRDate(o.data || ""), // ISO -> BR
       itens: (o.itens || []).map((i) => ({
         descricao: i.descricao || "",
-        quantidade: toNum(i.quantidade),
-        valor_unit: toNum(i.valor_unit),
+        quantidade: parseFlex(i.quantidade),
+        valor_unit: parseFlex(i.valor_unit),
       })),
       valor_total: String(o.valor_total ?? ""),
     });
@@ -252,6 +281,7 @@ export default function Orders() {
                   <TableHead className="text-center">Título</TableHead>
                   <TableHead className="text-center">Descrição</TableHead>
                   <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">Valor Unit.</TableHead>
                   <TableHead className="text-center">Total</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
@@ -269,6 +299,9 @@ export default function Orders() {
                     </TableCell>
                     <TableCell className="text-center align-middle">{o.status}</TableCell>
                     <TableCell className="text-center align-middle">
+                      {orderUnitValue(o) !== null ? BRL(orderUnitValue(o)) : "—"}
+                    </TableCell>
+                    <TableCell className="text-center align-middle">
                       {BRL(o.valor_total)}
                     </TableCell>
                     <TableCell className="text-center align-middle">
@@ -285,7 +318,7 @@ export default function Orders() {
                 ))}
                 {orders.length === 0 && (
                   <tr>
-                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
                       Nenhuma ordem cadastrada.
                     </TableCell>
                   </tr>
@@ -398,7 +431,7 @@ export default function Orders() {
                     <TableBody>
                       {form.itens.map((i, idx) => {
                         const rowTotal =
-                          Number(i.quantidade || 0) * Number(i.valor_unit || 0);
+                          parseFlex(i.quantidade) * parseFlex(i.valor_unit);
                         return (
                           <tr key={idx} className="border-t">
                             <TableCell className="w-[40%] text-center align-middle">
@@ -413,7 +446,7 @@ export default function Orders() {
                               <Input
                                 value={i.quantidade}
                                 onChange={(e) =>
-                                  updateItemField(idx, "quantidade", toNum(e.target.value))
+                                  updateItemField(idx, "quantidade", parseFlex(e.target.value))
                                 }
                               />
                             </TableCell>
@@ -421,7 +454,7 @@ export default function Orders() {
                               <Input
                                 value={i.valor_unit}
                                 onChange={(e) =>
-                                  updateItemField(idx, "valor_unit", toNum(e.target.value))
+                                  updateItemField(idx, "valor_unit", parseFlex(e.target.value))
                                 }
                               />
                             </TableCell>
@@ -448,7 +481,7 @@ export default function Orders() {
               )}
 
               <div className="text-right font-semibold mt-3">
-                Total: {BRL(form.valor_total)}
+                Total: {BRL(total)}
               </div>
             </div>
 
