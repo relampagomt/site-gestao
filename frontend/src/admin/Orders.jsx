@@ -1,5 +1,5 @@
 // frontend/src/admin/Orders.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table.jsx";
 
-// ===================== Helpers BR =====================
+/* ===================== Utils / Helpers ===================== */
 const fmtCurrency = (n) =>
   (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -26,96 +26,159 @@ const parseCurrency = (s) => {
   return isNaN(n) ? 0 : n;
 };
 
-const fmtDateBR = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("pt-BR");
+const fmtDateBR = (val) => {
+  if (!val) return "";
+  try {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      const [y, m, d] = val.split("-").map(Number);
+      const dt = new Date(y, m - 1, d);
+      return isNaN(dt) ? val : dt.toLocaleDateString("pt-BR");
+    }
+    const d = new Date(val);
+    return isNaN(d) ? String(val) : d.toLocaleDateString("pt-BR");
+  } catch {
+    return String(val);
+  }
 };
 
-const toISODate = (value) => {
-  if (!value) return null;
+const toYYYYMMDD = (value) => {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   try {
     const d = new Date(value);
-    if (!isNaN(d.getTime())) return d.toISOString();
-    return null;
+    if (isNaN(d)) return "";
+    return d.toISOString().slice(0, 10);
   } catch {
-    return null;
+    return "";
   }
 };
 
 const sum = (arr) => arr.reduce((a, b) => a + (Number(b) || 0), 0);
+const uid = () => Math.random().toString(36).slice(2, 10);
 
-// ===================== Component =====================
+/* ===================== Component ===================== */
 export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Preferência: mostrar valor médio quando houver vários itens?
+  // Preferência (valor médio em multi-itens)
+  const STORAGE_KEY = "rel_showAvgUnit";
   const [showAvgUnit, setShowAvgUnit] = useState(true);
+  const savePrefTimer = useRef(null);
 
-  // Modal (criar/editar)
+  // Modal CRUD
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
-  // Modal Itens (visualização de itens da ordem)
+  // Modal Itens
   const [itemsModalOpen, setItemsModalOpen] = useState(false);
   const [itemsModalOrder, setItemsModalOrder] = useState(null);
 
   // Form
   const emptyForm = {
-    data: "", // YYYY-MM-DD para input
+    data: "",
     cliente: "",
     empresa: "",
     descricao: "",
     status: "Aberta",
-    valorUnit: "", // string
-    quantidade: "", // inteiro
+    valorUnit: "",
+    quantidade: "",
   };
   const [form, setForm] = useState(emptyForm);
 
-  // ===================== Data Fetch =====================
+  /* ===== Preferências (backend + fallback localStorage) ===== */
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await api.get("/users/me/prefs"); // ajuste se necessário
+        if (mounted && data && typeof data.showAvgUnit === "boolean") {
+          setShowAvgUnit(data.showAvgUnit);
+          try { localStorage.setItem(STORAGE_KEY, data.showAvgUnit ? "1" : "0"); } catch {}
+          return;
+        }
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (mounted && saved !== null) setShowAvgUnit(saved === "1");
+        } catch {}
+      } catch {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (mounted && saved !== null) setShowAvgUnit(saved === "1");
+        } catch {}
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, showAvgUnit ? "1" : "0"); } catch {}
+    if (savePrefTimer.current) clearTimeout(savePrefTimer.current);
+    savePrefTimer.current = setTimeout(async () => {
+      try { await api.put("/users/me/prefs", { showAvgUnit }); } catch {}
+    }, 400);
+    return () => { if (savePrefTimer.current) clearTimeout(savePrefTimer.current); };
+  }, [showAvgUnit]);
+
+  /* ===================== Fetch Orders (robusto) ===================== */
   async function fetchOrders() {
     setLoading(true);
     try {
-      const { data } = await api.get("/orders");
-      // Espera itens como:
-      // { id, date, clientName, companyName, description, status,
-      //   unitPrice, quantity, total, items?: [{ description, unitPrice, quantity }] }
-      const normalized = (data || []).map((o) => {
-        const items = Array.isArray(o.items) ? o.items : [];
-        const hasItems = items.length > 0;
+      const resp = await api.get("/orders");
+      const arr = Array.isArray(resp?.data) ? resp.data : [];
 
-        // soma de quantidades e totais quando há vários itens
-        const itemsQty = hasItems ? sum(items.map((it) => Number(it.quantity || 0))) : 0;
-        const itemsTotal = hasItems
-          ? sum(items.map((it) => Number(it.unitPrice || 0) * Number(it.quantity || 0)))
-          : 0;
+      const normalized = arr.map((raw, index) => {
+        const id = raw.id ?? raw._id ?? `ord_${index}_${uid()}`;
 
-        const oneItemUnit =
-          hasItems && items.length === 1 ? Number(items[0].unitPrice || 0) : Number(o.unitPrice || o.valorUnit || 0);
+        const dateRaw = raw.date ?? raw.data ?? "";
+        const dateForInput = (() => {
+          if (!dateRaw) return "";
+          if (/^\d{4}-\d{2}-\d{2}$/.test(String(dateRaw))) return String(dateRaw);
+          try {
+            const d = new Date(dateRaw);
+            return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+          } catch { return ""; }
+        })();
 
-        const quantity = hasItems ? itemsQty : Number(o.quantity ?? o.quantidade ?? 0);
+        const clientName = raw.clientName ?? raw.cliente ?? "";
+        const companyName = raw.companyName ?? raw.empresa ?? "";
+        const description = raw.description ?? raw.descricao ?? "";
+        const status = raw.status ?? "Aberta";
+
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        const safeItems = items.map((it) => ({
+          description: it.description ?? it.descricao ?? "",
+          unitPrice: Number(it.unitPrice ?? it.valorUnit ?? 0),
+          quantity: Number(it.quantity ?? it.quantidade ?? 0),
+        }));
+
+        const itemsQty = sum(safeItems.map((it) => it.quantity));
+        const itemsTotal = sum(safeItems.map((it) => it.unitPrice * it.quantity));
+
+        const unitPriceSingle =
+          safeItems.length === 1 ? safeItems[0].unitPrice : Number(raw.unitPrice ?? raw.valorUnit ?? 0);
+
+        const quantity = safeItems.length > 0 ? itemsQty : Number(raw.quantity ?? raw.quantidade ?? 0);
         const total =
-          o.total != null
-            ? Number(o.total)
-            : hasItems
-            ? itemsTotal
-            : Number(oneItemUnit) * Number(quantity);
+          raw.total != null ? Number(raw.total)
+            : safeItems.length > 0 ? itemsTotal
+            : Number(unitPriceSingle) * Number(quantity);
 
         return {
-          id: o.id,
-          date: o.date || o.data || null,
-          clientName: o.clientName || o.cliente || "",
-          companyName: o.companyName || o.empresa || "",
-          description: o.description || o.descricao || "",
-          status: o.status || "Aberta",
-          unitPrice: oneItemUnit, // se tiver >1 item podemos mostrar "—" ou média
+          id,
+          dateRaw,
+          dateForInput,
+          clientName,
+          companyName,
+          description,
+          status,
+          unitPrice: unitPriceSingle,
           quantity,
           total,
-          items, // guardamos para abrir o modal
+          items: safeItems,
         };
       });
+
       setOrders(normalized);
     } catch (e) {
       console.error("Erro ao buscar orders:", e);
@@ -124,24 +187,19 @@ export default function Orders() {
     }
   }
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  useEffect(() => { fetchOrders(); }, []);
 
-  // ===================== Handlers =====================
+  /* ===================== Handlers ===================== */
   function openNew() {
     setEditingId(null);
-    setForm({
-      ...emptyForm,
-      data: new Date().toISOString().slice(0, 10),
-    });
+    setForm({ ...emptyForm, data: new Date().toISOString().slice(0, 10) });
     setIsOpen(true);
   }
 
   function openEdit(order) {
     setEditingId(order.id);
     setForm({
-      data: (order.date ? new Date(order.date) : new Date()).toISOString().slice(0, 10),
+      data: order.dateForInput || new Date().toISOString().slice(0, 10),
       cliente: order.clientName || "",
       empresa: order.companyName || "",
       descricao: order.description || "",
@@ -165,8 +223,10 @@ export default function Orders() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    const dateStr = toYYYYMMDD(form.data);
     const payload = {
-      date: toISODate(form.data),
+      date: dateStr,
+      data: dateStr,
       clientName: form.cliente,
       companyName: form.empresa,
       description: form.descricao,
@@ -179,8 +239,44 @@ export default function Orders() {
     try {
       if (editingId) {
         await api.put(`/orders/${editingId}`, payload);
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === editingId
+              ? {
+                  ...o,
+                  dateRaw: payload.date,
+                  dateForInput: payload.date,
+                  clientName: payload.clientName,
+                  companyName: payload.companyName,
+                  description: payload.description,
+                  status: payload.status,
+                  unitPrice: payload.unitPrice,
+                  quantity: payload.quantity,
+                  total: payload.total,
+                  items: [],
+                }
+              : o
+          )
+        );
       } else {
-        await api.post("/orders", payload);
+        const res = await api.post("/orders", payload);
+        const newId = res?.data?.id ?? res?.data?._id ?? `ord_${uid()}`;
+        setOrders((prev) => [
+          ...prev,
+          {
+            id: newId,
+            dateRaw: payload.date,
+            dateForInput: payload.date,
+            clientName: payload.clientName,
+            companyName: payload.companyName,
+            description: payload.description,
+            status: payload.status,
+            unitPrice: payload.unitPrice,
+            quantity: payload.quantity,
+            total: payload.total,
+            items: [],
+          },
+        ]);
       }
       setIsOpen(false);
       setEditingId(null);
@@ -192,7 +288,7 @@ export default function Orders() {
     }
   }
 
-  // Totais (rodapé)
+  /* ===================== Totais ===================== */
   const totalGeral = useMemo(
     () => orders.reduce((acc, o) => acc + (Number(o.total) || 0), 0),
     [orders]
@@ -202,7 +298,7 @@ export default function Orders() {
     [orders]
   );
 
-  // ===================== Render =====================
+  /* ===================== Render ===================== */
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -248,6 +344,7 @@ export default function Orders() {
                     <TableCell colSpan={9}>Carregando...</TableCell>
                   </TableRow>
                 )}
+
                 {!loading && orders.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={9} className="text-gray-500">
@@ -255,11 +352,14 @@ export default function Orders() {
                     </TableCell>
                   </TableRow>
                 )}
+
                 {!loading &&
-                  orders.map((o) => {
+                  orders.map((o, idx) => {
                     const hasItems = Array.isArray(o.items) && o.items.length > 0;
                     const avgUnit =
-                      Number(o.quantity || 0) > 0 ? Number(o.total || 0) / Number(o.quantity || 1) : 0;
+                      Number(o.quantity || 0) > 0
+                        ? Number(o.total || 0) / Number(o.quantity || 1)
+                        : 0;
 
                     const unitCol =
                       hasItems && o.items.length > 1
@@ -268,9 +368,11 @@ export default function Orders() {
                           : "—"
                         : fmtCurrency(o.unitPrice);
 
+                    const rowKey = o.id || `row_${idx}`;
+
                     return (
-                      <TableRow key={o.id}>
-                        <TableCell>{fmtDateBR(o.date)}</TableCell>
+                      <TableRow key={rowKey}>
+                        <TableCell>{fmtDateBR(o.dateRaw || o.dateForInput)}</TableCell>
                         <TableCell>{o.clientName}</TableCell>
                         <TableCell>{o.companyName}</TableCell>
                         <TableCell className="max-w-[280px] truncate">{o.description}</TableCell>
@@ -300,6 +402,7 @@ export default function Orders() {
                       </TableRow>
                     );
                   })}
+
                 {!loading && orders.length > 0 && (
                   <TableRow>
                     <TableCell colSpan={5} />
@@ -307,7 +410,6 @@ export default function Orders() {
                       {qtdGeral.toLocaleString("pt-BR")}
                     </TableCell>
                     <TableCell className="font-semibold">
-                      {/* Rodapé da coluna unit: mostramos média global se toggle ativo; senão “—” */}
                       {showAvgUnit && qtdGeral > 0 ? fmtCurrency(totalGeral / qtdGeral) : "—"}
                     </TableCell>
                     <TableCell className="font-semibold">
@@ -322,7 +424,7 @@ export default function Orders() {
         </CardContent>
       </Card>
 
-      {/* ===================== Modal Criar/Editar ===================== */}
+      {/* ===== Modal Criar/Editar ===== */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
@@ -464,7 +566,7 @@ export default function Orders() {
         </div>
       )}
 
-      {/* ===================== Modal de Itens da Ordem ===================== */}
+      {/* ===== Modal de Itens ===== */}
       {itemsModalOpen && itemsModalOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
@@ -504,7 +606,7 @@ export default function Orders() {
                     {itemsModalOrder.items.map((it, idx) => (
                       <TableRow key={idx}>
                         <TableCell className="max-w-[420px] truncate">
-                          {it.description || it.descricao || "-"}
+                          {it.description || "-"}
                         </TableCell>
                         <TableCell className="text-right">
                           {fmtCurrency(it.unitPrice || 0)}
@@ -520,7 +622,6 @@ export default function Orders() {
                     <TableRow>
                       <TableCell className="font-semibold">Totais</TableCell>
                       <TableCell className="text-right font-semibold">
-                        {/* Média desta ordem */}
                         {(() => {
                           const q = itemsModalOrder.items.reduce((a, it) => a + (Number(it.quantity || 0)), 0);
                           const t = itemsModalOrder.items.reduce((a, it) => a + (Number(it.unitPrice || 0) * Number(it.quantity || 0)), 0);
@@ -535,9 +636,7 @@ export default function Orders() {
                       <TableCell className="text-right font-semibold">
                         {fmtCurrency(
                           itemsModalOrder.items.reduce(
-                            (a, it) =>
-                              a +
-                              (Number(it.unitPrice || 0) * Number(it.quantity || 0)),
+                            (a, it) => a + (Number(it.unitPrice || 0) * Number(it.quantity || 0)),
                             0
                           )
                         )}
