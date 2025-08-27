@@ -16,7 +16,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog.jsx";
@@ -27,10 +26,8 @@ const parseFlex = (v) => {
   if (typeof v === "number") return v;
   let s = String(v).trim();
   if (!s) return 0;
-  // Se contém vírgula e ponto, assume BR: . milhar, , decimal
   if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
-  else if (s.includes(",")) s = s.replace(",", "."); // somente vírgula = decimal
-  // senão, apenas ponto já é decimal
+  else if (s.includes(",")) s = s.replace(",", ".");
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 };
@@ -85,28 +82,22 @@ function InputDateBR({ value, onChange, placeholder = "dd/mm/aaaa", ...props }) 
   );
 }
 
-/* Valor unit. para exibir na lista:
-   - se tiver apenas 1 item, mostra
-   - se todos os itens tiverem o MESMO valor unit., mostra
-   - caso contrário, retorna null (mostra "—")
-*/
+/* Valor unitário para exibir na lista */
 const orderUnitValue = (o) => {
   const itens = Array.isArray(o.itens) ? o.itens : [];
   if (!itens.length) return null;
-
   const vals = itens.map((i) => parseFlex(i.valor_unit)).filter(Number.isFinite);
   if (!vals.length) return null;
-
   const uniq = new Set(vals.map((v) => v.toFixed(2)));
   return uniq.size === 1 ? vals[0] : null;
 };
 
 const emptyOrder = () => ({
   cliente: "",
-  titulo: "",
+  empresa: "",        // substitui 'titulo'
   descricao: "",
   status: "Aberta",
-  data: "",            // BR no formulário
+  data: "",
   itens: [],
   valor_total: "",
 });
@@ -191,7 +182,6 @@ export default function Orders() {
   const submit = async (e) => {
     e.preventDefault();
 
-    // Recalcula o total a partir dos itens (fonte da verdade)
     const payloadTotal = (form.itens || []).reduce(
       (acc, i) => acc + parseFlex(i.quantidade) * parseFlex(i.valor_unit),
       0
@@ -199,7 +189,7 @@ export default function Orders() {
 
     const payload = {
       ...form,
-      data: toISO(form.data), // BR -> ISO
+      data: toISO(form.data),
       itens: (form.itens || []).map((i) => ({
         descricao: i.descricao,
         quantidade: parseFlex(i.quantidade),
@@ -223,10 +213,10 @@ export default function Orders() {
     setEditingId(o.id);
     setForm({
       cliente: o.cliente || "",
-      titulo: o.titulo || "",
+      empresa: o.empresa || o.titulo || "",
       descricao: o.descricao || "",
       status: o.status || "Aberta",
-      data: fmtBRDate(o.data || ""), // ISO -> BR
+      data: fmtBRDate(o.data || ""),
       itens: (o.itens || []).map((i) => ({
         descricao: i.descricao || "",
         quantidade: parseFlex(i.quantidade),
@@ -278,7 +268,7 @@ export default function Orders() {
                 <TableRow>
                   <TableHead className="text-center">Data</TableHead>
                   <TableHead className="text-center">Cliente</TableHead>
-                  <TableHead className="text-center">Título</TableHead>
+                  <TableHead className="text-center">Empresa</TableHead>
                   <TableHead className="text-center">Descrição</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-center">Valor Unit.</TableHead>
@@ -293,7 +283,9 @@ export default function Orders() {
                       {fmtBRDate(o.data)}
                     </TableCell>
                     <TableCell className="text-center align-middle">{o.cliente}</TableCell>
-                    <TableCell className="text-center align-middle">{o.titulo}</TableCell>
+                    <TableCell className="text-center align-middle">
+                      {o.empresa || o.titulo || "—"}
+                    </TableCell>
                     <TableCell className="text-center align-middle">
                       {o.descricao || "—"}
                     </TableCell>
@@ -337,7 +329,8 @@ export default function Orders() {
           if (!o) resetForm();
         }}
       >
-        <DialogContent className="w-[92vw] sm:max-w-[1100px] sm:p-8 rounded-2xl">
+        {/* largura reduzida */}
+        <DialogContent className="w-[92vw] sm:max-w-[900px] sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle>{editingId ? "Editar Ordem" : "Nova Ordem"}</DialogTitle>
           </DialogHeader>
@@ -352,14 +345,13 @@ export default function Orders() {
               className="md:col-span-2"
             />
             <Input
-              name="titulo"
-              value={form.titulo}
+              name="empresa"
+              value={form.empresa}
               onChange={onFormChange}
-              placeholder="Título"
+              placeholder="Empresa"
               className="md:col-span-2"
             />
 
-            {/* Data com máscara BR */}
             <InputDateBR
               name="data"
               value={form.data}
@@ -458,7 +450,7 @@ export default function Orders() {
                                 }
                               />
                             </TableCell>
-                            <TableCell className="w-[20%] text-center align-middle">
+                            <TableCell className="w/[20%] text-center align-middle">
                               {BRL(rowTotal)}
                             </TableCell>
                             <TableCell className="text-center align-middle w-[10%]">
