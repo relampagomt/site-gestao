@@ -13,6 +13,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
 
 /**
  * IMPORTANTE:
@@ -59,6 +66,9 @@ export default function Orders() {
     quantidade: "",
     valor_unit: "",
   });
+
+  // Modal
+  const [open, setOpen] = useState(false);
 
   // -------- Load ----------
   const load = async () => {
@@ -150,6 +160,7 @@ export default function Orders() {
 
     await api[method](url, payload);
     resetForm();
+    setOpen(false);
     load();
   };
 
@@ -168,7 +179,7 @@ export default function Orders() {
       })),
       valor_total: String(o.valor_total ?? ""),
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setOpen(true);
   };
 
   const del = async (o) => {
@@ -180,7 +191,17 @@ export default function Orders() {
   // -------- UI ------------
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Ordens</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">Ordens</h1>
+        <Button
+          onClick={() => {
+            resetForm();
+            setOpen(true);
+          }}
+        >
+          Nova Ordem
+        </Button>
+      </div>
 
       {err && (
         <div className="bg-red-50 text-red-700 border border-red-200 px-3 py-2 rounded mb-4">
@@ -188,12 +209,74 @@ export default function Orders() {
         </div>
       )}
 
-      {/* Formulário */}
-      <Card className="mb-6">
+      {/* Tabela de ordens */}
+      <Card>
         <CardHeader>
-          <CardTitle>{editingId ? "Editar Ordem" : "Nova Ordem"}</CardTitle>
+          <CardTitle>Ordens cadastradas</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-auto">
+          {loading ? (
+            <div className="text-sm text-gray-500">Carregando...</div>
+          ) : (
+            <Table className="min-w-full text-sm">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-center">Data</TableHead>
+                  <TableHead className="text-center">Cliente</TableHead>
+                  <TableHead className="text-center">Título</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">Total</TableHead>
+                  <TableHead className="text-center">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orders.map((o) => (
+                  <tr key={o.id} className="border-t">
+                    <TableCell className="text-center align-middle">{o.data}</TableCell>
+                    <TableCell className="text-center align-middle">{o.cliente}</TableCell>
+                    <TableCell className="text-center align-middle">{o.titulo}</TableCell>
+                    <TableCell className="text-center align-middle">{o.status}</TableCell>
+                    <TableCell className="text-center align-middle">
+                      {BRL(o.valor_total)}
+                    </TableCell>
+                    <TableCell className="text-center align-middle">
+                      <div className="flex justify-center gap-2">
+                        <Button variant="secondary" onClick={() => edit(o)}>
+                          Editar
+                        </Button>
+                        <Button variant="destructive" onClick={() => del(o)}>
+                          Excluir
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </tr>
+                ))}
+                {orders.length === 0 && (
+                  <tr>
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                      Nenhuma ordem cadastrada.
+                    </TableCell>
+                  </tr>
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* MODAL: Nova/Editar Ordem */}
+      <Dialog
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) resetForm();
+        }}
+      >
+        <DialogContent className="w-[92vw] sm:max-w-[1100px] sm:p-8 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Editar Ordem" : "Nova Ordem"}</DialogTitle>
+          </DialogHeader>
+
           <form onSubmit={submit} className="grid md:grid-cols-4 gap-3">
             <Input
               name="cliente"
@@ -271,11 +354,11 @@ export default function Orders() {
                   <Table className="min-w-full text-sm">
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Descrição</TableHead>
-                        <TableHead>Qtd</TableHead>
-                        <TableHead>Valor Unit.</TableHead>
-                        <TableHead>Total</TableHead>
-                        <TableHead></TableHead>
+                        <TableHead className="text-center">Descrição</TableHead>
+                        <TableHead className="text-center">Qtd</TableHead>
+                        <TableHead className="text-center">Valor Unit.</TableHead>
+                        <TableHead className="text-center">Total</TableHead>
+                        <TableHead className="text-center">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -284,7 +367,7 @@ export default function Orders() {
                           Number(i.quantidade || 0) * Number(i.valor_unit || 0);
                         return (
                           <tr key={idx} className="border-t">
-                            <TableCell className="w-[40%]">
+                            <TableCell className="w-[40%] text-center align-middle">
                               <Input
                                 value={i.descricao}
                                 onChange={(e) =>
@@ -292,7 +375,7 @@ export default function Orders() {
                                 }
                               />
                             </TableCell>
-                            <TableCell className="w-[10%]">
+                            <TableCell className="w-[10%] text-center align-middle">
                               <Input
                                 value={i.quantidade}
                                 onChange={(e) =>
@@ -304,7 +387,7 @@ export default function Orders() {
                                 }
                               />
                             </TableCell>
-                            <TableCell className="w-[20%]">
+                            <TableCell className="w-[20%] text-center align-middle">
                               <Input
                                 value={i.valor_unit}
                                 onChange={(e) =>
@@ -316,15 +399,19 @@ export default function Orders() {
                                 }
                               />
                             </TableCell>
-                            <TableCell className="w-[20%]">{BRL(rowTotal)}</TableCell>
-                            <TableCell className="text-right w-[10%]">
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                onClick={() => removeItem(idx)}
-                              >
-                                Remover
-                              </Button>
+                            <TableCell className="w-[20%] text-center align-middle">
+                              {BRL(rowTotal)}
+                            </TableCell>
+                            <TableCell className="text-center align-middle w-[10%]">
+                              <div className="flex justify-center">
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  onClick={() => removeItem(idx)}
+                                >
+                                  Remover
+                                </Button>
+                              </div>
                             </TableCell>
                           </tr>
                         );
@@ -339,67 +426,24 @@ export default function Orders() {
               </div>
             </div>
 
-            <div className="md:col-span-4 flex gap-2">
+            <div className="md:col-span-4 flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  resetForm();
+                  setOpen(false);
+                }}
+              >
+                Cancelar
+              </Button>
               <Button type="submit">
                 {editingId ? "Salvar Alterações" : "Adicionar Ordem"}
               </Button>
-              {editingId && (
-                <Button type="button" variant="secondary" onClick={resetForm}>
-                  Cancelar edição
-                </Button>
-              )}
             </div>
           </form>
-        </CardContent>
-      </Card>
-
-      {/* Tabela de ordens */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Ordens cadastradas</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-auto">
-          {loading ? (
-            <div className="text-sm text-gray-500">Carregando...</div>
-          ) : (
-            <Table className="min-w-full text-sm">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Título</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orders.map((o) => (
-                  <tr key={o.id} className="border-t">
-                    <TableCell>{o.data}</TableCell>
-                    <TableCell>{o.cliente}</TableCell>
-                    <TableCell>{o.titulo}</TableCell>
-                    <TableCell>{o.status}</TableCell>
-                    <TableCell>{BRL(o.valor_total)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="secondary"
-                        onClick={() => edit(o)}
-                        className="mr-2"
-                      >
-                        Editar
-                      </Button>
-                      <Button variant="destructive" onClick={() => del(o)}>
-                        Excluir
-                      </Button>
-                    </TableCell>
-                  </tr>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
