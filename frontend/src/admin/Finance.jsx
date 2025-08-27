@@ -14,14 +14,10 @@ import { Label } from '@/components/ui/label.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog.jsx';
-import { Separator } from '@/components/ui/separator.jsx';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
 
-// Ícones (lucide-react)
-import { Download, FileDown, PencilLine as Edit, Plus, Trash2, X } from 'lucide-react';
+import { TrendingUp, ArrowDownCircle, ArrowUpCircle, Plus, Search, Edit, Trash2, Download } from 'lucide-react';
 
-// Charts
 import {
   ResponsiveContainer,
   CartesianGrid,
@@ -36,53 +32,29 @@ import {
   Legend,
 } from 'recharts';
 
-import { format } from 'date-fns';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
-// =================== Constantes ===================
-const TX_PATH = '/api/transactions';
+/* =================== Helpers =================== */
+const BRL = (n) =>
+  `R$ ${Number(n || 0)
+    .toFixed(2)
+    .replace('.', ',')
+    .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
 
-const emptyForm = {
-  id: '',
-  type: 'entrada',
-  date: '',
-  action_text: '',
-  category: '',
-  status: 'Pendente',
-  client_text: '',
-  material_text: '',
-  amount: '',
-  notes: '',
-};
-
-// =================== Utils ===================
-
-const BRL = (v) =>
-  (Number(v || 0)).toLocaleString('pt-BR', {
+const BRL_COMPACT = (n) =>
+  new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
-    minimumFractionDigits: 2,
-  });
+    maximumFractionDigits: 0,
+    notation: 'compact',
+  }).format(Number(n || 0));
 
-const isYMD = (s) => /^\d{4}-\d{2}-\d{2}/.test(String(s || ''));
-
-const maskDateBR = (value) => {
-  const v = String(value || '').replace(/\D/g, '').slice(0, 8);
-  const a = [];
-  if (v.length >= 2) a.push(v.slice(0, 2));
-  if (v.length >= 4) a.push(v.slice(2, 4));
-  if (v.length > 4) a.push(v.slice(4, 8));
-  return a.join('/');
-};
-
-const fixDateInput = (s) => {
-  // aceita dd/mm/aaaa ou yyyy-mm-dd e devolve dd/mm/aaaa
-  if (!s) return '';
-  const str = String(s);
-  if (isYMD(str)) {
-    const [y, m, d] = str.slice(0, 10).split('-');
-    return `${d}/${m}/${y}`;
-  }
-  return maskDateBR(str);
+const maskBR = (v) => {
+  let clean = String(v || '').replace(/\D/g, '');
+  if (clean.length >= 3) clean = clean.slice(0, 2) + '/' + clean.slice(2);
+  if (clean.length >= 6) clean = clean.slice(0, 5) + '/' + clean.slice(5, 9);
+  return clean;
 };
 
 const isoToBR = (iso) => {
@@ -97,29 +69,48 @@ const brToISO = (br) => {
   return `${y}-${m}-${d}`;
 };
 
-const clampMoney = (s) => {
-  if (s === '' || s === null || s === undefined) return '';
-  const clean = String(s).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
-  const n = Number(clean);
-  if (!Number.isFinite(n)) return '';
-  return n.toFixed(2);
+const isYMD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '').slice(0, 10));
+
+const emptyForm = {
+  type: 'entrada',
+  // NOVOS CAMPOS no front
+  dueDateBr: '',     // Data de Vencimento (DD/MM/AAAA)
+  payDateBr: '',     // Data de Pagamento (DD/MM/AAAA) - opcional
+  paymentMethod: '', // Meio de Pagamento -> client_text
+  interestRate: '',  // Taxa de Juros -> material_text (string)
+  // comuns
+  amount: '',
+  category: '',
+  status: 'Pendente', // Pago | Pendente | Cancelado
+  notes: '',
+  // retrocompat/exibição
+  action_text: '',
+  client_text: '',
+  material_text: '',
+  action_id: '',
+  client_id: '',
+  material_id: '',
 };
 
-const statusTone = (status) => {
-  const s = String(status || '').toLowerCase();
-  if (s === 'pago') return 'success';
-  if (s === 'cancelado') return 'destructive';
-  return 'secondary';
+const TX_PATH = '/transactions';
+
+// Cores
+const COLORS = { entrada: '#16a34a', saida: '#dc2626', despesa: '#f59e0b' };
+
+// paleta fixa por categoria (pie)
+const CATEGORY_PALETTE = [
+  '#0ea5e9', '#8b5cf6', '#22c55e', '#f97316', '#14b8a6', '#ef4444',
+  '#84cc16', '#06b6d4', '#a855f7', '#eab308', '#10b981', '#f43f5e',
+  '#3b82f6', '#f59e0b', '#6366f1'
+];
+const hashStr = (s) => {
+  let h = 0;
+  for (let i = 0; i < String(s).length; i++) h = (h * 31 + String(s).charCodeAt(i)) >>> 0;
+  return h;
 };
+const colorForCategory = (name='') => CATEGORY_PALETTE[ hashStr(String(name).toLowerCase()) % CATEGORY_PALETTE.length ];
 
-const typeTone = (type) => {
-  const t = String(type || '').toLowerCase();
-  if (t === 'entrada' || t === 'receber') return 'success';
-  return 'destructive';
-};
-
-// =================== Componente ===================
-
+/* =================== Componente =================== */
 const Finance = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -143,127 +134,83 @@ const Finance = () => {
       setTransactions(Array.isArray(data) ? data : []);
     } catch {
       setTransactions([]);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
+  useEffect(() => { loadAll(); }, []);
 
-  useEffect(() => {
-    loadAll();
-  }, []);
-
-  // Criação/Edição
-  const openNew = () => {
-    setEditing(null);
-    setForm({ ...emptyForm });
-    setOpen(true);
-  };
-
-  const openEdit = (tx) => {
-    setEditing(tx);
-    setForm({
-      id: tx.id,
-      type: tx.type || 'entrada',
-      date: fixDateInput(tx.date),
-      action_text: fixDateInput(tx.action_text),
-      category: tx.category || '',
-      status: tx.status || 'Pendente',
-      client_text: tx.client_text || '',
-      material_text: tx.material_text || '',
-      amount: String(tx.amount ?? ''),
-      notes: tx.notes || '',
-    });
-    setOpen(true);
-  };
-
-  const onFormChange = (e) => {
-    const { name, value } = e.target;
-    if (name === 'date' || name === 'action_text') {
-      setForm((f) => ({ ...f, [name]: maskDateBR(value) }));
-    } else if (name === 'amount') {
-      setForm((f) => ({ ...f, [name]: value }));
-    } else {
-      setForm((f) => ({ ...f, [name]: value }));
-    }
-  };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const payload = {
-        ...form,
-        date: brToISO(form.date),
-        action_text: brToISO(form.action_text) || form.action_text || '',
-        amount: clampMoney(form.amount),
-      };
-      delete payload.id;
-
-      if (editing?.id) {
-        await api.put(`${TX_PATH}/${editing.id}`, payload);
-      } else {
-        await api.post(TX_PATH, payload);
-      }
-      setOpen(false);
-      await loadAll();
-    } catch (e) {
-      alert('Não foi possível salvar.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Tem certeza que deseja excluir este lançamento?')) return;
-    try {
-      await api.delete(`${TX_PATH}/${id}`);
-      setTransactions((prev) => prev.filter((t) => t.id !== id));
-    } catch {
-      alert('Não foi possível excluir.');
-    }
-  };
-
-  // Filtro/Busca
+  // Filtrados + ordenação
   const filtered = useMemo(() => {
     let list = [...transactions];
 
-    if (typeFilter !== 'todos') list = list.filter((t) => String(t.type || '').toLowerCase() === typeFilter);
-
-    if (monthFilter !== 'todos') {
-      const [y, m] = monthFilter.split('-').map((x) => Number(x));
-      list = list.filter((t) => {
-        const s = String(t.date || '');
-        if (!isYMD(s)) return false;
-        const yy = Number(s.slice(0, 4));
-        const mm = Number(s.slice(5, 7));
-        return yy === y && mm === m;
-      });
-    }
-
     if (search.trim()) {
-      const q = search.trim().toLowerCase();
+      const q = search.toLowerCase();
       list = list.filter((t) =>
         [
-          t.category,
-          t.status,
-          t.client_text,
-          t.material_text,
-          t.notes,
-          t.type,
-          isoToBR(String(t.date || '').slice(0, 10)),
-          isoToBR(String(t.action_text || '').slice(0, 10)),
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(q),
+          t.category, t.notes, String(t.amount),
+          t.action_text, t.client_text, t.material_text, t.status, t.type
+        ].filter(Boolean).some((f) => String(f).toLowerCase().includes(q))
       );
     }
 
-    return list;
-  }, [transactions, typeFilter, monthFilter, search]);
+    if (typeFilter !== 'todos') list = list.filter((t) => t.type === typeFilter);
+
+    if (monthFilter !== 'todos') {
+      const [y, m] = monthFilter.split('-');
+      list = list.filter((t) => String(t.date || '').slice(0, 7) === `${y}-${m}`);
+    }
+
+    // sort por date desc, id desc
+    return list.sort((a, b) => {
+      const da = String(a.date || '');
+      const db = String(b.date || '');
+      if (db !== da) return db.localeCompare(da);
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    });
+  }, [transactions, search, typeFilter, monthFilter]);
+
+  // Opções de mês
+  const monthOptions = useMemo(() => {
+    const s = new Set();
+    transactions.forEach((t) => {
+      const ym = String(t.date || '').slice(0, 7);
+      if (/^\d{4}-\d{2}$/.test(ym)) s.add(ym);
+    });
+    return Array.from(s).sort().reverse().map((ym) => {
+      const [y, m] = ym.split('-');
+      const label = new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      return { value: ym, label };
+    });
+  }, [transactions]);
+
+  // Charts
+  const categoryChart = useMemo(() => {
+    const map = {};
+    filtered.forEach((t) => {
+      if (t.type === 'entrada') return; // ignorar entradas
+      const cat = t.category || 'Sem categoria';
+      map[cat] = (map[cat] || 0) + Number(t.amount || 0);
+    });
+    return Object.entries(map)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 12);
+  }, [filtered]);
+
+  const monthlyChart = useMemo(() => {
+    const months = {};
+    filtered.forEach((t) => {
+      const month = String(t.date || '').slice(0, 7) || '—';
+      if (!months[month]) months[month] = { month, entrada: 0, saida: 0, despesa: 0 };
+      if (t.type === 'entrada') months[month].entrada += Number(t.amount || 0);
+      if (t.type === 'saida') months[month].saida += Number(t.amount || 0);
+      if (t.type === 'despesa') months[month].despesa += Number(t.amount || 0);
+    });
+    return Object.values(months).sort((a, b) => a.month.localeCompare(b.month)).slice(-6);
+  }, [filtered]);
 
   // KPIs
-  const totalEntrada = filtered.filter((t) => (t.type || '').toLowerCase() === 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
-  const totalSaida = filtered.filter((t) => (t.type || '').toLowerCase() !== 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const totalEntrada = filtered.filter((t) => t.type === 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const totalSaida = filtered.filter((t) => t.type !== 'entrada').reduce((s, t) => s + Number(t.amount || 0), 0);
   const saldo = totalEntrada - totalSaida;
 
   // Export
@@ -285,229 +232,284 @@ const Finance = () => {
   }), [filtered]);
 
   const exportCSV = () => {
-    const headers = ['Vencimento', 'Pagamento', 'Tipo', 'Categoria', 'Status', 'Meio de Pagamento', 'Juros', 'Valor', 'Obs.'];
-    const lines = [headers.join(';')]
-      .concat(
-        exportRows.map((r) =>
-          [
-            r.vencimento,
-            r.pagamento,
-            r.tipo,
-            r.categoria,
-            r.status,
-            r.meio_pagamento,
-            r.juros,
-            r.valor.toString().replace('.', ','),
-            r.observacoes?.replaceAll(';', ','),
-          ].join(';'),
-        ),
-      )
-      .join('\n');
+    const headers = ['Vencimento','Pagamento','Tipo','Categoria','Status','Meio de Pagamento','Juros','Valor','Observações'];
+    const body = exportRows.map(r => [
+      r.vencimento, r.pagamento, r.tipo, r.categoria, r.status, r.meio_pagamento, r.juros, String(r.valor).replace('.', ','), r.observacoes
+    ]);
+    const csv = [headers, ...body].map(row =>
+      row.map(v => {
+        let s = v == null ? '' : String(v);
+        const needsQuotes = /[",;\n]/.test(s);
+        s = s.replace(/"/g, '""');
+        return needsQuotes ? `"${s}"` : s;
+      }).join(';')
+    ).join('\n');
 
-    const blob = new Blob([lines], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `transacoes-${format(new Date(), 'yyyyMMdd-HHmmss')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    a.href = url; a.download = `financas.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   };
 
-  const exportPDF = async () => {
+  const exportPDF = () => {
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt' });
+    doc.setFontSize(14);
+    doc.text('Relatório Financeiro', 40, 40);
+
+    const totalLine = `Entradas: ${BRL(totalEntrada)} | Saídas: ${BRL(totalSaida)} | Saldo: ${BRL(saldo)}`;
+    doc.setFontSize(10);
+    doc.text(totalLine, 40, 60);
+
+    const head = [['Vencimento','Pagamento','Tipo','Categoria','Status','Meio de Pagamento','Juros','Valor','Observações']];
+    const body = exportRows.map(r => [r.vencimento, r.pagamento, r.tipo, r.categoria, r.status, r.meio_pagamento, r.juros, BRL(r.valor), r.observacoes]);
+
+    // @ts-ignore
+    doc.autoTable({
+      head, body,
+      startY: 80,
+      styles: { fontSize: 9, cellPadding: 6 },
+      headStyles: { fillColor: [33, 33, 33] },
+      columnStyles: {
+        0: { cellWidth: 70 }, 1: { cellWidth: 70 }, 2: { cellWidth: 60 },
+        3: { cellWidth: 110 }, 4: { cellWidth: 70 }, 5: { cellWidth: 110 },
+        6: { cellWidth: 70 }, 7: { cellWidth: 70 }, 8: { cellWidth: 180 },
+      }
+    });
+
+    doc.save('financas.pdf');
+  };
+
+  // Handlers form
+  const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+  const onDueDateChange = (e) => setForm((f) => ({ ...f, dueDateBr: maskBR(e.target.value) }));
+  const onPayDateChange = (e) => setForm((f) => ({ ...f, payDateBr: maskBR(e.target.value) }));
+
+  const openCreate = () => { setEditing(null); setForm(emptyForm); setOpen(true); };
+  const openEdit = (tx) => {
+    // preenche novos campos a partir do registro existente
+    const dueDateBr = isoToBR(String(tx.date || '').slice(0, 10)) || '';
+    const action = String(tx.action_text || '');
+    const payDateBr = isYMD(action) ? isoToBR(action.slice(0,10)) : '';
+    setEditing(tx);
+    setForm({
+      type: tx.type || 'entrada',
+      dueDateBr,
+      payDateBr,
+      paymentMethod: tx.client_text || '',
+      interestRate: tx.material_text || '',
+      amount: String(tx.amount ?? ''),
+      category: tx.category || '',
+      status: tx.status || 'Pendente',
+      notes: tx.notes || '',
+      // retrocompat somente para exibição
+      action_text: tx.action_text || '',
+      client_text: tx.client_text || '',
+      material_text: tx.material_text || '',
+      action_id: tx.action_id || '',
+      client_id: tx.client_id || '',
+      material_id: tx.material_id || '',
+    });
+    setOpen(true);
+  };
+
+  const submit = async (e) => {
+    e.preventDefault(); setSaving(true);
     try {
-      const { default: jsPDF } = await import('jspdf');
-      const { default: autoTable } = await import('jspdf-autotable');
+      const dateISO = brToISO(form.dueDateBr);
+      if (!isYMD(dateISO)) { alert('Data de Vencimento inválida. Use DD/MM/AAAA.'); setSaving(false); return; }
 
-      const doc = new jsPDF();
-      doc.text('Transações', 14, 16);
+      const payISO = brToISO(form.payDateBr);
+      const payload = {
+        type: form.type,
+        date: dateISO, // vencimento
+        action_text: isYMD(payISO) ? payISO : '', // pagamento opcional (ISO)
+        client_text: form.paymentMethod || '',     // meio de pagamento
+        material_text: form.interestRate || '',    // juros (string)
+        amount: Number(form.amount || 0),
+        category: form.category || '',
+        status: form.status || 'Pendente',
+        notes: form.notes || '',
+        // manter *_id nulos no novo front
+        action_id: null, client_id: null, material_id: null,
+      };
 
-      autoTable(doc, {
-        startY: 22,
-        styles: { fontSize: 8 },
-        head: [['Vencimento', 'Pagamento', 'Tipo', 'Categoria', 'Status', 'Meio Pag.', 'Juros', 'Valor', 'Obs.']],
-        body: exportRows.map((r) => [
-          r.vencimento,
-          r.pagamento,
-          r.tipo,
-          r.categoria,
-          r.status,
-          r.meio_pagamento,
-          r.juros,
-          BRL(r.valor),
-          r.observacoes,
-        ]),
-      });
+      if (editing?.id) await api.put(`${TX_PATH}/${editing.id}`, payload);
+      else await api.post(TX_PATH, payload);
 
-      doc.save(`transacoes-${format(new Date(), 'yyyyMMdd-HHmmss')}.pdf`);
+      setOpen(false); setEditing(null); setForm(emptyForm); loadAll();
     } catch {
-      alert('Falha ao exportar PDF');
-    }
+      alert('Não foi possível salvar. Verifique o backend.');
+    } finally { setSaving(false); }
   };
 
-  // =================== UI ===================
+  const updateStatus = async (tx, newStatus) => {
+    try {
+      await api.patch(`${TX_PATH}/${tx.id}`, { status: newStatus });
+      setTransactions((prev) => prev.map((t) => (t.id === tx.id ? { ...t, status: newStatus } : t)));
+    } catch { alert('Não foi possível atualizar o status.'); }
+  };
 
+  const handleDelete = async (id) => {
+    if (!window.confirm('Tem certeza que deseja excluir este lançamento?')) return;
+    try { await api.delete(`${TX_PATH}/${id}`); loadAll(); }
+    catch { alert('Não foi possível excluir.'); }
+  };
+
+  /* =================== UI =================== */
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+    <div className="max-w-screen-2xl mx-auto px-3 md:px-6 py-4 md:py-6">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl md:text-2xl font-semibold">Finanças</h1>
+
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" onClick={exportCSV}>
+            <Download className="size-4" /> Exportar CSV
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={exportPDF}>
+            <Download className="size-4" /> Exportar PDF
+          </Button>
+        </div>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card>
-          <CardHeader>
-            <CardTitle>Entradas</CardTitle>
-            <CardDescription>Receitas registradas</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Entradas</CardTitle>
+            <ArrowUpCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">{BRL(totalEntrada)}</div>
+            <div className="text-xl sm:text-2xl font-bold">{BRL(totalEntrada)}</div>
+            <p className="text-xs text-muted-foreground">Receitas registradas</p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader>
-            <CardTitle>Saídas/Despesas</CardTitle>
-            <CardDescription>Gastos registrados</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Saídas/Despesas</CardTitle>
+            <ArrowDownCircle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{BRL(totalSaida)}</div>
+            <div className="text-xl sm:text-2xl font-bold">{BRL(totalSaida)}</div>
+            <p className="text-xs text-muted-foreground">Gastos registrados</p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader>
-            <CardTitle>Saldo</CardTitle>
-            <CardDescription>Entradas - Saídas</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Saldo</CardTitle>
+            <TrendingUp className={`h-4 w-4 ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-700">{BRL(saldo)}</div>
+            <div className={`text-xl sm:text-2xl font-bold ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {BRL(saldo)}
+            </div>
+            <p className="text-xs text-muted-foreground">Entradas - Saídas</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Gráficos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <Card>
-          <CardHeader>
-            <CardTitle>Entradas vs Saídas</CardTitle>
-          </CardHeader>
-          <CardContent className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={[
-                  { name: 'Entradas', valor: totalEntrada },
-                  { name: 'Saídas', valor: totalSaida },
-                ]}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis tickFormatter={(v) => BRL(v)} />
-                <Tooltip formatter={(v) => BRL(v)} />
-                <Bar dataKey="valor" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Gastos por Categoria</CardTitle>
-          </CardHeader>
-          <CardContent className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+          <CardHeader><CardTitle className="text-lg">Gastos por Categoria</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={Object.entries(
-                    filtered
-                      .filter((t) => String(t.type || '').toLowerCase() !== 'entrada')
-                      .reduce((acc, t) => {
-                        const k = t.category || '—';
-                        acc[k] = (acc[k] || 0) + Number(t.amount || 0);
-                        return acc;
-                      }, {}),
-                  ).map(([name, value]) => ({ name, value }))}
-                  dataKey="value"
-                  nameKey="name"
+                  data={categoryChart}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                   outerRadius={80}
-                  label={(e) => `${e.name} (${BRL(e.value)})`}
+                  fill="#8884d8"
+                  dataKey="value"
                 >
-                  {filtered.map((_, idx) => (
-                    <Cell key={idx} />
+                  {categoryChart.map((entry, i) => (
+                    <Cell key={i} fill={colorForCategory(entry.name)} />
                   ))}
                 </Pie>
-                <Legend />
                 <Tooltip formatter={(v) => BRL(v)} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-lg">Fluxo Mensal</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={monthlyChart} margin={{ top: 10, right: 10, left: 0, bottom: 20 }} barCategoryGap="20%" barGap={6}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis
+                  tickFormatter={(v) => (v === 0 ? 'R$ 0' : BRL_COMPACT(v))}
+                  domain={[0, (dataMax) => (dataMax || 0) * 1.15 + 1]}
+                  allowDecimals={false}
+                />
+                <Tooltip formatter={(v) => BRL(v)} />
+                <Legend />
+                <Bar dataKey="entrada" name="Entradas" fill={COLORS.entrada} />
+                <Bar dataKey="saida" name="Saídas" fill={COLORS.saida} />
+                <Bar dataKey="despesa" name="Despesas" fill={COLORS.despesa} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Transações */}
-      <Card>
-        <CardHeader className="flex-row items-center justify-between gap-2">
-          <div>
-            <CardTitle>Transações</CardTitle>
-            <CardDescription>Gerencie entradas, saídas e despesas</CardDescription>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Todos os tipos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os tipos</SelectItem>
-                <SelectItem value="entrada">Entradas</SelectItem>
-                <SelectItem value="saida">Saídas</SelectItem>
-                <SelectItem value="despesa">Despesas</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={monthFilter} onValueChange={setMonthFilter}>
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="Todos os meses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os meses</SelectItem>
-                {Array.from({ length: 12 }).map((_, i) => {
-                  const d = new Date();
-                  const y = d.getFullYear();
-                  const m = String(i + 1).padStart(2, '0');
-                  return (
-                    <SelectItem key={m} value={`${y}-${m}`}>
-                      {`${m}/${y}`}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-
-            <Button variant="secondary" onClick={() => { setSearch(''); setTypeFilter('todos'); setMonthFilter('todos'); }}>
-              <X className="size-4 mr-2" />
-              Limpar Filtros
-            </Button>
-
-            <Button onClick={openNew}>
-              <Plus className="size-4 mr-2" />
-              Novo Lançamento
-            </Button>
+      {/* Filtros */}
+      <Card className="mb-4">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-lg md:text-xl font-semibold">Transações</CardTitle>
+              <CardDescription>Gerencie entradas, saídas e despesas</CardDescription>
+            </div>
+            <div className="relative w-80 max-w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input className="pl-10 pr-3" placeholder="Buscar transações..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="relative grow">
-              <Input
-                placeholder="Buscar transações..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 items-center">
+            <div className="w-full">
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                <option value="todos">Todos os tipos</option>
+                <option value="entrada">Entrada</option>
+                <option value="saida">Saída</option>
+                <option value="despesa">Despesa</option>
+              </select>
             </div>
-            <Button variant="outline" onClick={exportCSV}><Download className="size-4 mr-2" /> Exportar CSV</Button>
-            <Button variant="outline" onClick={exportPDF}><FileDown className="size-4 mr-2" /> Exportar PDF</Button>
-          </div>
 
-          <div className="rounded-md border overflow-x-auto">
+            <div className="w-full">
+              <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                <option value="todos">Todos os meses</option>
+                {monthOptions.map((m) => (<option key={m.value} value={m.value}>{m.label}</option>))}
+              </select>
+            </div>
+
+            <div className="w-full">
+              <Button variant="outline" className="w-full" onClick={() => { setSearch(''); setTypeFilter('todos'); setMonthFilter('todos'); }}>
+                Limpar Filtros
+              </Button>
+            </div>
+
+            <div className="w-full">
+              <Button className="w-full gap-2" onClick={openCreate}>
+                <Plus className="size-4" /> Novo Lançamento
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tabela */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto rounded-xl border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -524,150 +526,156 @@ const Finance = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((t) => {
-                  const typeColor = typeTone(t.type);
-                  const statusVariant = statusTone(t.status);
+                {loading ? (
+                  <TableRow><TableCell colSpan={10} className="text-center py-8">Carregando…</TableCell></TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow><TableCell colSpan={10} className="text-center py-8">Nenhuma transação encontrada.</TableCell></TableRow>
+                ) : (
+                  filtered.map((t) => {
+                    const payRaw = String(t.action_text || '');
+                    const pagamento = isYMD(payRaw) ? isoToBR(payRaw.slice(0,10)) : (payRaw || '—');
+                    const statusVariant =
+                      (t.status || 'Pendente') === 'Pago' ? 'default' :
+                      (t.status || 'Pendente') === 'Cancelado' ? 'destructive' : 'secondary';
+                    const typeColor = t.type === 'entrada' ? 'default' : t.type === 'saida' ? 'destructive' : 'secondary';
 
-                  const venc = isoToBR(String(t.date || '').slice(0, 10)) || '—';
-                  const rawPag = String(t.action_text || '');
-                  const pagamento = isYMD(rawPag) ? isoToBR(rawPag.slice(0, 10)) : (rawPag || '—');
-
-                  return (
-                    <TableRow key={t.id}>
-                      <TableCell className="text-center">{venc}</TableCell>
-                      <TableCell className="text-center">{pagamento}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={typeColor} className="capitalize">{t.type}</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">{t.category || '—'}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={statusVariant}>{t.status || 'Pendente'}</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">{t.client_text || '—'}</TableCell>
-                      <TableCell className="text-center">{t.material_text || '—'}</TableCell>
-                      <TableCell className="text-center font-medium">{BRL(t.amount)}</TableCell>
-                      <TableCell className="text-center">{t.notes || '—'}</TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex justify-center gap-2">
-                          <Button variant="outline" size="sm" onClick={() => openEdit(t)}><Edit className="size-4" />Editar</Button>
-                          <Button variant="destructive" size="sm" onClick={() => handleDelete(t.id)}><Trash2 className="size-4" />Excluir</Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-
-                {!loading && filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
-                      Nenhuma transação encontrada.
-                    </TableCell>
-                  </TableRow>
+                    return (
+                      <TableRow key={t.id}>
+                        <TableCell className="text-center">{isoToBR(String(t.date || '').slice(0, 10))}</TableCell>
+                        <TableCell className="text-center">{pagamento}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={typeColor} className="capitalize">{t.type}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">{t.category || '—'}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Badge variant={statusVariant}>{t.status || 'Pendente'}</Badge>
+                            <select
+                              className="border rounded-md px-2 py-1 text-xs bg-background"
+                              value={t.status || 'Pendente'}
+                              onChange={(e) => updateStatus(t, e.target.value)}
+                            >
+                              <option>Pago</option>
+                              <option>Pendente</option>
+                              <option>Cancelado</option>
+                            </select>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">{t.client_text || '—'}</TableCell>
+                        <TableCell className="text-center">{t.material_text || '—'}</TableCell>
+                        <TableCell className="text-center font-medium">{BRL(t.amount)}</TableCell>
+                        <TableCell className="text-center">{t.notes || '—'}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex justify-center gap-2">
+                            <Button variant="outline" size="sm" className="gap-2" onClick={() => openEdit(t)}><Edit className="size-4" />Editar</Button>
+                            <Button variant="destructive" size="sm" className="gap-2" onClick={() => handleDelete(t.id)}><Trash2 className="size-4" />Excluir</Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
           </div>
-
-          <div className="text-sm text-muted-foreground">
-            Total: {filtered.length} | Entradas: <span className="text-emerald-600">{BRL(totalEntrada)}</span> | Saídas: <span className="text-red-600">{BRL(totalSaida)}</span> | Saldo: <span className="text-emerald-700 font-semibold">{BRL(saldo)}</span>
-          </div>
+          <p className="text-xs text-muted-foreground mt-3 px-6 pb-6">
+            Total: <strong>{filtered.length}</strong> | Entradas: <strong>{BRL(totalEntrada)}</strong> | Saídas: <strong>{BRL(totalSaida)}</strong> | Saldo: <strong className={saldo >= 0 ? 'text-green-600' : 'text-red-600'}>{BRL(saldo)}</strong>
+          </p>
         </CardContent>
       </Card>
 
       {/* Modal */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
-          </DialogHeader>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => { if (!v) { setEditing(null); setForm(emptyForm); } setOpen(v); }}
+      >
+        <DialogContent className="w-[95vw] sm:max-w-2xl p-0">
+          <form onSubmit={submit} className="max-h-[80vh] flex flex-col">
+            <div className="p-6 pb-2">
+              <DialogHeader className="pb-2">
+                <DialogTitle>{editing ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+                <DialogDescription>
+                  Datas no formato DD/MM/AAAA. Pagamento é opcional.
+                </DialogDescription>
+              </DialogHeader>
+            </div>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="md:col-span-2">
-                <Label>Tipo</Label>
-                <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="entrada">Entrada</SelectItem>
-                    <SelectItem value="saida">Saída</SelectItem>
-                    <SelectItem value="despesa">Despesa</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label>Tipo</Label>
+                  <select name="type" value={form.type} onChange={onChange} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                    <option value="entrada">Entrada</option>
+                    <option value="saida">Saída</option>
+                    <option value="despesa">Despesa</option>
+                  </select>
+                </div>
 
-              <div>
-                <Label>Vencimento</Label>
-                <Input
-                  name="date"
-                  placeholder="dd/mm/aaaa"
-                  value={form.date}
-                  onChange={onFormChange}
-                  inputMode="numeric"
-                />
-              </div>
+                {/* Datas lado a lado em md+ */}
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Data de Vencimento</Label>
+                    <Input name="dueDateBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.dueDateBr} onChange={onDueDateChange} required />
+                  </div>
+                  <div>
+                    <Label>Data de Pagamento</Label>
+                    <Input name="payDateBr" placeholder="DD/MM/AAAA" inputMode="numeric" value={form.payDateBr} onChange={onPayDateChange} />
+                  </div>
+                </div>
 
-              <div>
-                <Label>Pagamento</Label>
-                <Input
-                  name="action_text"
-                  placeholder="dd/mm/aaaa ou texto"
-                  value={form.action_text}
-                  onChange={onFormChange}
-                />
+                <div>
+                  <Label>Valor</Label>
+                  <Input type="number" step="0.01" name="amount" value={form.amount} onChange={onChange} required />
+                </div>
+                <div>
+                  <Label>Categoria</Label>
+                  <Input name="category" value={form.category} onChange={onChange} placeholder="Ex.: Mídia, Produção..." />
+                </div>
+
+                <div>
+                  <Label>Status</Label>
+                  <select name="status" value={form.status} onChange={onChange} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                    <option>Pago</option>
+                    <option>Pendente</option>
+                    <option>Cancelado</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Meio de Pagamento</Label>
+                    <Input name="paymentMethod" value={form.paymentMethod} onChange={onChange} placeholder="Ex.: PIX, Boleto, Cartão..." />
+                  </div>
+                  <div>
+                    <Label>Taxa de Juros</Label>
+                    <Input name="interestRate" value={form.interestRate} onChange={onChange} placeholder="Ex.: 2.5" />
+                  </div>
+
+                  {/* se registro antigo tiver action_text não-ISO, mostrar referência */}
+                  {editing && form.action_text && !isYMD(String(form.action_text)) && (
+                    <div className="md:col-span-2">
+                      <Label>Pagamento (texto antigo)</Label>
+                      <Input value={form.action_text} readOnly className="bg-muted" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="md:col-span-2">
+                  <Label>Observações</Label>
+                  <Textarea name="notes" rows={3} value={form.notes} onChange={onChange} />
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div>
-                <Label>Categoria</Label>
-                <Input name="category" value={form.category} onChange={onFormChange} />
-              </div>
-
-              <div>
-                <Label>Status</Label>
-                <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Pago">Pago</SelectItem>
-                    <SelectItem value="Pendente">Pendente</SelectItem>
-                    <SelectItem value="Cancelado">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Meio de Pagamento</Label>
-                <Input name="client_text" value={form.client_text} onChange={onFormChange} placeholder="PIX, TED, Boleto..." />
-              </div>
-
-              <div>
-                <Label>Juros</Label>
-                <Input name="material_text" value={form.material_text} onChange={onFormChange} placeholder="Ex.: 2% a.m." />
-              </div>
+            <div className="border-t bg-background px-6 py-3 flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm); }}>
+                Cancelar
+              </Button>
+              <Button type="submit" size="sm" disabled={saving}>
+                {saving ? 'Salvando...' : 'Salvar'}
+              </Button>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div>
-                <Label>Valor</Label>
-                <Input
-                  name="amount"
-                  value={form.amount}
-                  onChange={onFormChange}
-                  placeholder="0,00"
-                  inputMode="decimal"
-                />
-              </div>
-              <div className="md:col-span-3">
-                <Label>Observações</Label>
-                <Textarea name="notes" value={form.notes} onChange={onFormChange} rows={2} />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button variant="secondary" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={save} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
-          </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
