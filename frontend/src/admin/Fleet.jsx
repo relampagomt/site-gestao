@@ -371,20 +371,20 @@ export default function FleetPage() {
           if (!o) resetFuel();
         }}
       >
-        <DialogContent className="w-[95vw] max-w-[1280px] sm:p-8">
+        <DialogContent className="w-[98vw] max-w-[1400px] sm:p-8">
           <DialogHeader>
             <DialogTitle>Novo Abastecimento</DialogTitle>
           </DialogHeader>
 
           <form onSubmit={submitFuel} className="grid md:grid-cols-12 gap-4">
-            {/* Veículo + Cadastrar */}
-            <div className="md:col-span-4 flex items-end gap-3">
-              <div className="flex-1 flex flex-col gap-1 min-w-0">
+            {/* Veículo + Cadastrar (mais largura) */}
+            <div className="md:col-span-5 flex items-end gap-3">
+              <div className="flex-1 flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground">Veículo</span>
                 <select
                   value={fuel.placa}
                   onChange={(e) => setFuel((p) => ({ ...p, placa: e.target.value }))}
-                  className="border rounded px-3 h-11"
+                  className="border rounded px-3 h-11 w-full"
                   required
                 >
                   <option value="">Selecione o veículo</option>
@@ -409,39 +409,39 @@ export default function FleetPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[140px]">
               <span className="text-xs text-muted-foreground">Data</span>
               <InputDateBR
                 value={fuel.data}
                 onChange={(val) => setFuel((p) => ({ ...p, data: val }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[140px]">
               <span className="text-xs text-muted-foreground">Litros</span>
               <Input
                 placeholder="Litros"
                 value={fuel.litros}
                 onChange={(e) => setFuel((p) => ({ ...p, litros: e.target.value }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[165px]">
               <span className="text-xs text-muted-foreground">Preço/Litro</span>
               <Input
                 placeholder="Preço/Litro"
                 value={fuel.preco_litro}
                 onChange={(e) => setFuel((p) => ({ ...p, preco_litro: e.target.value }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
               <span className="text-xs text-muted-foreground">Combustível</span>
               <select
-                className="border rounded px-3 h-11"
+                className="border rounded px-3 h-11 w-full"
                 value={fuel.combustivel}
                 onChange={(e) => setFuel((p) => ({ ...p, combustivel: e.target.value }))}
               >
@@ -453,42 +453,42 @@ export default function FleetPage() {
               </select>
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
               <span className="text-xs text-muted-foreground">Odômetro</span>
               <InputOdometerBR
                 value={fuel.odometro}
                 onChange={(val) => setFuel((p) => ({ ...p, odometro: val }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
               <span className="text-xs text-muted-foreground">Posto</span>
               <Input
                 placeholder="Posto"
                 value={fuel.posto}
                 onChange={(e) => setFuel((p) => ({ ...p, posto: e.target.value }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
               <span className="text-xs text-muted-foreground">Motorista</span>
               <Input
                 placeholder="Motorista"
                 value={fuel.motorista}
                 onChange={(e) => setFuel((p) => ({ ...p, motorista: e.target.value }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
               <span className="text-xs text-muted-foreground">Nota fiscal</span>
               <Input
                 placeholder="Nota fiscal"
                 value={fuel.nota_fiscal}
                 onChange={(e) => setFuel((p) => ({ ...p, nota_fiscal: e.target.value }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
@@ -498,6 +498,7 @@ export default function FleetPage() {
                 placeholder="Observações"
                 value={fuel.observacoes}
                 onChange={(e) => setFuel((p) => ({ ...p, observacoes: e.target.value }))}
+                className="w-full"
               />
             </div>
 
@@ -524,47 +525,47 @@ export default function FleetPage() {
 
       {/* MODAL: FILTROS AVANÇADOS (LARGO) */}
       <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
-        <DialogContent className="w-[95vw] max-w-[1280px] sm:p-8">
+        <DialogContent className="w-[98vw] max-w-[1400px] sm:p-8">
           <DialogHeader>
             <DialogTitle>Filtros</DialogTitle>
           </DialogHeader>
 
           <div className="grid md:grid-cols-12 gap-4">
-            {/* 1ª linha: 2 | 2 | 3 | 3 | 2 */}
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+            {/* 1ª linha mais folgada: 2 | 3 | 3 | 2 | 2 */}
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[150px]">
               <span className="text-xs text-muted-foreground">Placa</span>
               <Input
                 placeholder="Placa"
                 value={filters.placa}
                 onChange={(e) => setFilters((f) => ({ ...f, placa: e.target.value }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
               <span className="text-xs text-muted-foreground">Veículo</span>
               <Input
                 placeholder="Veículo"
                 value={filters.veiculo}
                 onChange={(e) => setFilters((f) => ({ ...f, veiculo: e.target.value }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
               <span className="text-xs text-muted-foreground">Motorista</span>
               <Input
                 placeholder="Motorista"
                 value={filters.motorista}
                 onChange={(e) => setFilters((f) => ({ ...f, motorista: e.target.value }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[170px]">
               <span className="text-xs text-muted-foreground">Combustível</span>
               <select
-                className="border rounded px-3 h-11"
+                className="border rounded px-3 h-11 w-full"
                 value={filters.combustivel}
                 onChange={(e) => setFilters((f) => ({ ...f, combustivel: e.target.value }))}
               >
@@ -577,18 +578,18 @@ export default function FleetPage() {
               </select>
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[170px]">
               <span className="text-xs text-muted-foreground">Posto</span>
               <Input
                 placeholder="Posto"
                 value={filters.posto}
                 onChange={(e) => setFilters((f) => ({ ...f, posto: e.target.value }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
             {/* 2ª linha */}
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[150px]">
               <span className="text-xs text-muted-foreground">Preço</span>
               <Input
                 type="number"
@@ -596,25 +597,25 @@ export default function FleetPage() {
                 placeholder="Preço"
                 value={filters.preco}
                 onChange={(e) => setFilters((f) => ({ ...f, preco: e.target.value }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[150px]">
               <span className="text-xs text-muted-foreground">De</span>
               <InputDateBR
                 value={filters.de}
                 onChange={(val) => setFilters((f) => ({ ...f, de: val }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[150px]">
               <span className="text-xs text-muted-foreground">Até</span>
               <InputDateBR
                 value={filters.ate}
                 onChange={(val) => setFilters((f) => ({ ...f, ate: val }))}
-                className="h-11"
+                className="h-11 w-full"
               />
             </div>
 
@@ -645,19 +646,19 @@ export default function FleetPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL DE EDIÇÃO (mantido espaçoso) */}
+      {/* MODAL DE EDIÇÃO (LARGO) */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="w-[95vw] max-w-[1200px] sm:p-8">
+        <DialogContent className="w-[98vw] max-w-[1400px] sm:p-8">
           <DialogHeader>
             <DialogTitle>Editar Abastecimento</DialogTitle>
           </DialogHeader>
 
           {editing && (
             <div className="grid md:grid-cols-12 gap-4">
-              <div className="md:col-span-4 flex flex-col gap-1 min-w-0">
+              <div className="md:col-span-4 flex flex-col gap-1 min-w-[240px]">
                 <span className="text-xs text-muted-foreground">Placa</span>
                 <select
-                  className="border rounded px-3 h-11"
+                  className="border rounded px-3 h-11 w-full"
                   value={editing.placa}
                   onChange={(e) => setEditing((p) => ({ ...p, placa: e.target.value }))}
                 >
@@ -671,28 +672,28 @@ export default function FleetPage() {
                 </select>
               </div>
 
-              <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+              <div className="md:col-span-2 flex flex-col gap-1 min-w-[140px]">
                 <span className="text-xs text-muted-foreground">Data</span>
                 <InputDateBR
-                  className="h-11"
+                  className="h-11 w-full"
                   value={editing.data}
                   onChange={(val) => setEditing((p) => ({ ...p, data: val }))}
                 />
               </div>
 
-              <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+              <div className="md:col-span-2 flex flex-col gap-1 min-w-[140px]">
                 <span className="text-xs text-muted-foreground">Litros</span>
                 <Input
-                  className="h-11"
+                  className="h-11 w-full"
                   value={editing.litros}
                   onChange={(e) => setEditing((p) => ({ ...p, litros: e.target.value }))}
                 />
               </div>
 
-              <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+              <div className="md:col-span-2 flex flex-col gap-1 min-w-[165px]">
                 <span className="text-xs text-muted-foreground">Preço/Litro</span>
                 <Input
-                  className="h-11"
+                  className="h-11 w-full"
                   value={editing.preco_litro}
                   onChange={(e) =>
                     setEditing((p) => ({ ...p, preco_litro: e.target.value }))
@@ -700,10 +701,10 @@ export default function FleetPage() {
                 />
               </div>
 
-              <div className="md:col-span-2 flex flex-col gap-1 min-w-0">
+              <div className="md:col-span-2 flex flex-col gap-1 min-w-[180px]">
                 <span className="text-xs text-muted-foreground">Combustível</span>
                 <select
-                  className="border rounded px-3 h-11"
+                  className="border rounded px-3 h-11 w-full"
                   value={editing.combustivel}
                   onChange={(e) =>
                     setEditing((p) => ({ ...p, combustivel: e.target.value }))
@@ -717,19 +718,19 @@ export default function FleetPage() {
                 </select>
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-0">
+              <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
                 <span className="text-xs text-muted-foreground">Posto</span>
                 <Input
-                  className="h-11"
+                  className="h-11 w-full"
                   value={editing.posto || ""}
                   onChange={(e) => setEditing((p) => ({ ...p, posto: e.target.value }))}
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-0">
+              <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
                 <span className="text-xs text-muted-foreground">Motorista</span>
                 <Input
-                  className="h-11"
+                  className="h-11 w-full"
                   value={editing.motorista || ""}
                   onChange={(e) =>
                     setEditing((p) => ({ ...p, motorista: e.target.value }))
@@ -737,19 +738,19 @@ export default function FleetPage() {
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-0">
+              <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
                 <span className="text-xs text-muted-foreground">Odômetro</span>
                 <InputOdometerBR
-                  className="h-11"
+                  className="h-11 w-full"
                   value={editing.odometro || ""}
                   onChange={(val) => setEditing((p) => ({ ...p, odometro: val }))}
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-0">
+              <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
                 <span className="text-xs text-muted-foreground">Nota fiscal</span>
                 <Input
-                  className="h-11"
+                  className="h-11 w-full"
                   value={editing.nota_fiscal || ""}
                   onChange={(e) =>
                     setEditing((p) => ({ ...p, nota_fiscal: e.target.value }))
@@ -764,6 +765,7 @@ export default function FleetPage() {
                   onChange={(e) =>
                     setEditing((p) => ({ ...p, observacoes: e.target.value }))
                   }
+                  className="w-full"
                 />
               </div>
 
