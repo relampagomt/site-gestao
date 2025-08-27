@@ -27,10 +27,8 @@ const parseFlex = (v) => {
   if (typeof v === "number") return v;
   let s = String(v).trim();
   if (!s) return 0;
-  // Se contém vírgula e ponto, assume BR: . milhar, , decimal
   if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
-  else if (s.includes(",")) s = s.replace(",", "."); // somente vírgula = decimal
-  // senão, apenas ponto já é decimal
+  else if (s.includes(",")) s = s.replace(",", ".");
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 };
@@ -85,20 +83,32 @@ function InputDateBR({ value, onChange, placeholder = "dd/mm/aaaa", ...props }) 
   );
 }
 
-/* Valor unit. para exibir na lista:
-   - se tiver apenas 1 item, mostra
-   - se todos os itens tiverem o MESMO valor unit., mostra
-   - caso contrário, retorna null (mostra "—")
+/* Valor unit. “puro” para exibir na lista:
+   - se tiver 1 item, mostra
+   - se TODOS os itens tiverem o MESMO valor unit., mostra
+   - senão, retorna null
 */
 const orderUnitValue = (o) => {
   const itens = Array.isArray(o.itens) ? o.itens : [];
   if (!itens.length) return null;
-
   const vals = itens.map((i) => parseFlex(i.valor_unit)).filter(Number.isFinite);
   if (!vals.length) return null;
-
   const uniq = new Set(vals.map((v) => v.toFixed(2)));
   return uniq.size === 1 ? vals[0] : null;
+};
+
+/* Quantidade total da ordem (soma dos itens) */
+const orderQty = (o) =>
+  (Array.isArray(o.itens) ? o.itens : []).reduce(
+    (acc, i) => acc + parseFlex(i.quantidade),
+    0
+  );
+
+/* Valor médio da ordem (Total ÷ Qtd) quando fizer sentido */
+const orderAvgUnit = (o) => {
+  const q = orderQty(o);
+  const t = parseFlex(o.valor_total);
+  return q > 0 ? t / q : 0;
 };
 
 const emptyOrder = () => ({
@@ -116,6 +126,15 @@ export default function Orders() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
+  // Toggle: Valor médio (multi-itens) — persistido em localStorage
+  const AVG_KEY = "rel_showAvgUnit";
+  const [showAvgUnit, setShowAvgUnit] = useState(() => {
+    try { return localStorage.getItem(AVG_KEY) !== "0"; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(AVG_KEY, showAvgUnit ? "1" : "0"); } catch {}
+  }, [showAvgUnit]);
+
   const [form, setForm] = useState(emptyOrder());
   const [editingId, setEditingId] = useState(null);
   const [open, setOpen] = useState(false);
@@ -131,6 +150,7 @@ export default function Orders() {
     setLoading(true);
     setErr("");
     try {
+      // mantém a rota que JÁ FUNCIONAVA
       const { data } = await api.get("/commercial/orders");
       setOrders(Array.isArray(data) ? data : []);
     } catch (e) {
@@ -199,7 +219,7 @@ export default function Orders() {
 
     const payload = {
       ...form,
-      data: toISO(form.data), // BR -> ISO
+      data: toISO(form.data), // BR -> ISO (mantém seu padrão)
       itens: (form.itens || []).map((i) => ({
         descricao: i.descricao,
         quantidade: parseFlex(i.quantidade),
@@ -243,19 +263,40 @@ export default function Orders() {
     load();
   };
 
+  /* ---------- Totais p/ rodapé ---------- */
+  const qtdGeral = useMemo(
+    () => orders.reduce((acc, o) => acc + orderQty(o), 0),
+    [orders]
+  );
+  const totalGeral = useMemo(
+    () => orders.reduce((acc, o) => acc + parseFlex(o.valor_total), 0),
+    [orders]
+  );
+
   /* ---------- UI ---------- */
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Ordens</h1>
-        <Button
-          onClick={() => {
-            resetForm();
-            setOpen(true);
-          }}
-        >
-          Nova Ordem
-        </Button>
+
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-gray-600 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={showAvgUnit}
+              onChange={(e) => setShowAvgUnit(e.target.checked)}
+            />
+            Valor médio (multi-itens)
+          </label>
+          <Button
+            onClick={() => {
+              resetForm();
+              setOpen(true);
+            }}
+          >
+            Nova Ordem
+          </Button>
+        </div>
       </div>
 
       {err && (
@@ -281,46 +322,76 @@ export default function Orders() {
                   <TableHead className="text-center">Título</TableHead>
                   <TableHead className="text-center">Descrição</TableHead>
                   <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">Qtd</TableHead>{/* NOVA */}
                   <TableHead className="text-center">Valor Unit.</TableHead>
                   <TableHead className="text-center">Total</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orders.map((o) => (
-                  <tr key={o.id} className="border-t">
-                    <TableCell className="text-center align-middle">
-                      {fmtBRDate(o.data)}
-                    </TableCell>
-                    <TableCell className="text-center align-middle">{o.cliente}</TableCell>
-                    <TableCell className="text-center align-middle">{o.titulo}</TableCell>
-                    <TableCell className="text-center align-middle">
-                      {o.descricao || "—"}
-                    </TableCell>
-                    <TableCell className="text-center align-middle">{o.status}</TableCell>
-                    <TableCell className="text-center align-middle">
-                      {orderUnitValue(o) !== null ? BRL(orderUnitValue(o)) : "—"}
-                    </TableCell>
-                    <TableCell className="text-center align-middle">
-                      {BRL(o.valor_total)}
-                    </TableCell>
-                    <TableCell className="text-center align-middle">
-                      <div className="flex justify-center gap-2">
-                        <Button variant="secondary" onClick={() => edit(o)}>
-                          Editar
-                        </Button>
-                        <Button variant="destructive" onClick={() => del(o)}>
-                          Excluir
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </tr>
-                ))}
+                {orders.map((o) => {
+                  const unitPure = orderUnitValue(o);             // valor “puro” se único/igual
+                  const qty = orderQty(o);
+                  const unitToShow =
+                    unitPure !== null
+                      ? BRL(unitPure)
+                      : showAvgUnit && qty > 0
+                      ? BRL(orderAvgUnit(o)) // média quando toggle ligado
+                      : "—";
+                  return (
+                    <tr key={o.id} className="border-t">
+                      <TableCell className="text-center align-middle">
+                        {fmtBRDate(o.data)}
+                      </TableCell>
+                      <TableCell className="text-center align-middle">{o.cliente}</TableCell>
+                      <TableCell className="text-center align-middle">{o.titulo}</TableCell>
+                      <TableCell className="text-center align-middle">
+                        {o.descricao || "—"}
+                      </TableCell>
+                      <TableCell className="text-center align-middle">{o.status}</TableCell>
+                      <TableCell className="text-center align-middle">
+                        {qty.toLocaleString("pt-BR")}
+                      </TableCell>
+                      <TableCell className="text-center align-middle">
+                        {unitToShow}
+                      </TableCell>
+                      <TableCell className="text-center align-middle">
+                        {BRL(o.valor_total)}
+                      </TableCell>
+                      <TableCell className="text-center align-middle">
+                        <div className="flex justify-center gap-2">
+                          <Button variant="secondary" onClick={() => edit(o)}>
+                            Editar
+                          </Button>
+                          <Button variant="destructive" onClick={() => del(o)}>
+                            Excluir
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </tr>
+                  );
+                })}
+
                 {orders.length === 0 && (
                   <tr>
-                    <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center text-sm text-muted-foreground">
                       Nenhuma ordem cadastrada.
                     </TableCell>
+                  </tr>
+                )}
+
+                {/* Rodapé com totais */}
+                {orders.length > 0 && (
+                  <tr className="border-t font-semibold">
+                    <TableCell colSpan={5} />
+                    <TableCell className="text-center">
+                      {qtdGeral.toLocaleString("pt-BR")}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {showAvgUnit && qtdGeral > 0 ? BRL(totalGeral / qtdGeral) : "—"}
+                    </TableCell>
+                    <TableCell className="text-center">{BRL(totalGeral)}</TableCell>
+                    <TableCell />
                   </tr>
                 )}
               </TableBody>
