@@ -13,488 +13,553 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table.jsx";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog.jsx";
 
-/* ---------- Helpers ---------- */
-const parseFlex = (v) => {
-  if (v === null || v === undefined || v === "") return 0;
-  if (typeof v === "number") return v;
-  let s = String(v).trim();
+// ===================== Helpers BR =====================
+const fmtCurrency = (n) =>
+  (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const parseCurrency = (s) => {
+  if (typeof s === "number") return s;
   if (!s) return 0;
-  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
-  else if (s.includes(",")) s = s.replace(",", ".");
-  const n = Number(s);
-  return Number.isFinite(n) ? n : 0;
+  const v = s.toString().replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
 };
 
-const BRL = (v) => {
-  const n = parseFlex(v);
-  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-};
-
-/* Datas: máscara BR + conversores BR <-> ISO */
-const maskDateBR = (s) => {
-  const d = String(s || "").replace(/\D/g, "").slice(0, 8);
-  if (d.length <= 2) return d;
-  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
-  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
-};
-const toISO = (s) => {
-  const str = String(s || "").trim();
-  if (!str) return "";
-  if (str.length >= 10 && str[2] === "/" && str[5] === "/") {
-    const [dd, mm, yy] = str.slice(0, 10).split("/");
-    return `${yy}-${mm}-${dd}`;
-  }
-  if (/^\d{8}$/.test(str)) {
-    const dd = str.slice(0, 2), mm = str.slice(2, 4), yy = str.slice(4, 8);
-    return `${yy}-${mm}-${dd}`;
-  }
-  return str.slice(0, 10);
-};
-const fmtBRDate = (iso) => {
+const fmtDateBR = (iso) => {
   if (!iso) return "";
-  const s = String(iso);
-  if (s.length >= 10 && s[4] === "-" && s[7] === "-") {
-    const [yy, mm, dd] = s.slice(0, 10).split("-");
-    return `${dd}/${mm}/${yy}`;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("pt-BR");
+};
+
+const toISODate = (value) => {
+  if (!value) return null;
+  try {
+    const d = new Date(value);
+    if (!isNaN(d.getTime())) return d.toISOString();
+    return null;
+  } catch {
+    return null;
   }
-  if (s.length === 8 && /^\d{8}$/.test(s))
-    return `${s.slice(0, 2)}/${s.slice(2, 4)}/${s.slice(4, 8)}`;
-  if (s.length >= 10 && s[2] === "/" && s[5] === "/") return s.slice(0, 10);
-  return s;
 };
 
-function InputDateBR({ value, onChange, placeholder = "dd/mm/aaaa", ...props }) {
-  return (
-    <Input
-      inputMode="numeric"
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => onChange(maskDateBR(e.target.value))}
-      {...props}
-    />
-  );
-}
+const sum = (arr) => arr.reduce((a, b) => a + (Number(b) || 0), 0);
 
-/* Valor unitário para exibir na lista */
-const orderUnitValue = (o) => {
-  const itens = Array.isArray(o.itens) ? o.itens : [];
-  if (!itens.length) return null;
-  const vals = itens.map((i) => parseFlex(i.valor_unit)).filter(Number.isFinite);
-  if (!vals.length) return null;
-  const uniq = new Set(vals.map((v) => v.toFixed(2)));
-  return uniq.size === 1 ? vals[0] : null;
-};
-
-const emptyOrder = () => ({
-  cliente: "",
-  empresa: "",        // substitui 'titulo'
-  descricao: "",
-  status: "Aberta",
-  data: "",
-  itens: [],
-  valor_total: "",
-});
-
+// ===================== Component =====================
 export default function Orders() {
   const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [form, setForm] = useState(emptyOrder());
+  // Preferência: mostrar valor médio quando houver vários itens?
+  const [showAvgUnit, setShowAvgUnit] = useState(true);
+
+  // Modal (criar/editar)
+  const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [open, setOpen] = useState(false);
 
-  const [newItem, setNewItem] = useState({
+  // Modal Itens (visualização de itens da ordem)
+  const [itemsModalOpen, setItemsModalOpen] = useState(false);
+  const [itemsModalOrder, setItemsModalOrder] = useState(null);
+
+  // Form
+  const emptyForm = {
+    data: "", // YYYY-MM-DD para input
+    cliente: "",
+    empresa: "",
     descricao: "",
-    quantidade: "",
-    valor_unit: "",
-  });
+    status: "Aberta",
+    valorUnit: "", // string
+    quantidade: "", // inteiro
+  };
+  const [form, setForm] = useState(emptyForm);
 
-  /* ---------- Load ---------- */
-  const load = async () => {
+  // ===================== Data Fetch =====================
+  async function fetchOrders() {
     setLoading(true);
-    setErr("");
     try {
-      const { data } = await api.get("/commercial/orders");
-      setOrders(Array.isArray(data) ? data : []);
+      const { data } = await api.get("/orders");
+      // Espera itens como:
+      // { id, date, clientName, companyName, description, status,
+      //   unitPrice, quantity, total, items?: [{ description, unitPrice, quantity }] }
+      const normalized = (data || []).map((o) => {
+        const items = Array.isArray(o.items) ? o.items : [];
+        const hasItems = items.length > 0;
+
+        // soma de quantidades e totais quando há vários itens
+        const itemsQty = hasItems ? sum(items.map((it) => Number(it.quantity || 0))) : 0;
+        const itemsTotal = hasItems
+          ? sum(items.map((it) => Number(it.unitPrice || 0) * Number(it.quantity || 0)))
+          : 0;
+
+        const oneItemUnit =
+          hasItems && items.length === 1 ? Number(items[0].unitPrice || 0) : Number(o.unitPrice || o.valorUnit || 0);
+
+        const quantity = hasItems ? itemsQty : Number(o.quantity ?? o.quantidade ?? 0);
+        const total =
+          o.total != null
+            ? Number(o.total)
+            : hasItems
+            ? itemsTotal
+            : Number(oneItemUnit) * Number(quantity);
+
+        return {
+          id: o.id,
+          date: o.date || o.data || null,
+          clientName: o.clientName || o.cliente || "",
+          companyName: o.companyName || o.empresa || "",
+          description: o.description || o.descricao || "",
+          status: o.status || "Aberta",
+          unitPrice: oneItemUnit, // se tiver >1 item podemos mostrar "—" ou média
+          quantity,
+          total,
+          items, // guardamos para abrir o modal
+        };
+      });
+      setOrders(normalized);
     } catch (e) {
-      setErr("Falha ao carregar ordens.");
+      console.error("Erro ao buscar orders:", e);
     } finally {
       setLoading(false);
     }
-  };
-  useEffect(() => { load(); }, []);
+  }
 
-  /* ---------- Handlers ---------- */
-  const onFormChange = (e) => {
-    const { name, value } = e.target;
-    setForm((p) => ({ ...p, [name]: value }));
-  };
-  const onNewItemChange = (e) => {
-    const { name, value } = e.target;
-    setNewItem((p) => ({ ...p, [name]: value }));
-  };
-
-  const addItem = () => {
-    if (!newItem.descricao?.trim()) return;
-    const item = {
-      descricao: newItem.descricao.trim(),
-      quantidade: parseFlex(newItem.quantidade || 1),
-      valor_unit: parseFlex(newItem.valor_unit || 0),
-    };
-    setForm((p) => ({ ...p, itens: [...(p.itens || []), item] }));
-    setNewItem({ descricao: "", quantidade: "", valor_unit: "" });
-  };
-  const removeItem = (idx) => {
-    setForm((p) => ({ ...p, itens: p.itens.filter((_, i) => i !== idx) }));
-  };
-  const updateItemField = (idx, field, value) => {
-    setForm((p) => ({
-      ...p,
-      itens: p.itens.map((it, i) => (i === idx ? { ...it, [field]: value } : it)),
-    }));
-  };
-
-  const total = useMemo(() => {
-    return (form.itens || []).reduce(
-      (acc, i) => acc + parseFlex(i.quantidade) * parseFlex(i.valor_unit),
-      0
-    );
-  }, [JSON.stringify(form.itens)]);
   useEffect(() => {
-    setForm((p) => ({ ...p, valor_total: total.toFixed(2) }));
-  }, [total]);
+    fetchOrders();
+  }, []);
 
-  const resetForm = () => {
-    setForm(emptyOrder());
+  // ===================== Handlers =====================
+  function openNew() {
     setEditingId(null);
-    setNewItem({ descricao: "", quantidade: "", valor_unit: "" });
-  };
-
-  /* ---------- Submit ---------- */
-  const submit = async (e) => {
-    e.preventDefault();
-
-    const payloadTotal = (form.itens || []).reduce(
-      (acc, i) => acc + parseFlex(i.quantidade) * parseFlex(i.valor_unit),
-      0
-    );
-
-    const payload = {
-      ...form,
-      data: toISO(form.data),
-      itens: (form.itens || []).map((i) => ({
-        descricao: i.descricao,
-        quantidade: parseFlex(i.quantidade),
-        valor_unit: parseFlex(i.valor_unit),
-      })),
-      valor_total: Number(payloadTotal.toFixed(2)),
-    };
-
-    const url = editingId
-      ? `/commercial/orders/${editingId}`
-      : `/commercial/orders`;
-    const method = editingId ? "put" : "post";
-
-    await api[method](url, payload);
-    resetForm();
-    setOpen(false);
-    load();
-  };
-
-  const edit = (o) => {
-    setEditingId(o.id);
     setForm({
-      cliente: o.cliente || "",
-      empresa: o.empresa || o.titulo || "",
-      descricao: o.descricao || "",
-      status: o.status || "Aberta",
-      data: fmtBRDate(o.data || ""),
-      itens: (o.itens || []).map((i) => ({
-        descricao: i.descricao || "",
-        quantidade: parseFlex(i.quantidade),
-        valor_unit: parseFlex(i.valor_unit),
-      })),
-      valor_total: String(o.valor_total ?? ""),
+      ...emptyForm,
+      data: new Date().toISOString().slice(0, 10),
     });
-    setOpen(true);
-  };
+    setIsOpen(true);
+  }
 
-  const del = async (o) => {
+  function openEdit(order) {
+    setEditingId(order.id);
+    setForm({
+      data: (order.date ? new Date(order.date) : new Date()).toISOString().slice(0, 10),
+      cliente: order.clientName || "",
+      empresa: order.companyName || "",
+      descricao: order.description || "",
+      status: order.status || "Aberta",
+      valorUnit: (order.unitPrice ?? 0).toLocaleString("pt-BR"),
+      quantidade: String(order.quantity ?? 0),
+    });
+    setIsOpen(true);
+  }
+
+  async function handleDelete(id) {
     if (!confirm("Excluir esta ordem?")) return;
-    await api.delete(`/commercial/orders/${o.id}`);
-    load();
-  };
+    try {
+      await api.delete(`/orders/${id}`);
+      setOrders((prev) => prev.filter((o) => o.id !== id));
+    } catch (e) {
+      console.error("Erro ao excluir:", e);
+      alert("Não foi possível excluir. Verifique a conexão/servidor.");
+    }
+  }
 
-  /* ---------- UI ---------- */
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const payload = {
+      date: toISODate(form.data),
+      clientName: form.cliente,
+      companyName: form.empresa,
+      description: form.descricao,
+      status: form.status,
+      unitPrice: parseCurrency(form.valorUnit),
+      quantity: Number(String(form.quantidade).replace(/[^\d]/g, "")) || 0,
+    };
+    payload.total = Number(payload.unitPrice) * Number(payload.quantity);
+
+    try {
+      if (editingId) {
+        await api.put(`/orders/${editingId}`, payload);
+      } else {
+        await api.post("/orders", payload);
+      }
+      setIsOpen(false);
+      setEditingId(null);
+      setForm(emptyForm);
+      fetchOrders();
+    } catch (e) {
+      console.error("Erro ao salvar:", e);
+      alert("Não foi possível salvar. Verifique os campos e o servidor.");
+    }
+  }
+
+  // Totais (rodapé)
+  const totalGeral = useMemo(
+    () => orders.reduce((acc, o) => acc + (Number(o.total) || 0), 0),
+    [orders]
+  );
+  const qtdGeral = useMemo(
+    () => orders.reduce((acc, o) => acc + (Number(o.quantity) || 0), 0),
+    [orders]
+  );
+
+  // ===================== Render =====================
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Ordens</h1>
-        <Button
-          onClick={() => {
-            resetForm();
-            setOpen(true);
-          }}
-        >
-          Nova Ordem
-        </Button>
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-gray-600 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={showAvgUnit}
+              onChange={(e) => setShowAvgUnit(e.target.checked)}
+            />
+            Valor médio (multi-itens)
+          </label>
+          <Button onClick={openNew} className="bg-black text-white hover:opacity-90">
+            Nova Ordem
+          </Button>
+        </div>
       </div>
 
-      {err && (
-        <div className="bg-red-50 text-red-700 border border-red-200 px-3 py-2 rounded mb-4">
-          {err}
-        </div>
-      )}
-
-      {/* Tabela de ordens */}
       <Card>
         <CardHeader>
           <CardTitle>Ordens cadastradas</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-auto">
-          {loading ? (
-            <div className="text-sm text-gray-500">Carregando...</div>
-          ) : (
-            <Table className="min-w-full text-sm">
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-center">Data</TableHead>
-                  <TableHead className="text-center">Cliente</TableHead>
-                  <TableHead className="text-center">Empresa</TableHead>
-                  <TableHead className="text-center">Descrição</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-center">Valor Unit.</TableHead>
-                  <TableHead className="text-center">Total</TableHead>
-                  <TableHead className="text-center">Ações</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Empresa</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Qtd</TableHead>
+                  <TableHead>Valor Unit.</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orders.map((o) => (
-                  <tr key={o.id} className="border-t">
-                    <TableCell className="text-center align-middle">
-                      {fmtBRDate(o.data)}
-                    </TableCell>
-                    <TableCell className="text-center align-middle">{o.cliente}</TableCell>
-                    <TableCell className="text-center align-middle">
-                      {o.empresa || o.titulo || "—"}
-                    </TableCell>
-                    <TableCell className="text-center align-middle">
-                      {o.descricao || "—"}
-                    </TableCell>
-                    <TableCell className="text-center align-middle">{o.status}</TableCell>
-                    <TableCell className="text-center align-middle">
-                      {orderUnitValue(o) !== null ? BRL(orderUnitValue(o)) : "—"}
-                    </TableCell>
-                    <TableCell className="text-center align-middle">
-                      {BRL(o.valor_total)}
-                    </TableCell>
-                    <TableCell className="text-center align-middle">
-                      <div className="flex justify-center gap-2">
-                        <Button variant="secondary" onClick={() => edit(o)}>
-                          Editar
-                        </Button>
-                        <Button variant="destructive" onClick={() => del(o)}>
-                          Excluir
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </tr>
-                ))}
-                {orders.length === 0 && (
-                  <tr>
-                    <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
+                {loading && (
+                  <TableRow>
+                    <TableCell colSpan={9}>Carregando...</TableCell>
+                  </TableRow>
+                )}
+                {!loading && orders.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-gray-500">
                       Nenhuma ordem cadastrada.
                     </TableCell>
-                  </tr>
+                  </TableRow>
+                )}
+                {!loading &&
+                  orders.map((o) => {
+                    const hasItems = Array.isArray(o.items) && o.items.length > 0;
+                    const avgUnit =
+                      Number(o.quantity || 0) > 0 ? Number(o.total || 0) / Number(o.quantity || 1) : 0;
+
+                    const unitCol =
+                      hasItems && o.items.length > 1
+                        ? showAvgUnit
+                          ? fmtCurrency(avgUnit)
+                          : "—"
+                        : fmtCurrency(o.unitPrice);
+
+                    return (
+                      <TableRow key={o.id}>
+                        <TableCell>{fmtDateBR(o.date)}</TableCell>
+                        <TableCell>{o.clientName}</TableCell>
+                        <TableCell>{o.companyName}</TableCell>
+                        <TableCell className="max-w-[280px] truncate">{o.description}</TableCell>
+                        <TableCell>{o.status}</TableCell>
+                        <TableCell>{Number(o.quantity || 0).toLocaleString("pt-BR")}</TableCell>
+                        <TableCell>{unitCol}</TableCell>
+                        <TableCell>{fmtCurrency(o.total)}</TableCell>
+                        <TableCell className="text-right space-x-2">
+                          {hasItems && (
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                setItemsModalOrder(o);
+                                setItemsModalOpen(true);
+                              }}
+                            >
+                              Itens
+                            </Button>
+                          )}
+                          <Button variant="secondary" onClick={() => openEdit(o)}>
+                            Editar
+                          </Button>
+                          <Button variant="destructive" onClick={() => handleDelete(o.id)}>
+                            Excluir
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                {!loading && orders.length > 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} />
+                    <TableCell className="font-semibold">
+                      {qtdGeral.toLocaleString("pt-BR")}
+                    </TableCell>
+                    <TableCell className="font-semibold">
+                      {/* Rodapé da coluna unit: mostramos média global se toggle ativo; senão “—” */}
+                      {showAvgUnit && qtdGeral > 0 ? fmtCurrency(totalGeral / qtdGeral) : "—"}
+                    </TableCell>
+                    <TableCell className="font-semibold">
+                      {fmtCurrency(totalGeral)}
+                    </TableCell>
+                    <TableCell />
+                  </TableRow>
                 )}
               </TableBody>
             </Table>
-          )}
+          </div>
         </CardContent>
       </Card>
 
-      {/* MODAL: Nova/Editar Ordem */}
-      <Dialog
-        open={open}
-        onOpenChange={(o) => {
-          setOpen(o);
-          if (!o) resetForm();
-        }}
-      >
-        {/* largura reduzida */}
-        <DialogContent className="w-[92vw] sm:max-w-[900px] sm:p-6 rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Editar Ordem" : "Nova Ordem"}</DialogTitle>
-          </DialogHeader>
-
-          <form onSubmit={submit} className="grid md:grid-cols-4 gap-3">
-            <Input
-              name="cliente"
-              value={form.cliente}
-              onChange={onFormChange}
-              placeholder="Cliente"
-              required
-              className="md:col-span-2"
-            />
-            <Input
-              name="empresa"
-              value={form.empresa}
-              onChange={onFormChange}
-              placeholder="Empresa"
-              className="md:col-span-2"
-            />
-
-            <InputDateBR
-              name="data"
-              value={form.data}
-              onChange={(val) => setForm((p) => ({ ...p, data: val }))}
-              placeholder="dd/mm/aaaa"
-            />
-            <select
-              name="status"
-              value={form.status}
-              onChange={onFormChange}
-              className="border rounded px-3 py-2"
-            >
-              <option>Aberta</option>
-              <option>Em Andamento</option>
-              <option>Concluída</option>
-              <option>Cancelada</option>
-            </select>
-            <Textarea
-              name="descricao"
-              value={form.descricao}
-              onChange={onFormChange}
-              placeholder="Descrição"
-              className="md:col-span-4"
-            />
-
-            {/* Itens */}
-            <div className="md:col-span-4 border rounded p-3">
-              <div className="font-medium mb-3">Itens</div>
-
-              {/* Linha de adição */}
-              <div className="grid md:grid-cols-5 gap-2 mb-3">
-                <Input
-                  name="descricao"
-                  value={newItem.descricao}
-                  onChange={onNewItemChange}
-                  placeholder="Descrição do item"
-                  className="md:col-span-2"
-                />
-                <Input
-                  name="quantidade"
-                  value={newItem.quantidade}
-                  onChange={onNewItemChange}
-                  placeholder="Qtd"
-                />
-                <Input
-                  name="valor_unit"
-                  value={newItem.valor_unit}
-                  onChange={onNewItemChange}
-                  placeholder="Valor unit."
-                />
-                <Button type="button" onClick={addItem}>
-                  + Adicionar
-                </Button>
-              </div>
-
-              {/* Lista de itens */}
-              {(form.itens || []).length > 0 && (
-                <div className="overflow-auto">
-                  <Table className="min-w-full text-sm">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-center">Descrição</TableHead>
-                        <TableHead className="text-center">Qtd</TableHead>
-                        <TableHead className="text-center">Valor Unit.</TableHead>
-                        <TableHead className="text-center">Total</TableHead>
-                        <TableHead className="text-center">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {form.itens.map((i, idx) => {
-                        const rowTotal =
-                          parseFlex(i.quantidade) * parseFlex(i.valor_unit);
-                        return (
-                          <tr key={idx} className="border-t">
-                            <TableCell className="w-[40%] text-center align-middle">
-                              <Input
-                                value={i.descricao}
-                                onChange={(e) =>
-                                  updateItemField(idx, "descricao", e.target.value)
-                                }
-                              />
-                            </TableCell>
-                            <TableCell className="w-[10%] text-center align-middle">
-                              <Input
-                                value={i.quantidade}
-                                onChange={(e) =>
-                                  updateItemField(idx, "quantidade", parseFlex(e.target.value))
-                                }
-                              />
-                            </TableCell>
-                            <TableCell className="w-[20%] text-center align-middle">
-                              <Input
-                                value={i.valor_unit}
-                                onChange={(e) =>
-                                  updateItemField(idx, "valor_unit", parseFlex(e.target.value))
-                                }
-                              />
-                            </TableCell>
-                            <TableCell className="w/[20%] text-center align-middle">
-                              {BRL(rowTotal)}
-                            </TableCell>
-                            <TableCell className="text-center align-middle w-[10%]">
-                              <div className="flex justify-center">
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  onClick={() => removeItem(idx)}
-                                >
-                                  Remover
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </tr>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-
-              <div className="text-right font-semibold mt-3">
-                Total: {BRL(total)}
-              </div>
-            </div>
-
-            <div className="md:col-span-4 flex justify-end gap-2 pt-2">
+      {/* ===================== Modal Criar/Editar ===================== */}
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => {
+              setIsOpen(false);
+              setEditingId(null);
+              setForm(emptyForm);
+            }}
+          />
+          <div className="relative w-full max-w-2xl rounded-lg bg-white shadow-lg">
+            <div className="flex items-center justify-between border-b p-4">
+              <h2 className="text-lg font-semibold">
+                {editingId ? "Editar Ordem" : "Nova Ordem"}
+              </h2>
               <Button
-                type="button"
-                variant="secondary"
+                variant="ghost"
                 onClick={() => {
-                  resetForm();
-                  setOpen(false);
+                  setIsOpen(false);
+                  setEditingId(null);
+                  setForm(emptyForm);
                 }}
               >
-                Cancelar
-              </Button>
-              <Button type="submit">
-                {editingId ? "Salvar Alterações" : "Adicionar Ordem"}
+                ✕
               </Button>
             </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+
+            <form onSubmit={handleSubmit} className="p-4 space-y-3">
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium">Data</label>
+                  <Input
+                    type="date"
+                    value={form.data}
+                    onChange={(e) => setForm((f) => ({ ...f, data: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Status</label>
+                  <select
+                    className="w-full border rounded-md h-10 px-3"
+                    value={form.status}
+                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+                  >
+                    <option>Aberta</option>
+                    <option>Em Planejamento</option>
+                    <option>Em Execução</option>
+                    <option>Em Validação</option>
+                    <option>Concluída</option>
+                    <option>Faturada</option>
+                    <option>Pausada</option>
+                    <option>Cancelada</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium">Cliente</label>
+                  <Input
+                    placeholder="Nome do cliente"
+                    value={form.cliente}
+                    onChange={(e) => setForm((f) => ({ ...f, cliente: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Empresa</label>
+                  <Input
+                    placeholder="Nome da empresa"
+                    value={form.empresa}
+                    onChange={(e) => setForm((f) => ({ ...f, empresa: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Descrição</label>
+                <Textarea
+                  rows={3}
+                  placeholder="Descreva a ordem (ex.: Panfletagem - Arrastão)"
+                  value={form.descricao}
+                  onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-sm font-medium">Valor Unit.</label>
+                  <Input
+                    placeholder="0,00"
+                    value={form.valorUnit}
+                    onChange={(e) => setForm((f) => ({ ...f, valorUnit: e.target.value }))}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Aceita “0,30”, “1,50”, etc. (moeda BR)
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Qtd</label>
+                  <Input
+                    placeholder="0"
+                    value={form.quantidade}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        quantidade: e.target.value.replace(/[^\d]/g, ""),
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Total</label>
+                  <div className="h-10 px-3 flex items-center rounded-md bg-green-50 text-green-700 font-semibold">
+                    {fmtCurrency(
+                      parseCurrency(form.valorUnit) * (Number(form.quantidade || 0) || 0)
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setIsOpen(false);
+                    setEditingId(null);
+                    setForm(emptyForm);
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" className="bg-black text-white hover:opacity-90">
+                  Salvar
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== Modal de Itens da Ordem ===================== */}
+      {itemsModalOpen && itemsModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => {
+              setItemsModalOpen(false);
+              setItemsModalOrder(null);
+            }}
+          />
+          <div className="relative w-full max-w-3xl rounded-lg bg-white shadow-lg">
+            <div className="flex items-center justify-between border-b p-4">
+              <h2 className="text-lg font-semibold">
+                Itens da Ordem — {itemsModalOrder.clientName}
+              </h2>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setItemsModalOpen(false);
+                  setItemsModalOrder(null);
+                }}
+              >
+                ✕
+              </Button>
+            </div>
+            <div className="p-4">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead className="text-right">Valor Unit.</TableHead>
+                      <TableHead className="text-right">Qtd</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {itemsModalOrder.items.map((it, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="max-w-[420px] truncate">
+                          {it.description || it.descricao || "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {fmtCurrency(it.unitPrice || 0)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {(Number(it.quantity || 0)).toLocaleString("pt-BR")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {fmtCurrency((Number(it.unitPrice || 0)) * (Number(it.quantity || 0)))}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow>
+                      <TableCell className="font-semibold">Totais</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {/* Média desta ordem */}
+                        {(() => {
+                          const q = itemsModalOrder.items.reduce((a, it) => a + (Number(it.quantity || 0)), 0);
+                          const t = itemsModalOrder.items.reduce((a, it) => a + (Number(it.unitPrice || 0) * Number(it.quantity || 0)), 0);
+                          return q > 0 ? fmtCurrency(t / q) : "—";
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {itemsModalOrder.items
+                          .reduce((a, it) => a + (Number(it.quantity || 0)), 0)
+                          .toLocaleString("pt-BR")}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {fmtCurrency(
+                          itemsModalOrder.items.reduce(
+                            (a, it) =>
+                              a +
+                              (Number(it.unitPrice || 0) * Number(it.quantity || 0)),
+                            0
+                          )
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 p-4 border-t">
+              <Button
+                onClick={() => {
+                  setItemsModalOpen(false);
+                  setItemsModalOrder(null);
+                }}
+              >
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
