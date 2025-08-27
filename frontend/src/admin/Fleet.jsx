@@ -310,36 +310,46 @@ export default function FleetPage() {
             <Table className="min-w-full text-sm">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Placa</TableHead>
-                  <TableHead>Veículo</TableHead>
-                  <TableHead>Litros</TableHead>
-                  <TableHead>Preço/L</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Odômetro</TableHead>
-                  <TableHead>Posto</TableHead>
-                  <TableHead>Motorista</TableHead>
-                  <TableHead>Combustível</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead className="text-center">Data</TableHead>
+                  <TableHead className="text-center">Placa</TableHead>
+                  <TableHead className="text-center">Veículo</TableHead>
+                  <TableHead className="text-center">Litros</TableHead>
+                  <TableHead className="text-center">Preço/L</TableHead>
+                  <TableHead className="text-center">Total</TableHead>
+                  <TableHead className="text-center">Odômetro</TableHead>
+                  <TableHead className="text-center">Posto</TableHead>
+                  <TableHead className="text-center">Motorista</TableHead>
+                  <TableHead className="text-center">Combustível</TableHead>
+                  <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(fuelLogs.data || []).map((f) => (
                   <tr key={f.id} className="border-t">
-                    <TableCell>{fmtBRDate(f.data)}</TableCell>
-                    <TableCell>{f.placa}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-center align-middle">
+                      {fmtBRDate(f.data)}
+                    </TableCell>
+                    <TableCell className="text-center align-middle">{f.placa}</TableCell>
+                    <TableCell className="text-center align-middle">
                       {f.carro || modelByPlaca[(f.placa || "").toUpperCase()] || ""}
                     </TableCell>
-                    <TableCell>{Number(f.litros || 0)}</TableCell>
-                    <TableCell>{BRL(f.preco_litro)}</TableCell>
-                    <TableCell className="font-medium">{BRL(f.valor_total)}</TableCell>
-                    <TableCell>{INT_BR(f.odometro)}</TableCell>
-                    <TableCell>{f.posto}</TableCell>
-                    <TableCell>{f.motorista}</TableCell>
-                    <TableCell>{f.combustivel}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                    <TableCell className="text-center align-middle">
+                      {Number(f.litros || 0)}
+                    </TableCell>
+                    <TableCell className="text-center align-middle">
+                      {BRL(f.preco_litro)}
+                    </TableCell>
+                    <TableCell className="text-center align-middle font-medium">
+                      {BRL(f.valor_total)}
+                    </TableCell>
+                    <TableCell className="text-center align-middle">
+                      {INT_BR(f.odometro)}
+                    </TableCell>
+                    <TableCell className="text-center align-middle">{f.posto}</TableCell>
+                    <TableCell className="text-center align-middle">{f.motorista}</TableCell>
+                    <TableCell className="text-center align-middle">{f.combustivel}</TableCell>
+                    <TableCell className="text-center align-middle">
+                      <div className="flex justify-center gap-2">
                         <Button variant="outline" onClick={() => openEdit(f)}>
                           Editar
                         </Button>
@@ -352,7 +362,7 @@ export default function FleetPage() {
                 ))}
                 {(fuelLogs.data || []).length === 0 && (
                   <tr>
-                    <TableCell colSpan={11} className="text-sm text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center text-sm text-muted-foreground">
                       Sem registros.
                     </TableCell>
                   </tr>
