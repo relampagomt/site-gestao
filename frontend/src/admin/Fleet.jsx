@@ -19,7 +19,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog.jsx";
 
 const BRL = (n) =>
@@ -374,7 +373,7 @@ export default function FleetPage() {
         </CardContent>
       </Card>
 
-      {/* MODAL: NOVO ABASTECIMENTO — aparência padronizada com Actions */}
+      {/* MODAL: NOVO ABASTECIMENTO (retângulo centralizado) */}
       <Dialog
         open={newOpen}
         onOpenChange={(o) => {
@@ -382,222 +381,343 @@ export default function FleetPage() {
           if (!o) resetFuel();
         }}
       >
-        <DialogContent className="w-full max-w-2xl max-h-[85vh] overflow-y-auto p-0">
-          {/* Header */}
-          <div className="px-5 pt-5 pb-3 border-b">
-            <DialogHeader>
-              <DialogTitle className="text-base">Novo Abastecimento</DialogTitle>
-              <DialogDescription className="text-xs">
-                Preencha os campos e salve para adicionar o abastecimento.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
+        <DialogContent className="w-[92vw] sm:max-w-[1100px] sm:p-8 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Novo Abastecimento</DialogTitle>
+          </DialogHeader>
 
-          {/* Body */}
-          <div className="px-5 py-4">
-            <form onSubmit={submitFuel} className="grid md:grid-cols-12 gap-4">
-              {/* Veículo + Cadastrar */}
-              <div className="md:col-span-5 flex items-end gap-3">
-                <div className="flex-1 flex flex-col gap-1">
-                  <span className="text-xs text-muted-foreground">Veículo</span>
-                  <select
-                    value={fuel.placa}
-                    onChange={(e) => setFuel((p) => ({ ...p, placa: e.target.value }))}
-                    className="border rounded px-3 h-11 w-full"
-                    required
-                  >
-                    <option value="">Selecione o veículo</option>
-                    {(vehicles.data || [])
-                      .filter((v) => v.ativo !== false)
-                      .map((v) => (
-                        <option key={v.id} value={v.placa}>
-                          {v.placa} — {v.modelo || v.marca}
-                        </option>
-                      ))}
-                  </select>
-                </div>
+          <form onSubmit={submitFuel} className="grid md:grid-cols-12 gap-4">
+            {/* Veículo + Cadastrar */}
+            <div className="md:col-span-5 flex items-end gap-3">
+              <div className="flex-1 flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Veículo</span>
+                <select
+                  value={fuel.placa}
+                  onChange={(e) => setFuel((p) => ({ ...p, placa: e.target.value }))}
+                  className="border rounded px-3 h-11 w-full"
+                  required
+                >
+                  <option value="">Selecione o veículo</option>
+                  {(vehicles.data || [])
+                    .filter((v) => v.ativo !== false)
+                    .map((v) => (
+                      <option key={v.id} value={v.placa}>
+                        {v.placa} — {v.modelo || v.marca}
+                      </option>
+                    ))}
+                </select>
+              </div>
 
-                <VehiclesManager
-                  trigger={<Button type="button" variant="secondary" className="h-11 px-5">Cadastrar</Button>}
-                  onCreated={(v) => {
-                    vehicles.reload();
-                    setFuel((p) => ({ ...p, placa: v.placa }));
+              <VehiclesManager
+                trigger={<Button type="button" variant="secondary" className="h-11 px-5">Cadastrar</Button>}
+                onCreated={(v) => {
+                  vehicles.reload();
+                  setFuel((p) => ({ ...p, placa: v.placa }));
+                }}
+                onUpdated={() => vehicles.reload()}
+                onDeleted={() => vehicles.reload()}
+              />
+            </div>
+
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[148px]">
+              <span className="text-xs text-muted-foreground">Data</span>
+              <InputDateBR
+                value={fuel.data}
+                onChange={(val) => setFuel((p) => ({ ...p, data: val }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-2 flex flex-col gap-1 min-w-[148px]">
+              <span className="text-xs text-muted-foreground">Litros</span>
+              <Input
+                placeholder="Litros"
+                value={fuel.litros}
+                onChange={(e) => setFuel((p) => ({ ...p, litros: e.target.value }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[176px]">
+              <span className="text-xs text-muted-foreground">Preço/Litro</span>
+              <Input
+                placeholder="Preço/Litro"
+                value={fuel.preco_litro}
+                onChange={(e) => setFuel((p) => ({ ...p, preco_litro: e.target.value }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
+              <span className="text-xs text-muted-foreground">Combustível</span>
+              <select
+                className="border rounded px-3 h-11 w-full"
+                value={fuel.combustivel}
+                onChange={(e) => setFuel((p) => ({ ...p, combustivel: e.target.value }))}
+              >
+                {FUEL_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
+              <span className="text-xs text-muted-foreground">Odômetro</span>
+              <InputOdometerBR
+                value={fuel.odometro}
+                onChange={(val) => setFuel((p) => ({ ...p, odometro: val }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
+              <span className="text-xs text-muted-foreground">Posto</span>
+              <Input
+                placeholder="Posto"
+                value={fuel.posto}
+                onChange={(e) => setFuel((p) => ({ ...p, posto: e.target.value }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
+              <span className="text-xs text-muted-foreground">Motorista</span>
+              <Input
+                placeholder="Motorista"
+                value={fuel.motorista}
+                onChange={(e) => setFuel((p) => ({ ...p, motorista: e.target.value }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-12 flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Nota fiscal</span>
+              <Input
+                placeholder="Nota fiscal"
+                value={fuel.nota_fiscal}
+                onChange={(e) => setFuel((p) => ({ ...p, nota_fiscal: e.target.value }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-12 flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Observações</span>
+              <Input
+                placeholder="Observações"
+                value={fuel.observacoes}
+                onChange={(e) => setFuel((p) => ({ ...p, observacoes: e.target.value }))}
+                className="w-full"
+              />
+            </div>
+
+            <div className="md:col-span-12 flex items-center justify-between pt-1">
+              <div className="font-semibold">Total: {BRL(fuel.valor_total)}</div>
+              <DialogFooter className="gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    resetFuel();
+                    setNewOpen(false);
                   }}
-                  onUpdated={() => vehicles.reload()}
-                  onDeleted={() => vehicles.reload()}
-                />
+                  className="px-6"
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" className="px-6">Adicionar</Button>
+              </DialogFooter>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: FILTROS (retângulo centralizado) */}
+      <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
+        <DialogContent className="w-[92vw] sm:max-w-[1100px] sm:p-8 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Filtros</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid md:grid-cols-12 gap-4">
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+              <span className="text-xs text-muted-foreground">Placa</span>
+              <Input
+                placeholder="Placa"
+                value={filters.placa}
+                onChange={(e) => setFilters((f) => ({ ...f, placa: e.target.value }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[200px]">
+              <span className="text-xs text-muted-foreground">Veículo</span>
+              <Input
+                placeholder="Veículo"
+                value={filters.veiculo}
+                onChange={(e) => setFilters((f) => ({ ...f, veiculo: e.target.value }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[200px]">
+              <span className="text-xs text-muted-foreground">Motorista</span>
+              <Input
+                placeholder="Motorista"
+                value={filters.motorista}
+                onChange={(e) => setFilters((f) => ({ ...f, motorista: e.target.value }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+              <span className="text-xs text-muted-foreground">Combustível</span>
+              <select
+                className="border rounded px-3 h-11 w-full"
+                value={filters.combustivel}
+                onChange={(e) => setFilters((f) => ({ ...f, combustivel: e.target.value }))}
+              >
+                <option value="">Todos</option>
+                {FUEL_OPTIONS.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+              <span className="text-xs text-muted-foreground">Posto</span>
+              <Input
+                placeholder="Posto"
+                value={filters.posto}
+                onChange={(e) => setFilters((f) => ({ ...f, posto: e.target.value }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[160px]">
+              <span className="text-xs text-muted-foreground">Preço</span>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Preço"
+                value={filters.preco}
+                onChange={(e) => setFilters((f) => ({ ...f, preco: e.target.value }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[160px]">
+              <span className="text-xs text-muted-foreground">De</span>
+              <InputDateBR
+                value={filters.de}
+                onChange={(val) => setFilters((f) => ({ ...f, de: val }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-3 flex flex-col gap-1 min-w-[160px]">
+              <span className="text-xs text-muted-foreground">Até</span>
+              <InputDateBR
+                value={filters.ate}
+                onChange={(val) => setFilters((f) => ({ ...f, ate: val }))}
+                className="h-11 w-full"
+              />
+            </div>
+
+            <div className="md:col-span-12 flex items-center gap-2 pt-1">
+              <Button
+                type="button"
+                onClick={async () => {
+                  await reloadWithFilters();
+                  setFilterOpen(false);
+                }}
+                className="px-6"
+              >
+                Aplicar
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={async () => {
+                  await clearFilters();
+                  setFilterOpen(false);
+                }}
+                className="px-6"
+              >
+                Limpar filtros
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE EDIÇÃO (retângulo centralizado) */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="w-[92vw] sm:max-w-[1100px] sm:p-8 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar Abastecimento</DialogTitle>
+          </DialogHeader>
+
+          {editing && (
+            <div className="grid md:grid-cols-12 gap-4">
+              <div className="md:col-span-4 flex flex-col gap-1 min-w-[240px]">
+                <span className="text-xs text-muted-foreground">Placa</span>
+                <select
+                  className="border rounded px-3 h-11 w-full"
+                  value={editing.placa}
+                  onChange={(e) => setEditing((p) => ({ ...p, placa: e.target.value }))}
+                >
+                  {(vehicles.data || [])
+                    .filter((v) => v.ativo !== false)
+                    .map((v) => (
+                      <option key={v.id} value={v.placa}>
+                        {v.placa} — {v.modelo || v.marca}
+                      </option>
+                    ))}
+                </select>
               </div>
 
               <div className="md:col-span-2 flex flex-col gap-1 min-w-[148px]">
                 <span className="text-xs text-muted-foreground">Data</span>
                 <InputDateBR
-                  value={fuel.data}
-                  onChange={(val) => setFuel((p) => ({ ...p, data: val }))}
                   className="h-11 w-full"
+                  value={editing.data}
+                  onChange={(val) => setEditing((p) => ({ ...p, data: val }))}
                 />
               </div>
 
               <div className="md:col-span-2 flex flex-col gap-1 min-w-[148px]">
                 <span className="text-xs text-muted-foreground">Litros</span>
                 <Input
-                  placeholder="Litros"
-                  value={fuel.litros}
-                  onChange={(e) => setFuel((p) => ({ ...p, litros: e.target.value }))}
                   className="h-11 w-full"
+                  value={editing.litros}
+                  onChange={(e) => setEditing((p) => ({ ...p, litros: e.target.value }))}
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[176px]">
+              <div className="md:col-span-2 flex flex-col gap-1 min-w-[176px]">
                 <span className="text-xs text-muted-foreground">Preço/Litro</span>
                 <Input
-                  placeholder="Preço/Litro"
-                  value={fuel.preco_litro}
-                  onChange={(e) => setFuel((p) => ({ ...p, preco_litro: e.target.value }))}
                   className="h-11 w-full"
+                  value={editing.preco_litro}
+                  onChange={(e) =>
+                    setEditing((p) => ({ ...p, preco_litro: e.target.value }))
+                  }
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[190px]">
+              <div className="md:col-span-2 flex flex-col gap-1 min-w-[190px]">
                 <span className="text-xs text-muted-foreground">Combustível</span>
                 <select
                   className="border rounded px-3 h-11 w-full"
-                  value={fuel.combustivel}
-                  onChange={(e) => setFuel((p) => ({ ...p, combustivel: e.target.value }))}
+                  value={editing.combustivel}
+                  onChange={(e) =>
+                    setEditing((p) => ({ ...p, combustivel: e.target.value }))
+                  }
                 >
-                  {FUEL_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
-                <span className="text-xs text-muted-foreground">Odômetro</span>
-                <InputOdometerBR
-                  value={fuel.odometro}
-                  onChange={(val) => setFuel((p) => ({ ...p, odometro: val }))}
-                  className="h-11 w-full"
-                />
-              </div>
-
-              <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
-                <span className="text-xs text-muted-foreground">Posto</span>
-                <Input
-                  placeholder="Posto"
-                  value={fuel.posto}
-                  onChange={(e) => setFuel((p) => ({ ...p, posto: e.target.value }))}
-                  className="h-11 w-full"
-                />
-              </div>
-
-              <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
-                <span className="text-xs text-muted-foreground">Motorista</span>
-                <Input
-                  placeholder="Motorista"
-                  value={fuel.motorista}
-                  onChange={(e) => setFuel((p) => ({ ...p, motorista: e.target.value }))}
-                  className="h-11 w-full"
-                />
-              </div>
-
-              <div className="md:col-span-12 flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Nota fiscal</span>
-                <Input
-                  placeholder="Nota fiscal"
-                  value={fuel.nota_fiscal}
-                  onChange={(e) => setFuel((p) => ({ ...p, nota_fiscal: e.target.value }))}
-                  className="h-11 w-full"
-                />
-              </div>
-
-              <div className="md:col-span-12 flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Observações</span>
-                <Input
-                  placeholder="Observações"
-                  value={fuel.observacoes}
-                  onChange={(e) => setFuel((p) => ({ ...p, observacoes: e.target.value }))}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="md:col-span-12 flex items-center justify-between pt-1">
-                <div className="font-semibold">Total: {BRL(fuel.valor_total)}</div>
-                <DialogFooter className="gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      resetFuel();
-                      setNewOpen(false);
-                    }}
-                    className="px-6"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button type="submit" size="sm" className="px-6">Adicionar</Button>
-                </DialogFooter>
-              </div>
-            </form>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL: FILTROS — aparência padronizada com Actions */}
-      <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
-        <DialogContent className="w-full max-w-2xl max-h-[85vh] overflow-y-auto p-0">
-          {/* Header */}
-          <div className="px-5 pt-5 pb-3 border-b">
-            <DialogHeader>
-              <DialogTitle className="text-base">Filtros</DialogTitle>
-              <DialogDescription className="text-xs">
-                Refine os resultados com os campos abaixo.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
-
-          {/* Body */}
-          <div className="px-5 py-4">
-            <div className="grid md:grid-cols-12 gap-4">
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
-                <span className="text-xs text-muted-foreground">Placa</span>
-                <Input
-                  placeholder="Placa"
-                  value={filters.placa}
-                  onChange={(e) => setFilters((f) => ({ ...f, placa: e.target.value }))}
-                  className="h-11 w-full"
-                />
-              </div>
-
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[200px]">
-                <span className="text-xs text-muted-foreground">Veículo</span>
-                <Input
-                  placeholder="Veículo"
-                  value={filters.veiculo}
-                  onChange={(e) => setFilters((f) => ({ ...f, veiculo: e.target.value }))}
-                  className="h-11 w-full"
-                />
-              </div>
-
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[200px]">
-                <span className="text-xs text-muted-foreground">Motorista</span>
-                <Input
-                  placeholder="Motorista"
-                  value={filters.motorista}
-                  onChange={(e) => setFilters((f) => ({ ...f, motorista: e.target.value }))}
-                  className="h-11 w-full"
-                />
-              </div>
-
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
-                <span className="text-xs text-muted-foreground">Combustível</span>
-                <select
-                  className="border rounded px-3 h-11 w-full"
-                  value={filters.combustivel}
-                  onChange={(e) => setFilters((f) => ({ ...f, combustivel: e.target.value }))}
-                >
-                  <option value="">Todos</option>
                   {FUEL_OPTIONS.map((o) => (
                     <option key={o} value={o}>
                       {o}
@@ -606,221 +726,70 @@ export default function FleetPage() {
                 </select>
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[180px]">
+              <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
                 <span className="text-xs text-muted-foreground">Posto</span>
                 <Input
-                  placeholder="Posto"
-                  value={filters.posto}
-                  onChange={(e) => setFilters((f) => ({ ...f, posto: e.target.value }))}
                   className="h-11 w-full"
+                  value={editing.posto || ""}
+                  onChange={(e) => setEditing((p) => ({ ...p, posto: e.target.value }))}
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[160px]">
-                <span className="text-xs text-muted-foreground">Preço</span>
+              <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
+                <span className="text-xs text-muted-foreground">Motorista</span>
                 <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="Preço"
-                  value={filters.preco}
-                  onChange={(e) => setFilters((f) => ({ ...f, preco: e.target.value }))}
                   className="h-11 w-full"
+                  value={editing.motorista || ""}
+                  onChange={(e) =>
+                    setEditing((p) => ({ ...p, motorista: e.target.value }))
+                  }
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[160px]">
-                <span className="text-xs text-muted-foreground">De</span>
-                <InputDateBR
-                  value={filters.de}
-                  onChange={(val) => setFilters((f) => ({ ...f, de: val }))}
+              <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
+                <span className="text-xs text-muted-foreground">Odômetro</span>
+                <InputOdometerBR
                   className="h-11 w-full"
+                  value={editing.odometro || ""}
+                  onChange={(val) => setEditing((p) => ({ ...p, odometro: val }))}
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1 min-w-[160px]">
-                <span className="text-xs text-muted-foreground">Até</span>
-                <InputDateBR
-                  value={filters.ate}
-                  onChange={(val) => setFilters((f) => ({ ...f, ate: val }))}
+              <div className="md:col-span-12 flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Nota fiscal</span>
+                <Input
                   className="h-11 w-full"
+                  value={editing.nota_fiscal || ""}
+                  onChange={(e) =>
+                    setEditing((p) => ({ ...p, nota_fiscal: e.target.value }))
+                  }
                 />
               </div>
 
-              <div className="md:col-span-12 flex items-center gap-2 pt-1 justify-end">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={async () => {
-                    await reloadWithFilters();
-                    setFilterOpen(false);
-                  }}
-                  className="px-6"
-                >
-                  Aplicar
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={async () => {
-                    await clearFilters();
-                    setFilterOpen(false);
-                  }}
-                  className="px-6"
-                >
-                  Limpar filtros
-                </Button>
+              <div className="md:col-span-12 flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Observações</span>
+                <Input
+                  value={editing.observacoes || ""}
+                  onChange={(e) =>
+                    setEditing((p) => ({ ...p, observacoes: e.target.value }))
+                  }
+                  className="w-full"
+                />
+              </div>
+
+              <div className="md:col-span-12 flex items-center justify-between pt-1">
+                <div className="text-sm text-muted-foreground">
+                  Total: <span className="font-medium">{BRL(editing.valor_total)}</span>
+                </div>
+                <DialogFooter className="gap-2">
+                  <Button variant="secondary" onClick={() => setEditOpen(false)} className="px-6">
+                    Cancelar
+                  </Button>
+                  <Button onClick={saveEdit} className="px-6">Salvar</Button>
+                </DialogFooter>
               </div>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL DE EDIÇÃO — aparência padronizada com Actions */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="w-full max-w-2xl max-h-[85vh] overflow-y-auto p-0">
-          {/* Header */}
-          <div className="px-5 pt-5 pb-3 border-b">
-            <DialogHeader>
-              <DialogTitle className="text-base">Editar Abastecimento</DialogTitle>
-              <DialogDescription className="text-xs">
-                Atualize as informações e salve para aplicar as mudanças.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
-
-          {/* Body */}
-          <div className="px-5 py-4">
-            {editing && (
-              <div className="grid md:grid-cols-12 gap-4">
-                <div className="md:col-span-4 flex flex-col gap-1 min-w-[240px]">
-                  <span className="text-xs text-muted-foreground">Placa</span>
-                  <select
-                    className="border rounded px-3 h-11 w-full"
-                    value={editing.placa}
-                    onChange={(e) => setEditing((p) => ({ ...p, placa: e.target.value }))}
-                  >
-                    {(vehicles.data || [])
-                      .filter((v) => v.ativo !== false)
-                      .map((v) => (
-                        <option key={v.id} value={v.placa}>
-                          {v.placa} — {v.modelo || v.marca}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-
-                <div className="md:col-span-2 flex flex-col gap-1 min-w-[148px]">
-                  <span className="text-xs text-muted-foreground">Data</span>
-                  <InputDateBR
-                    className="h-11 w-full"
-                    value={editing.data}
-                    onChange={(val) => setEditing((p) => ({ ...p, data: val }))}
-                  />
-                </div>
-
-                <div className="md:col-span-2 flex flex-col gap-1 min-w-[148px]">
-                  <span className="text-xs text-muted-foreground">Litros</span>
-                  <Input
-                    className="h-11 w-full"
-                    value={editing.litros}
-                    onChange={(e) => setEditing((p) => ({ ...p, litros: e.target.value }))}
-                  />
-                </div>
-
-                <div className="md:col-span-2 flex flex-col gap-1 min-w-[176px]">
-                  <span className="text-xs text-muted-foreground">Preço/Litro</span>
-                  <Input
-                    className="h-11 w-full"
-                    value={editing.preco_litro}
-                    onChange={(e) =>
-                      setEditing((p) => ({ ...p, preco_litro: e.target.value }))
-                    }
-                  />
-                </div>
-
-                <div className="md:col-span-2 flex flex-col gap-1 min-w-[190px]">
-                  <span className="text-xs text-muted-foreground">Combustível</span>
-                  <select
-                    className="border rounded px-3 h-11 w-full"
-                    value={editing.combustivel}
-                    onChange={(e) =>
-                      setEditing((p) => ({ ...p, combustivel: e.target.value }))
-                    }
-                  >
-                    {FUEL_OPTIONS.map((o) => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
-                  <span className="text-xs text-muted-foreground">Posto</span>
-                  <Input
-                    className="h-11 w-full"
-                    value={editing.posto || ""}
-                    onChange={(e) => setEditing((p) => ({ ...p, posto: e.target.value }))}
-                  />
-                </div>
-
-                <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
-                  <span className="text-xs text-muted-foreground">Motorista</span>
-                  <Input
-                    className="h-11 w-full"
-                    value={editing.motorista || ""}
-                    onChange={(e) =>
-                      setEditing((p) => ({ ...p, motorista: e.target.value }))
-                    }
-                  />
-                </div>
-
-                <div className="md:col-span-4 flex flex-col gap-1 min-w-[190px]">
-                  <span className="text-xs text-muted-foreground">Odômetro</span>
-                  <InputOdometerBR
-                    className="h-11 w-full"
-                    value={editing.odometro || ""}
-                    onChange={(val) => setEditing((p) => ({ ...p, odometro: val }))}
-                  />
-                </div>
-
-                <div className="md:col-span-12 flex flex-col gap-1">
-                  <span className="text-xs text-muted-foreground">Nota fiscal</span>
-                  <Input
-                    className="h-11 w-full"
-                    value={editing.nota_fiscal || ""}
-                    onChange={(e) =>
-                      setEditing((p) => ({ ...p, nota_fiscal: e.target.value }))
-                    }
-                  />
-                </div>
-
-                <div className="md:col-span-12 flex flex-col gap-1">
-                  <span className="text-xs text-muted-foreground">Observações</span>
-                  <Input
-                    value={editing.observacoes || ""}
-                    onChange={(e) =>
-                      setEditing((p) => ({ ...p, observacoes: e.target.value }))
-                    }
-                    className="w-full"
-                  />
-                </div>
-
-                <div className="md:col-span-12 flex items-center justify-between pt-1">
-                  <div className="text-sm text-muted-foreground">
-                    Total: <span className="font-medium">{BRL(editing.valor_total)}</span>
-                  </div>
-                  <DialogFooter className="gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setEditOpen(false)} className="px-6">
-                      Cancelar
-                    </Button>
-                    <Button onClick={saveEdit} size="sm" className="px-6">Salvar</Button>
-                  </DialogFooter>
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

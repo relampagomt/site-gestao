@@ -19,7 +19,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog.jsx";
 
 /* ---------- Helpers ---------- */
@@ -376,7 +375,7 @@ export default function Orders() {
         </CardContent>
       </Card>
 
-      {/* MODAL: Nova/Editar Ordem — aparência padronizada com Actions */}
+      {/* MODAL: Nova/Editar Ordem */}
       <Dialog
         open={open}
         onOpenChange={(o) => {
@@ -384,182 +383,170 @@ export default function Orders() {
           if (!o) resetForm();
         }}
       >
-        <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
-          {/* Header */}
-          <div className="px-5 pt-5 pb-3 border-b">
-            <DialogHeader>
-              <DialogTitle className="text-base">
-                {editingId ? "Editar Ordem" : "Nova Ordem"}
-              </DialogTitle>
-              <DialogDescription className="text-xs">
-                Preencha os campos e salve para {editingId ? "atualizar" : "adicionar"} a ordem.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
+        <DialogContent className="w-[92vw] sm:max-w-[1100px] sm:p-8 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Editar Ordem" : "Nova Ordem"}</DialogTitle>
+          </DialogHeader>
 
-          {/* Body */}
-          <div className="px-5 py-4">
-            <form onSubmit={submit} className="grid md:grid-cols-4 gap-3">
-              <Input
-                name="cliente"
-                value={form.cliente}
-                onChange={onFormChange}
-                placeholder="Cliente"
-                required
-                className="md:col-span-2"
-              />
-              <Input
-                name="titulo"
-                value={form.titulo}
-                onChange={onFormChange}
-                placeholder="Título"
-                className="md:col-span-2"
-              />
+          <form onSubmit={submit} className="grid md:grid-cols-4 gap-3">
+            <Input
+              name="cliente"
+              value={form.cliente}
+              onChange={onFormChange}
+              placeholder="Cliente"
+              required
+              className="md:col-span-2"
+            />
+            <Input
+              name="titulo"
+              value={form.titulo}
+              onChange={onFormChange}
+              placeholder="Título"
+              className="md:col-span-2"
+            />
 
-              {/* Data com máscara BR */}
-              <InputDateBR
-                name="data"
-                value={form.data}
-                onChange={(val) => setForm((p) => ({ ...p, data: val }))}
-                placeholder="dd/mm/aaaa"
-              />
-              <select
-                name="status"
-                value={form.status}
-                onChange={onFormChange}
-                className="border rounded px-3 py-2"
+            {/* Data com máscara BR */}
+            <InputDateBR
+              name="data"
+              value={form.data}
+              onChange={(val) => setForm((p) => ({ ...p, data: val }))}
+              placeholder="dd/mm/aaaa"
+            />
+            <select
+              name="status"
+              value={form.status}
+              onChange={onFormChange}
+              className="border rounded px-3 py-2"
+            >
+              <option>Aberta</option>
+              <option>Em Andamento</option>
+              <option>Concluída</option>
+              <option>Cancelada</option>
+            </select>
+            <Textarea
+              name="descricao"
+              value={form.descricao}
+              onChange={onFormChange}
+              placeholder="Descrição"
+              className="md:col-span-4"
+            />
+
+            {/* Itens */}
+            <div className="md:col-span-4 border rounded p-3">
+              <div className="font-medium mb-3">Itens</div>
+
+              {/* Linha de adição */}
+              <div className="grid md:grid-cols-5 gap-2 mb-3">
+                <Input
+                  name="descricao"
+                  value={newItem.descricao}
+                  onChange={onNewItemChange}
+                  placeholder="Descrição do item"
+                  className="md:col-span-2"
+                />
+                <Input
+                  name="quantidade"
+                  value={newItem.quantidade}
+                  onChange={onNewItemChange}
+                  placeholder="Qtd"
+                />
+                <Input
+                  name="valor_unit"
+                  value={newItem.valor_unit}
+                  onChange={onNewItemChange}
+                  placeholder="Valor unit."
+                />
+                <Button type="button" onClick={addItem}>
+                  + Adicionar
+                </Button>
+              </div>
+
+              {/* Lista de itens */}
+              {(form.itens || []).length > 0 && (
+                <div className="overflow-auto">
+                  <Table className="min-w-full text-sm">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-center">Descrição</TableHead>
+                        <TableHead className="text-center">Qtd</TableHead>
+                        <TableHead className="text-center">Valor Unit.</TableHead>
+                        <TableHead className="text-center">Total</TableHead>
+                        <TableHead className="text-center">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {form.itens.map((i, idx) => {
+                        const rowTotal =
+                          parseFlex(i.quantidade) * parseFlex(i.valor_unit);
+                        return (
+                          <tr key={idx} className="border-t">
+                            <TableCell className="w-[40%] text-center align-middle">
+                              <Input
+                                value={i.descricao}
+                                onChange={(e) =>
+                                  updateItemField(idx, "descricao", e.target.value)
+                                }
+                              />
+                            </TableCell>
+                            <TableCell className="w-[10%] text-center align-middle">
+                              <Input
+                                value={i.quantidade}
+                                onChange={(e) =>
+                                  updateItemField(idx, "quantidade", parseFlex(e.target.value))
+                                }
+                              />
+                            </TableCell>
+                            <TableCell className="w-[20%] text-center align-middle">
+                              <Input
+                                value={i.valor_unit}
+                                onChange={(e) =>
+                                  updateItemField(idx, "valor_unit", parseFlex(e.target.value))
+                                }
+                              />
+                            </TableCell>
+                            <TableCell className="w-[20%] text-center align-middle">
+                              {BRL(rowTotal)}
+                            </TableCell>
+                            <TableCell className="text-center align-middle w-[10%]">
+                              <div className="flex justify-center">
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  onClick={() => removeItem(idx)}
+                                >
+                                  Remover
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </tr>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              <div className="text-right font-semibold mt-3">
+                Total: {BRL(total)}
+              </div>
+            </div>
+
+            <div className="md:col-span-4 flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  resetForm();
+                  setOpen(false);
+                }}
               >
-                <option>Aberta</option>
-                <option>Em Andamento</option>
-                <option>Concluída</option>
-                <option>Cancelada</option>
-              </select>
-              <Textarea
-                name="descricao"
-                value={form.descricao}
-                onChange={onFormChange}
-                placeholder="Descrição"
-                className="md:col-span-4"
-              />
-
-              {/* Itens */}
-              <div className="md:col-span-4 border rounded p-3">
-                <div className="font-medium mb-3">Itens</div>
-
-                {/* Linha de adição */}
-                <div className="grid md:grid-cols-5 gap-2 mb-3">
-                  <Input
-                    name="descricao"
-                    value={newItem.descricao}
-                    onChange={onNewItemChange}
-                    placeholder="Descrição do item"
-                    className="md:col-span-2"
-                  />
-                  <Input
-                    name="quantidade"
-                    value={newItem.quantidade}
-                    onChange={onNewItemChange}
-                    placeholder="Qtd"
-                  />
-                  <Input
-                    name="valor_unit"
-                    value={newItem.valor_unit}
-                    onChange={onNewItemChange}
-                    placeholder="Valor unit."
-                  />
-                  <Button type="button" onClick={addItem}>
-                    + Adicionar
-                  </Button>
-                </div>
-
-                {/* Lista de itens */}
-                {(form.itens || []).length > 0 && (
-                  <div className="overflow-auto">
-                    <Table className="min-w-full text-sm">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-center">Descrição</TableHead>
-                          <TableHead className="text-center">Qtd</TableHead>
-                          <TableHead className="text-center">Valor Unit.</TableHead>
-                          <TableHead className="text-center">Total</TableHead>
-                          <TableHead className="text-center">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {form.itens.map((i, idx) => {
-                          const rowTotal =
-                            parseFlex(i.quantidade) * parseFlex(i.valor_unit);
-                          return (
-                            <tr key={idx} className="border-t">
-                              <TableCell className="w-[40%] text-center align-middle">
-                                <Input
-                                  value={i.descricao}
-                                  onChange={(e) =>
-                                    updateItemField(idx, "descricao", e.target.value)
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell className="w-[10%] text-center align-middle">
-                                <Input
-                                  value={i.quantidade}
-                                  onChange={(e) =>
-                                    updateItemField(idx, "quantidade", parseFlex(e.target.value))
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell className="w-[20%] text-center align-middle">
-                                <Input
-                                  value={i.valor_unit}
-                                  onChange={(e) =>
-                                    updateItemField(idx, "valor_unit", parseFlex(e.target.value))
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell className="w-[20%] text-center align-middle">
-                                {BRL(rowTotal)}
-                              </TableCell>
-                              <TableCell className="text-center align-middle w-[10%]">
-                                <div className="flex justify-center">
-                                  <Button
-                                    type="button"
-                                    variant="destructive"
-                                    onClick={() => removeItem(idx)}
-                                  >
-                                    Remover
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </tr>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-
-                <div className="text-right font-semibold mt-3">
-                  Total: {BRL(total)}
-                </div>
-              </div>
-
-              <div className="md:col-span-4 flex justify-end gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    resetForm();
-                    setOpen(false);
-                  }}
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" size="sm">
-                  {editingId ? "Salvar Alterações" : "Adicionar Ordem"}
-                </Button>
-              </div>
-            </form>
-          </div>
+                Cancelar
+              </Button>
+              <Button type="submit">
+                {editingId ? "Salvar Alterações" : "Adicionar Ordem"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

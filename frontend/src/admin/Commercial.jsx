@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog.jsx";
 
 /**
@@ -398,158 +397,149 @@ export default function Commercial() {
             </CardContent>
           </Card>
 
-          {/* Modal de Ordem — aparência padronizada com Actions */}
+          {/* Modal de Ordem com largura reduzida */}
           <Dialog open={openOrder} onOpenChange={(o) => { setOpenOrder(o); if (!o) resetOrderForm(); }}>
-            <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-0">
-              {/* Header */}
-              <div className="px-5 pt-5 pb-3 border-b">
-                <DialogHeader>
-                  <DialogTitle className="text-base">{ordEditId ? "Editar Ordem" : "Nova Ordem"}</DialogTitle>
-                  <DialogDescription className="text-xs">
-                    Preencha os campos e salve para {ordEditId ? "atualizar" : "adicionar"} a ordem.
-                  </DialogDescription>
-                </DialogHeader>
-              </div>
+            <DialogContent className="w-[92vw] sm:max-w-[900px] sm:p-6 rounded-2xl">
+              <DialogHeader>
+                <DialogTitle>{ordEditId ? "Editar Ordem" : "Nova Ordem"}</DialogTitle>
+              </DialogHeader>
 
-              {/* Body */}
-              <div className="px-5 py-4">
-                <form onSubmit={submitOrder} className="grid md:grid-cols-4 gap-3">
-                  <Input
-                    name="cliente"
-                    value={ordForm.cliente}
-                    onChange={onOrd}
-                    placeholder="Cliente"
-                    required
-                    className="md:col-span-2"
-                  />
-                  <Input
-                    name="empresa"
-                    value={ordForm.empresa}
-                    onChange={onOrd}
-                    placeholder="Empresa"
-                    className="md:col-span-2"
-                  />
+              <form onSubmit={submitOrder} className="grid md:grid-cols-4 gap-3">
+                <Input
+                  name="cliente"
+                  value={ordForm.cliente}
+                  onChange={onOrd}
+                  placeholder="Cliente"
+                  required
+                  className="md:col-span-2"
+                />
+                <Input
+                  name="empresa"
+                  value={ordForm.empresa}
+                  onChange={onOrd}
+                  placeholder="Empresa"
+                  className="md:col-span-2"
+                />
 
-                  <InputDateBR
-                    name="data"
-                    value={ordForm.data}
-                    onChange={(val) => setOrdForm((p) => ({ ...p, data: val }))}
-                    placeholder="dd/mm/aaaa"
-                  />
+                <InputDateBR
+                  name="data"
+                  value={ordForm.data}
+                  onChange={(val) => setOrdForm((p) => ({ ...p, data: val }))}
+                  placeholder="dd/mm/aaaa"
+                />
 
-                  <select
-                    name="status"
-                    value={ordForm.status}
-                    onChange={onOrd}
-                    className="border rounded px-3 py-2"
-                  >
-                    <option>Aberta</option>
-                    <option>Em Andamento</option>
-                    <option>Concluída</option>
-                    <option>Cancelada</option>
-                  </select>
+                <select
+                  name="status"
+                  value={ordForm.status}
+                  onChange={onOrd}
+                  className="border rounded px-3 py-2"
+                >
+                  <option>Aberta</option>
+                  <option>Em Andamento</option>
+                  <option>Concluída</option>
+                  <option>Cancelada</option>
+                </select>
 
-                  <Textarea
-                    name="descricao"
-                    value={ordForm.descricao}
-                    onChange={onOrd}
-                    placeholder="Descrição"
-                    className="md:col-span-4"
-                  />
+                <Textarea
+                  name="descricao"
+                  value={ordForm.descricao}
+                  onChange={onOrd}
+                  placeholder="Descrição"
+                  className="md:col-span-4"
+                />
 
-                  {/* Itens */}
-                  <div className="md:col-span-4 border rounded p-3">
-                    <div className="font-medium mb-3">Itens</div>
+                {/* Itens */}
+                <div className="md:col-span-4 border rounded p-3">
+                  <div className="font-medium mb-3">Itens</div>
 
-                    <div className="grid md:grid-cols-5 gap-2 mb-3">
-                      <Input
-                        name="descricao"
-                        value={newItem.descricao}
-                        onChange={(e) => setNewItem((p) => ({ ...p, descricao: e.target.value }))}
-                        placeholder="Descrição do item"
-                        className="md:col-span-2"
-                      />
-                      <Input
-                        name="quantidade"
-                        value={newItem.quantidade}
-                        onChange={(e) => setNewItem((p) => ({ ...p, quantidade: e.target.value }))}
-                        placeholder="Qtd"
-                      />
-                      <Input
-                        name="valor_unit"
-                        value={newItem.valor_unit}
-                        onChange={(e) => setNewItem((p) => ({ ...p, valor_unit: e.target.value }))}
-                        placeholder="Valor unit."
-                      />
-                      <Button type="button" onClick={addItem}>+ Adicionar</Button>
-                    </div>
-
-                    {(ordForm.itens || []).length > 0 && (
-                      <div className="overflow-auto">
-                        <Table className="min-w-full text-sm">
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="text-center">Descrição</TableHead>
-                              <TableHead className="text-center">Qtd</TableHead>
-                              <TableHead className="text-center">Valor Unit.</TableHead>
-                              <TableHead className="text-center">Total</TableHead>
-                              <TableHead className="text-center">Ações</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {ordForm.itens.map((i, idx) => {
-                              const rowTotal = parseFlex(i.quantidade) * parseFlex(i.valor_unit);
-                              return (
-                                <tr key={idx} className="border-t">
-                                  <TableCell className="w-[40%] text-center align-middle">
-                                    <Input
-                                      value={i.descricao}
-                                      onChange={(e) => updateItemField(idx, "descricao", e.target.value)}
-                                    />
-                                  </TableCell>
-                                  <TableCell className="w-[10%] text-center align-middle">
-                                    <Input
-                                      value={i.quantidade}
-                                      onChange={(e) => updateItemField(idx, "quantidade", parseFlex(e.target.value))}
-                                    />
-                                  </TableCell>
-                                  <TableCell className="w-[20%] text-center align-middle">
-                                    <Input
-                                      value={i.valor_unit}
-                                      onChange={(e) => updateItemField(idx, "valor_unit", parseFlex(e.target.value))}
-                                    />
-                                  </TableCell>
-                                  <TableCell className="w/[20%] text-center align-middle">
-                                    {BRL(rowTotal)}
-                                  </TableCell>
-                                  <TableCell className="text-center align-middle w-[10%]">
-                                    <div className="flex justify-center">
-                                      <Button type="button" variant="destructive" onClick={() => removeItem(idx)}>
-                                        Remover
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </tr>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-
-                    <div className="text-right font-semibold mt-3">
-                      Total: {BRL(orderTotal)}
-                    </div>
+                  <div className="grid md:grid-cols-5 gap-2 mb-3">
+                    <Input
+                      name="descricao"
+                      value={newItem.descricao}
+                      onChange={(e) => setNewItem((p) => ({ ...p, descricao: e.target.value }))}
+                      placeholder="Descrição do item"
+                      className="md:col-span-2"
+                    />
+                    <Input
+                      name="quantidade"
+                      value={newItem.quantidade}
+                      onChange={(e) => setNewItem((p) => ({ ...p, quantidade: e.target.value }))}
+                      placeholder="Qtd"
+                    />
+                    <Input
+                      name="valor_unit"
+                      value={newItem.valor_unit}
+                      onChange={(e) => setNewItem((p) => ({ ...p, valor_unit: e.target.value }))}
+                      placeholder="Valor unit."
+                    />
+                    <Button type="button" onClick={addItem}>+ Adicionar</Button>
                   </div>
 
-                  <div className="md:col-span-4 flex justify-end gap-2 pt-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => { resetOrderForm(); setOpenOrder(false); }}>
-                      Cancelar
-                    </Button>
-                    <Button type="submit" size="sm">{ordEditId ? "Salvar Alterações" : "Adicionar Ordem"}</Button>
+                  {(ordForm.itens || []).length > 0 && (
+                    <div className="overflow-auto">
+                      <Table className="min-w-full text-sm">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-center">Descrição</TableHead>
+                            <TableHead className="text-center">Qtd</TableHead>
+                            <TableHead className="text-center">Valor Unit.</TableHead>
+                            <TableHead className="text-center">Total</TableHead>
+                            <TableHead className="text-center">Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {ordForm.itens.map((i, idx) => {
+                            const rowTotal = parseFlex(i.quantidade) * parseFlex(i.valor_unit);
+                            return (
+                              <tr key={idx} className="border-t">
+                                <TableCell className="w-[40%] text-center align-middle">
+                                  <Input
+                                    value={i.descricao}
+                                    onChange={(e) => updateItemField(idx, "descricao", e.target.value)}
+                                  />
+                                </TableCell>
+                                <TableCell className="w-[10%] text-center align-middle">
+                                  <Input
+                                    value={i.quantidade}
+                                    onChange={(e) => updateItemField(idx, "quantidade", parseFlex(e.target.value))}
+                                  />
+                                </TableCell>
+                                <TableCell className="w-[20%] text-center align-middle">
+                                  <Input
+                                    value={i.valor_unit}
+                                    onChange={(e) => updateItemField(idx, "valor_unit", parseFlex(e.target.value))}
+                                  />
+                                </TableCell>
+                                <TableCell className="w/[20%] text-center align-middle">
+                                  {BRL(rowTotal)}
+                                </TableCell>
+                                <TableCell className="text-center align-middle w-[10%]">
+                                  <div className="flex justify-center">
+                                    <Button type="button" variant="destructive" onClick={() => removeItem(idx)}>
+                                      Remover
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </tr>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+
+                  <div className="text-right font-semibold mt-3">
+                    Total: {BRL(orderTotal)}
                   </div>
-                </form>
-              </div>
+                </div>
+
+                <div className="md:col-span-4 flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="secondary" onClick={() => { resetOrderForm(); setOpenOrder(false); }}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit">{ordEditId ? "Salvar Alterações" : "Adicionar Ordem"}</Button>
+                </div>
+              </form>
             </DialogContent>
           </Dialog>
         </section>
