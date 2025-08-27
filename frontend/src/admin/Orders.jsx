@@ -1,3 +1,4 @@
+// frontend/src/admin/Orders.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.jsx";
@@ -20,7 +21,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog.jsx";
 
-/* ---------- Helpers ---------- */
+/**
+ * IMPORTANTE:
+ * - O axios `api` já possui baseURL `/api`.
+ *   Portanto, use caminhos RELATIVOS: `/commercial/orders`, sem repetir `/api`.
+ * - Endpoints usados (conforme backend):
+ *   GET    /commercial/orders
+ *   POST   /commercial/orders
+ *   PUT    /commercial/orders/:id
+ *   DELETE /commercial/orders/:id
+ */
+
 const BRL = (n) =>
   Number(n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -32,59 +43,12 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-/* Datas: máscara BR + conversores BR <-> ISO */
-const maskDateBR = (s) => {
-  const d = String(s || "").replace(/\D/g, "").slice(0, 8);
-  if (d.length <= 2) return d;
-  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
-  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
-};
-const toISO = (s) => {
-  const str = String(s || "").trim();
-  if (!str) return "";
-  // dd/mm/aaaa
-  if (str.length >= 10 && str[2] === "/" && str[5] === "/") {
-    const [dd, mm, yy] = str.slice(0, 10).split("/");
-    return `${yy}-${mm}-${dd}`;
-  }
-  // 8 dígitos: ddmmyyyy
-  if (/^\d{8}$/.test(str)) {
-    const dd = str.slice(0, 2), mm = str.slice(2, 4), yy = str.slice(4, 8);
-    return `${yy}-${mm}-${dd}`;
-  }
-  return str.slice(0, 10);
-};
-const fmtBRDate = (iso) => {
-  if (!iso) return "";
-  const s = String(iso);
-  if (s.length >= 10 && s[4] === "-" && s[7] === "-") {
-    const [yy, mm, dd] = s.slice(0, 10).split("-");
-    return `${dd}/${mm}/${yy}`;
-  }
-  if (s.length === 8 && /^\d{8}$/.test(s))
-    return `${s.slice(0, 2)}/${s.slice(2, 4)}/${s.slice(4, 8)}`;
-  if (s.length >= 10 && s[2] === "/" && s[5] === "/") return s.slice(0, 10);
-  return s;
-};
-
-function InputDateBR({ value, onChange, placeholder = "dd/mm/aaaa", ...props }) {
-  return (
-    <Input
-      inputMode="numeric"
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => onChange(maskDateBR(e.target.value))}
-      {...props}
-    />
-  );
-}
-
 const emptyOrder = () => ({
   cliente: "",
   titulo: "",
   descricao: "",
   status: "Aberta",
-  data: "",            // guardamos como BR no formulário
+  data: "",
   itens: [],
   valor_total: "",
 });
@@ -96,7 +60,6 @@ export default function Orders() {
 
   const [form, setForm] = useState(emptyOrder());
   const [editingId, setEditingId] = useState(null);
-  const [open, setOpen] = useState(false);
 
   const [newItem, setNewItem] = useState({
     descricao: "",
@@ -104,7 +67,10 @@ export default function Orders() {
     valor_unit: "",
   });
 
-  /* ---------- Load ---------- */
+  // Modal
+  const [open, setOpen] = useState(false);
+
+  // -------- Load ----------
   const load = async () => {
     setLoading(true);
     setErr("");
@@ -117,13 +83,17 @@ export default function Orders() {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, []);
 
-  /* ---------- Handlers ---------- */
+  useEffect(() => {
+    load();
+  }, []);
+
+  // -------- Handlers -------
   const onFormChange = (e) => {
     const { name, value } = e.target;
     setForm((p) => ({ ...p, [name]: value }));
   };
+
   const onNewItemChange = (e) => {
     const { name, value } = e.target;
     setNewItem((p) => ({ ...p, [name]: value }));
@@ -139,13 +109,17 @@ export default function Orders() {
     setForm((p) => ({ ...p, itens: [...(p.itens || []), item] }));
     setNewItem({ descricao: "", quantidade: "", valor_unit: "" });
   };
+
   const removeItem = (idx) => {
     setForm((p) => ({ ...p, itens: p.itens.filter((_, i) => i !== idx) }));
   };
+
   const updateItemField = (idx, field, value) => {
     setForm((p) => ({
       ...p,
-      itens: p.itens.map((it, i) => (i === idx ? { ...it, [field]: value } : it)),
+      itens: p.itens.map((it, i) =>
+        i === idx ? { ...it, [field]: field === "descricao" ? value : value } : it
+      ),
     }));
   };
 
@@ -155,6 +129,7 @@ export default function Orders() {
       0
     );
   }, [JSON.stringify(form.itens)]);
+
   useEffect(() => {
     setForm((p) => ({ ...p, valor_total: total.toFixed(2) }));
   }, [total]);
@@ -165,12 +140,11 @@ export default function Orders() {
     setNewItem({ descricao: "", quantidade: "", valor_unit: "" });
   };
 
-  /* ---------- Submit ---------- */
+  // -------- Submit --------
   const submit = async (e) => {
     e.preventDefault();
     const payload = {
       ...form,
-      data: toISO(form.data), // BR -> ISO ao enviar
       itens: (form.itens || []).map((i) => ({
         descricao: i.descricao,
         quantidade: toNum(i.quantidade),
@@ -197,7 +171,7 @@ export default function Orders() {
       titulo: o.titulo || "",
       descricao: o.descricao || "",
       status: o.status || "Aberta",
-      data: fmtBRDate(o.data || ""), // ISO -> BR ao abrir
+      data: o.data || "",
       itens: (o.itens || []).map((i) => ({
         descricao: i.descricao || "",
         quantidade: toNum(i.quantidade),
@@ -214,7 +188,7 @@ export default function Orders() {
     load();
   };
 
-  /* ---------- UI ---------- */
+  // -------- UI ------------
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
@@ -250,7 +224,6 @@ export default function Orders() {
                   <TableHead className="text-center">Data</TableHead>
                   <TableHead className="text-center">Cliente</TableHead>
                   <TableHead className="text-center">Título</TableHead>
-                  <TableHead className="text-center">Descrição</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-center">Total</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
@@ -259,14 +232,9 @@ export default function Orders() {
               <TableBody>
                 {orders.map((o) => (
                   <tr key={o.id} className="border-t">
-                    <TableCell className="text-center align-middle">
-                      {fmtBRDate(o.data)}
-                    </TableCell>
+                    <TableCell className="text-center align-middle">{o.data}</TableCell>
                     <TableCell className="text-center align-middle">{o.cliente}</TableCell>
                     <TableCell className="text-center align-middle">{o.titulo}</TableCell>
-                    <TableCell className="text-center align-middle">
-                      {o.descricao || "—"}
-                    </TableCell>
                     <TableCell className="text-center align-middle">{o.status}</TableCell>
                     <TableCell className="text-center align-middle">
                       {BRL(o.valor_total)}
@@ -285,7 +253,7 @@ export default function Orders() {
                 ))}
                 {orders.length === 0 && (
                   <tr>
-                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                       Nenhuma ordem cadastrada.
                     </TableCell>
                   </tr>
@@ -325,13 +293,11 @@ export default function Orders() {
               placeholder="Título"
               className="md:col-span-2"
             />
-
-            {/* Data com máscara BR */}
-            <InputDateBR
+            <Input
               name="data"
               value={form.data}
-              onChange={(val) => setForm((p) => ({ ...p, data: val }))}
-              placeholder="dd/mm/aaaa"
+              onChange={onFormChange}
+              placeholder="Data (YYYY-MM-DD)"
             />
             <select
               name="status"
@@ -413,7 +379,11 @@ export default function Orders() {
                               <Input
                                 value={i.quantidade}
                                 onChange={(e) =>
-                                  updateItemField(idx, "quantidade", toNum(e.target.value))
+                                  updateItemField(
+                                    idx,
+                                    "quantidade",
+                                    toNum(e.target.value)
+                                  )
                                 }
                               />
                             </TableCell>
@@ -421,7 +391,11 @@ export default function Orders() {
                               <Input
                                 value={i.valor_unit}
                                 onChange={(e) =>
-                                  updateItemField(idx, "valor_unit", toNum(e.target.value))
+                                  updateItemField(
+                                    idx,
+                                    "valor_unit",
+                                    toNum(e.target.value)
+                                  )
                                 }
                               />
                             </TableCell>
