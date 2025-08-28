@@ -197,7 +197,7 @@ const Dashboard = () => {
         api.get('/clients').catch(() => ({ data: [] })),
         api.get('/materials').catch(() => ({ data: [] })),
         api.get('/actions').catch(() => ({ data: [] })),
-        api.get('/vacancies').catch(() => ({ data: [] })),
+        api.get('/job-vacancies').catch(() => ({ data: [] })),
         Promise.resolve({ data: [] })
       ]);
 
