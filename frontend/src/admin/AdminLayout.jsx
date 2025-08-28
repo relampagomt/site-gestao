@@ -13,6 +13,7 @@ import {
   UserCog,
   Truck,
   Bell,
+  ClipboardCheck,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button.jsx";
