@@ -18,7 +18,6 @@ import Users from './admin/Users';
 import Finance from './admin/Finance';
 
 import Fleet from './admin/Fleet';
-import Alerts from './admin/Alerts';
 import Orders from './admin/Orders';
 
 import SupervisorDashboard from './pages/SupervisorDashboard';
@@ -53,7 +52,6 @@ function App() {
 
               {/* Novas páginas */}
               <Route path="fleet" element={<Fleet />} />
-              <Route path="alerts" element={<Alerts />} />
               <Route path="orders" element={<Orders />} />
 
               <Route
