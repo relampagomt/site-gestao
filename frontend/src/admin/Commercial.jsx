@@ -1,24 +1,28 @@
 // frontend/src/admin/Commercial.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import api from "@/services/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.jsx";
+import {
+  Card, CardContent, CardDescription, CardHeader, CardTitle
+} from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
-import { Textarea } from "@/components/ui/textarea.jsx";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.jsx";
+import { Label } from "@/components/ui/label.jsx";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog.jsx";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table.jsx";
+import { Textarea } from "@/components/ui/textarea.jsx";
+import { Badge } from "@/components/ui/badge.jsx";
+import { Plus, Search, Edit, Trash2, Filter as FilterIcon } from "lucide-react";
 
-/**
- * IMPORTANTE:
- * - O axios `api` já tem baseURL `/api`. Portanto use caminhos RELATIVOS `/commercial/...`.
- */
+// Export CSV/XLSX (mesmo componente usado nas outras páginas)
+import ExportMenu from "@/components/export/ExportMenu";
 
-/* ---------- Helpers compartilhados ---------- */
+/* ================= Helpers ================= */
+
+// número flex (aceita "1.234,56", "1234.56" etc)
 const parseFlex = (v) => {
   if (v === null || v === undefined || v === "") return 0;
   if (typeof v === "number") return v;
@@ -29,59 +33,34 @@ const parseFlex = (v) => {
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 };
+const BRL = (n) =>
+  Number(parseFlex(n)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const INT_BR = (n) => new Intl.NumberFormat("pt-BR").format(Number(n || 0));
 
-const BRL = (v) => {
-  const n = parseFlex(v);
-  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-};
+// estágios do funil (padronizados)
+const STAGES = [
+  "Novo",
+  "Em contato",
+  "Qualificando",
+  "Proposta",
+  "Negociação",
+  "Fechado (ganho)",
+  "Fechado (perdido)",
+];
 
-// Datas BR <-> ISO
-const maskDateBR = (s) => {
-  const d = String(s || "").replace(/\D/g, "").slice(0, 8);
-  if (d.length <= 2) return d;
-  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
-  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
-};
-const toISO = (s) => {
-  const str = String(s || "").trim();
-  if (!str) return "";
-  if (str.length >= 10 && str[2] === "/" && str[5] === "/") {
-    const [dd, mm, yy] = str.slice(0, 10).split("/");
-    return `${yy}-${mm}-${dd}`;
-  }
-  if (/^\d{8}$/.test(str)) {
-    const dd = str.slice(0, 2), mm = str.slice(2, 4), yy = str.slice(4, 8);
-    return `${yy}-${mm}-${dd}`;
-  }
-  return str.slice(0, 10);
-};
-const fmtBRDate = (iso) => {
-  if (!iso) return "";
-  const s = String(iso);
-  if (s.length >= 10 && s[4] === "-" && s[7] === "-") {
-    const [yy, mm, dd] = s.slice(0, 10).split("-");
-    return `${dd}/${mm}/${yy}`;
-  }
-  if (s.length === 8 && /^\d{8}$/.test(s))
-    return `${s.slice(0, 2)}/${s.slice(2, 4)}/${s.slice(4, 8)}`;
-  if (s.length >= 10 && s[2] === "/" && s[5] === "/") return s.slice(0, 10);
-  return s;
-};
+// origens comuns (exemplo — ajuste livre)
+const SOURCES = [
+  "Indicação",
+  "Orgânico",
+  "Tráfego Pago",
+  "WhatsApp",
+  "Instagram",
+  "Site",
+  "Evento",
+];
 
-function InputDateBR({ value, onChange, placeholder = "dd/mm/aaaa", ...props }) {
-  return (
-    <Input
-      inputMode="numeric"
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => onChange(maskDateBR(e.target.value))}
-      {...props}
-    />
-  );
-}
-
-/* ---------- Hooks utilitários ---------- */
-const useLoad = (path) => {
+/* Hook utilitário para carregar listas */
+const useList = (path) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -91,7 +70,7 @@ const useLoad = (path) => {
       const { data } = await api.get(path);
       setData(Array.isArray(data) ? data : []);
     } catch (e) {
-      setErr("Falha ao carregar.");
+      setErr("Falha ao carregar registros.");
     } finally {
       setLoading(false);
     }
@@ -100,7 +79,7 @@ const useLoad = (path) => {
   return { data, loading, err, reload, setData };
 };
 
-/* ---------- Estado inicial ---------- */
+/* ================= Modelo ================= */
 const emptyRecord = () => ({
   name: "",
   company: "",
@@ -111,439 +90,390 @@ const emptyRecord = () => ({
   notes: "",
 });
 
-const emptyOrder = () => ({
-  cliente: "",
-  empresa: "",        // substitui 'titulo'
-  descricao: "",
-  status: "Aberta",
-  data: "",
-  itens: [],
-  valor_total: "",
-});
-
-/* ---------- Componente principal ---------- */
 export default function Commercial() {
-  const [tab, setTab] = useState("records");
+  // fonte oficial: apenas REGISTROS (sem a aba de Ordens para evitar redundância)
+  const records = useList("/commercial/records");
 
-  // Records
-  const records = useLoad("/commercial/records");
-  const [recForm, setRecForm] = useState(emptyRecord());
-  const [recEditId, setRecEditId] = useState(null);
+  // busca / filtros
+  const [q, setQ] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [fStage, setFStage] = useState("");
+  const [fSource, setFSource] = useState("");
+  const activeFiltersCount = (fStage ? 1 : 0) + (fSource ? 1 : 0);
 
-  // Orders
-  const orders = useLoad("/commercial/orders");
-  const [ordForm, setOrdForm] = useState(emptyOrder());
-  const [ordEditId, setOrdEditId] = useState(null);
-  const [openOrder, setOpenOrder] = useState(false);
+  // paginação
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
 
-  const [newItem, setNewItem] = useState({ descricao: "", quantidade: "", valor_unit: "" });
+  // formulário (criar/editar)
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState(emptyRecord());
+  const [editId, setEditId] = useState(null);
 
-  /* ---------- Records Handlers ---------- */
-  const onRec = (e) => { const { name, value } = e.target; setRecForm((p) => ({ ...p, [name]: value })); };
-
-  const submitRecord = async (e) => {
-    e.preventDefault();
-    const method = recEditId ? "put" : "post";
-    const url = recEditId ? `/commercial/records/${recEditId}` : `/commercial/records`;
-    await api[method](url, {
-      ...recForm,
-      value: parseFlex(recForm.value),
-    });
-    setRecForm(emptyRecord());
-    setRecEditId(null);
-    records.reload();
+  const resetForm = () => {
+    setForm(emptyRecord());
+    setEditId(null);
   };
 
-  const editRecord = (r) => {
-    setRecEditId(r.id);
-    setRecForm({
-      name: r.name || "",
-      company: r.company || "",
-      phone: r.phone || "",
-      stage: r.stage || "Novo",
-      value: r.value || "",
-      source: r.source || "",
-      notes: r.notes || "",
-    });
-  };
-
-  const deleteRecord = async (r) => {
-    if (!confirm("Excluir registro?")) return;
-    await api.delete(`/commercial/records/${r.id}`);
-    records.reload();
-  };
-
-  /* ---------- Orders Handlers ---------- */
-  const onOrd = (e) => { const { name, value } = e.target; setOrdForm((p) => ({ ...p, [name]: value })); };
-
-  const addItem = () => {
-    if (!newItem.descricao?.trim()) return;
-    const item = {
-      descricao: newItem.descricao.trim(),
-      quantidade: parseFlex(newItem.quantidade || 1),
-      valor_unit: parseFlex(newItem.valor_unit || 0),
-    };
-    setOrdForm((p) => ({ ...p, itens: [...(p.itens || []), item] }));
-    setNewItem({ descricao: "", quantidade: "", valor_unit: "" });
-  };
-  const removeItem = (idx) => {
-    setOrdForm((p) => ({ ...p, itens: p.itens.filter((_, i) => i !== idx) }));
-  };
-  const updateItemField = (idx, field, value) => {
-    setOrdForm((p) => ({
-      ...p,
-      itens: p.itens.map((it, i) => (i === idx ? { ...it, [field]: value } : it)),
+  // normalização + filtros locais
+  const normalized = useMemo(() => {
+    return (records.data || []).map((r) => ({
+      ...r,
+      _value: parseFlex(r.value),
+      _stage: r.stage || "Novo",
+      _source: r.source || "",
+      _name: r.name || "",
+      _company: r.company || "",
+      _phone: r.phone || "",
+      _notes: r.notes || "",
     }));
-  };
+  }, [records.data]);
 
-  const orderTotal = useMemo(() => {
-    return (ordForm.itens || []).reduce((acc, i) => acc + parseFlex(i.quantidade) * parseFlex(i.valor_unit), 0);
-  }, [JSON.stringify(ordForm.itens)]);
+  const filtered = useMemo(() => {
+    let list = [...normalized];
 
-  useEffect(() => {
-    setOrdForm((p) => ({ ...p, valor_total: orderTotal.toFixed(2) }));
-  }, [orderTotal]);
+    // busca livre por nome/empresa/telefone/origem/estágio
+    const k = q.trim().toLowerCase();
+    if (k) {
+      list = list.filter((r) =>
+        [r._name, r._company, r._phone, r._source, r._stage]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(k))
+      );
+    }
 
-  const resetOrderForm = () => {
-    setOrdForm(emptyOrder());
-    setOrdEditId(null);
-    setNewItem({ descricao: "", quantidade: "", valor_unit: "" });
-  };
+    // filtros
+    if (fStage) list = list.filter((r) => r._stage === fStage);
+    if (fSource) list = list.filter((r) => r._source === fSource);
 
-  const submitOrder = async (e) => {
-    e.preventDefault();
-    const payloadTotal = (ordForm.itens || []).reduce(
-      (acc, i) => acc + parseFlex(i.quantidade) * parseFlex(i.valor_unit),
-      0
+    // ordenação simples: por estágio & nome
+    list.sort((a, b) =>
+      STAGES.indexOf(a._stage) - STAGES.indexOf(b._stage) ||
+      String(a._name).localeCompare(String(b._name), "pt-BR")
     );
-    const payload = {
-      ...ordForm,
-      data: toISO(ordForm.data),
-      itens: (ordForm.itens || []).map((i) => ({
-        descricao: i.descricao,
-        quantidade: parseFlex(i.quantidade),
-        valor_unit: parseFlex(i.valor_unit),
-      })),
-      valor_total: Number(payloadTotal.toFixed(2)),
-    };
-    const url = ordEditId ? `/commercial/orders/${ordEditId}` : `/commercial/orders`;
-    const method = ordEditId ? "put" : "post";
-    await api[method](url, payload);
-    resetOrderForm();
-    setOpenOrder(false);
-    orders.reload();
-  };
 
-  const editOrder = (o) => {
-    setOrdEditId(o.id);
-    setOrdForm({
-      cliente: o.cliente || "",
-      empresa: o.empresa || o.titulo || "",
-      descricao: o.descricao || "",
-      status: o.status || "Aberta",
-      data: fmtBRDate(o.data || ""),
-      itens: (o.itens || []).map((i) => ({
-        descricao: i.descricao || "",
-        quantidade: parseFlex(i.quantidade),
-        valor_unit: parseFlex(i.valor_unit),
-      })),
-      valor_total: String(o.valor_total ?? ""),
+    return list;
+  }, [normalized, q, fStage, fSource]);
+
+  // KPIs
+  const kpiCount = filtered.length;
+  const kpiPipeline = useMemo(() => {
+    // considera tudo que NÃO está perdido
+    return filtered
+      .filter((r) => r._stage !== "Fechado (perdido)")
+      .reduce((s, r) => s + parseFlex(r._value), 0);
+  }, [filtered]);
+  const kpiWon = useMemo(() => {
+    return filtered
+      .filter((r) => r._stage === "Fechado (ganho)")
+      .reduce((s, r) => s + parseFlex(r._value), 0);
+  }, [filtered]);
+
+  // pagina atual
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  useEffect(() => { if (page > totalPages) setPage(1); }, [page, totalPages]);
+  const pageItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page]);
+
+  // export (apenas a página atual, como nas outras telas)
+  const exportData = useMemo(() => {
+    return pageItems.map((r) => ({
+      "Nome": r._name,
+      "Empresa": r._company,
+      "Telefone": r._phone,
+      "Estágio": r._stage,
+      "Valor": parseFlex(r._value),
+      "Origem": r._source,
+      "Notas": r._notes,
+    }));
+  }, [pageItems]);
+
+  // handlers
+  const onFormChange = (e) => {
+    const { name, value } = e.target;
+    setForm((p) => ({ ...p, [name]: value }));
+  };
+  const openCreate = () => { resetForm(); setFormOpen(true); };
+  const openEdit = (row) => {
+    setEditId(row.id);
+    setForm({
+      name: row.name || "",
+      company: row.company || "",
+      phone: row.phone || "",
+      stage: row.stage || "Novo",
+      value: String(row.value ?? ""),
+      source: row.source || "",
+      notes: row.notes || "",
     });
-    setOpenOrder(true);
+    setFormOpen(true);
+  };
+  const submit = async (e) => {
+    e.preventDefault();
+    const payload = {
+      ...form,
+      value: parseFlex(form.value),
+    };
+    const method = editId ? "put" : "post";
+    const url = editId ? `/commercial/records/${editId}` : `/commercial/records`;
+    await api[method](url, payload);
+    setFormOpen(false);
+    resetForm();
+    records.reload();
+  };
+  const del = async (row) => {
+    if (!confirm("Excluir este registro?")) return;
+    await api.delete(`/commercial/records/${row.id}`);
+    records.reload();
   };
 
-  const deleteOrder = async (o) => {
-    if (!confirm("Excluir esta ordem?")) return;
-    await api.delete(`/commercial/orders/${o.id}`);
-    orders.reload();
+  const clearFilters = () => {
+    setQ("");
+    setFStage("");
+    setFSource("");
   };
+  const goPrev = useCallback(() => setPage((p) => Math.max(1, p - 1)), []);
+  const goNext = useCallback(() => setPage((p) => Math.min(totalPages, p + 1)), [totalPages]);
 
-  const orderUnitValue = (o) => {
-    const itens = Array.isArray(o.itens) ? o.itens : [];
-    if (!itens.length) return null;
-    const vals = itens.map((i) => parseFlex(i.valor_unit)).filter(Number.isFinite);
-    if (!vals.length) return null;
-    const uniq = new Set(vals.map((v) => v.toFixed(2)));
-    return uniq.size === 1 ? vals[0] : null;
-  };
-
+  /* ================= UI ================= */
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Comercial</h1>
-        <div className="flex gap-2">
-          <Button onClick={() => setTab("records")} variant={tab === "records" ? "default" : "secondary"}>Registros</Button>
-          <Button onClick={() => setTab("orders")} variant={tab === "orders" ? "default" : "secondary"}>Ordens</Button>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle className="text-xl">Comercial — Registros</CardTitle>
+              <CardDescription>CRM simples para contatos e oportunidades</CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={openCreate}>
+                <Plus className="mr-2 size-4" />
+                Novo Registro
+              </Button>
 
-      {tab === "records" && (
-        <section className="grid md:grid-cols-4 gap-3">
-          {/* Novo registro */}
-          <Card className="md:col-span-1">
-            <CardHeader><CardTitle>Novo Registro</CardTitle></CardHeader>
-            <CardContent>
-              <form onSubmit={submitRecord} className="grid gap-2">
-                <Input name="name" value={recForm.name} onChange={onRec} placeholder="Nome" required />
-                <Input name="company" value={recForm.company} onChange={onRec} placeholder="Empresa" />
-                <Input name="phone" value={recForm.phone} onChange={onRec} placeholder="Telefone" />
-                <Input name="stage" value={recForm.stage} onChange={onRec} placeholder="Etapa" />
-                <Input name="value" value={recForm.value} onChange={onRec} placeholder="Valor (R$)" />
-                <Input name="source" value={recForm.source} onChange={onRec} placeholder="Origem" />
-                <Textarea name="notes" value={recForm.notes} onChange={onRec} placeholder="Observações" />
-                <div className="flex justify-end">
-                  <Button type="submit">{recEditId ? "Salvar" : "Adicionar"}</Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+              <ExportMenu
+                data={exportData}
+                fileBaseName={`comercial_registros`}
+                buttonProps={{ variant: "outline", size: "sm" }}
+              />
 
-          {/* Lista registros */}
-          <Card className="md:col-span-3">
-            <CardHeader><CardTitle>Registros</CardTitle></CardHeader>
-            <CardContent className="overflow-auto">
-              {records.loading ? (
-                <div className="text-sm text-muted-foreground">Carregando...</div>
-              ) : (
-                <Table className="min-w-full text-sm">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-center">Nome</TableHead>
-                      <TableHead className="text-center">Empresa</TableHead>
-                      <TableHead className="text-center">Telefone</TableHead>
-                      <TableHead className="text-center">Etapa</TableHead>
-                      <TableHead className="text-center">Valor</TableHead>
-                      <TableHead className="text-center">Origem</TableHead>
-                      <TableHead className="text-center">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {records.data.map((r) => (
-                      <tr key={r.id} className="border-t">
-                        <TableCell className="text-center">{r.name || "—"}</TableCell>
-                        <TableCell className="text-center">{r.company || "—"}</TableCell>
-                        <TableCell className="text-center">{r.phone || "—"}</TableCell>
-                        <TableCell className="text-center">{r.stage || "—"}</TableCell>
-                        <TableCell className="text-center">{r.value ? BRL(r.value) : "—"}</TableCell>
-                        <TableCell className="text-center">{r.source || "—"}</TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex justify-center gap-2">
-                            <Button variant="secondary" onClick={() => editRecord(r)}>Editar</Button>
-                            <Button variant="destructive" onClick={() => deleteRecord(r)}>Excluir</Button>
-                          </div>
-                        </TableCell>
-                      </tr>
-                    ))}
-                    {records.data.length === 0 && (
-                      <tr><TableCell colSpan={7} className="text-center text-muted-foreground">Sem registros.</TableCell></tr>
-                    )}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </section>
-      )}
+              <Button
+                variant={filtersOpen || activeFiltersCount ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setFiltersOpen(true)}
+              >
+                <FilterIcon className="mr-2 size-4" />
+                Filtros {activeFiltersCount ? <Badge variant="secondary" className="ml-2">{activeFiltersCount}</Badge> : null}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
 
-      {tab === "orders" && (
-        <section className="grid gap-3">
-          <div className="flex justify-end">
-            <Button onClick={() => { resetOrderForm(); setOpenOrder(true); }}>Nova Ordem</Button>
+        <CardContent className="space-y-4">
+          {/* Busca rápida */}
+          <div className="flex flex-col md:flex-row gap-3">
+            <div className="relative md:w-2/3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Buscar por nome, empresa, telefone, origem ou estágio..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
+
+            <div className="flex-1 md:text-right">
+              {(q || fStage || fSource) ? (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>Limpar filtros</Button>
+              ) : null}
+            </div>
           </div>
 
-          <Card>
-            <CardHeader><CardTitle>Ordens cadastradas</CardTitle></CardHeader>
-            <CardContent className="overflow-auto">
-              {orders.loading ? (
-                <div className="text-sm text-muted-foreground">Carregando...</div>
-              ) : (
-                <Table className="min-w-full text-sm">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-center">Data</TableHead>
-                      <TableHead className="text-center">Cliente</TableHead>
-                      <TableHead className="text-center">Empresa</TableHead>
-                      <TableHead className="text-center">Descrição</TableHead>
-                      <TableHead className="text-center">Status</TableHead>
-                      <TableHead className="text-center">Valor Unit.</TableHead>
-                      <TableHead className="text-center">Total</TableHead>
-                      <TableHead className="text-center">Ações</TableHead>
+          {/* KPIs */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border bg-card p-4">
+              <p className="text-xs text-muted-foreground">Registros</p>
+              <p className="text-2xl font-bold leading-tight">{INT_BR(kpiCount)}</p>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <p className="text-xs text-muted-foreground">Pipeline (R$)</p>
+              <p className="text-2xl font-bold leading-tight">{BRL(kpiPipeline)}</p>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <p className="text-xs text-muted-foreground">Fechados (ganho)</p>
+              <p className="text-2xl font-bold leading-tight">{BRL(kpiWon)}</p>
+            </div>
+          </div>
+
+          {/* Tabela */}
+          <div className="overflow-x-auto rounded-xl border bg-card">
+            <Table className="[text-align:_center] [&_th]:!text-center [&_td]:!text-center [&_th]:!align-middle [&_td]:!align-middle">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs md:text-sm">Nome</TableHead>
+                  <TableHead className="text-xs md:text-sm">Empresa</TableHead>
+                  <TableHead className="text-xs md:text-sm">Telefone</TableHead>
+                  <TableHead className="text-xs md:text-sm">Estágio</TableHead>
+                  <TableHead className="text-xs md:text-sm">Valor</TableHead>
+                  <TableHead className="text-xs md:text-sm">Origem</TableHead>
+                  <TableHead className="text-xs md:text-sm">Notas</TableHead>
+                  <TableHead className="text-xs md:text-sm w-[160px]">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {records.loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-10 text-muted-foreground">Carregando...</TableCell>
+                  </TableRow>
+                ) : pageItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-10 text-muted-foreground">Nenhum registro encontrado</TableCell>
+                  </TableRow>
+                ) : (
+                  pageItems.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.name || "—"}</TableCell>
+                      <TableCell>{r.company || "—"}</TableCell>
+                      <TableCell>{r.phone || "—"}</TableCell>
+                      <TableCell>{r.stage || "—"}</TableCell>
+                      <TableCell className="font-medium">{BRL(r.value)}</TableCell>
+                      <TableCell>{r.source || "—"}</TableCell>
+                      <TableCell className="max-w-[280px] truncate" title={r.notes || ""}>
+                        {r.notes || "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-center gap-2">
+                          <Button variant="outline" size="sm" className="gap-2" onClick={() => openEdit(r)}>
+                            <Edit className="size-4" /> Editar
+                          </Button>
+                          <Button variant="destructive" size="sm" className="gap-2" onClick={() => del(r)}>
+                            <Trash2 className="size-4" /> Excluir
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orders.data.map((o) => (
-                      <tr key={o.id} className="border-t">
-                        <TableCell className="text-center">{fmtBRDate(o.data)}</TableCell>
-                        <TableCell className="text-center">{o.cliente || "—"}</TableCell>
-                        <TableCell className="text-center">{o.empresa || o.titulo || "—"}</TableCell>
-                        <TableCell className="text-center">{o.descricao || "—"}</TableCell>
-                        <TableCell className="text-center">{o.status || "—"}</TableCell>
-                        <TableCell className="text-center">{orderUnitValue(o) !== null ? BRL(orderUnitValue(o)) : "—"}</TableCell>
-                        <TableCell className="text-center">{BRL(o.valor_total)}</TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex justify-center gap-2">
-                            <Button variant="secondary" onClick={() => editOrder(o)}>Editar</Button>
-                            <Button variant="destructive" onClick={() => deleteOrder(o)}>Excluir</Button>
-                          </div>
-                        </TableCell>
-                      </tr>
-                    ))}
-                    {orders.data.length === 0 && (
-                      <tr><TableCell colSpan={8} className="text-center text-muted-foreground">Nenhuma ordem cadastrada.</TableCell></tr>
-                    )}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
 
-          {/* Modal de Ordem com largura reduzida */}
-          <Dialog open={openOrder} onOpenChange={(o) => { setOpenOrder(o); if (!o) resetOrderForm(); }}>
-            <DialogContent className="w-[92vw] sm:max-w-[900px] sm:p-6 rounded-2xl">
-              <DialogHeader>
-                <DialogTitle>{ordEditId ? "Editar Ordem" : "Nova Ordem"}</DialogTitle>
-              </DialogHeader>
+          {/* Paginação */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="order-2 sm:order-1 text-xs text-muted-foreground">
+              Exibindo <b>{pageItems.length}</b> de <b>{filtered.length}</b> — Pipeline exibido: <b>{BRL(kpiPipeline)}</b>
+            </div>
+            <div className="order-1 sm:order-2 flex items-center justify-between gap-2">
+              <Button type="button" variant="outline" size="sm" className="min-w-[92px] h-9" disabled={page <= 1} onClick={goPrev}>Anterior</Button>
+              <div className="shrink-0 text-xs tabular-nums">
+                <span className="inline-block rounded-md border bg-muted/60 px-2.5 py-1">
+                  Página <b>{page}</b><span className="opacity-60">/{totalPages}</span>
+                </span>
+              </div>
+              <Button type="button" variant="outline" size="sm" className="min-w-[92px] h-9" disabled={page >= totalPages} onClick={goNext}>Próxima</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-              <form onSubmit={submitOrder} className="grid md:grid-cols-4 gap-3">
-                <Input
-                  name="cliente"
-                  value={ordForm.cliente}
-                  onChange={onOrd}
-                  placeholder="Cliente"
-                  required
-                  className="md:col-span-2"
-                />
-                <Input
-                  name="empresa"
-                  value={ordForm.empresa}
-                  onChange={onOrd}
-                  placeholder="Empresa"
-                  className="md:col-span-2"
-                />
+      {/* MODAL: FILTROS AVANÇADOS */}
+      <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Filtros</DialogTitle>
+          </DialogHeader>
 
-                <InputDateBR
-                  name="data"
-                  value={ordForm.data}
-                  onChange={(val) => setOrdForm((p) => ({ ...p, data: val }))}
-                  placeholder="dd/mm/aaaa"
-                />
+          <div className="grid md:grid-cols-12 gap-4">
+            <div className="md:col-span-6">
+              <Label className="text-xs">Estágio</Label>
+              <select
+                className="border rounded px-3 h-11 w-full"
+                value={fStage}
+                onChange={(e) => setFStage(e.target.value)}
+              >
+                <option value="">Todos</option>
+                {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
 
-                <select
-                  name="status"
-                  value={ordForm.status}
-                  onChange={onOrd}
-                  className="border rounded px-3 py-2"
-                >
-                  <option>Aberta</option>
-                  <option>Em Andamento</option>
-                  <option>Concluída</option>
-                  <option>Cancelada</option>
-                </select>
+            <div className="md:col-span-6">
+              <Label className="text-xs">Origem</Label>
+              <select
+                className="border rounded px-3 h-11 w-full"
+                value={fSource}
+                onChange={(e) => setFSource(e.target.value)}
+              >
+                <option value="">Todas</option>
+                {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
 
-                <Textarea
-                  name="descricao"
-                  value={ordForm.descricao}
-                  onChange={onOrd}
-                  placeholder="Descrição"
-                  className="md:col-span-4"
-                />
+            <div className="md:col-span-12 flex items-center gap-2 pt-1">
+              <Button type="button" onClick={() => setFiltersOpen(false)} className="px-6">Aplicar</Button>
+              <Button type="button" variant="secondary" onClick={() => { clearFilters(); setFiltersOpen(false); }} className="px-6">Limpar filtros</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-                {/* Itens */}
-                <div className="md:col-span-4 border rounded p-3">
-                  <div className="font-medium mb-3">Itens</div>
+      {/* MODAL: CRIAR/EDITAR REGISTRO */}
+      <Dialog open={formOpen} onOpenChange={(o) => { setFormOpen(o); if (!o) resetForm(); }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{editId ? "Editar Registro" : "Novo Registro"}</DialogTitle>
+          </DialogHeader>
 
-                  <div className="grid md:grid-cols-5 gap-2 mb-3">
-                    <Input
-                      name="descricao"
-                      value={newItem.descricao}
-                      onChange={(e) => setNewItem((p) => ({ ...p, descricao: e.target.value }))}
-                      placeholder="Descrição do item"
-                      className="md:col-span-2"
-                    />
-                    <Input
-                      name="quantidade"
-                      value={newItem.quantidade}
-                      onChange={(e) => setNewItem((p) => ({ ...p, quantidade: e.target.value }))}
-                      placeholder="Qtd"
-                    />
-                    <Input
-                      name="valor_unit"
-                      value={newItem.valor_unit}
-                      onChange={(e) => setNewItem((p) => ({ ...p, valor_unit: e.target.value }))}
-                      placeholder="Valor unit."
-                    />
-                    <Button type="button" onClick={addItem}>+ Adicionar</Button>
-                  </div>
+          <form onSubmit={submit} className="grid md:grid-cols-12 gap-4">
+            <div className="md:col-span-6">
+              <Label className="text-xs">Nome</Label>
+              <Input name="name" value={form.name} onChange={onFormChange} className="h-11 w-full" required />
+            </div>
 
-                  {(ordForm.itens || []).length > 0 && (
-                    <div className="overflow-auto">
-                      <Table className="min-w-full text-sm">
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-center">Descrição</TableHead>
-                            <TableHead className="text-center">Qtd</TableHead>
-                            <TableHead className="text-center">Valor Unit.</TableHead>
-                            <TableHead className="text-center">Total</TableHead>
-                            <TableHead className="text-center">Ações</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {ordForm.itens.map((i, idx) => {
-                            const rowTotal = parseFlex(i.quantidade) * parseFlex(i.valor_unit);
-                            return (
-                              <tr key={idx} className="border-t">
-                                <TableCell className="w-[40%] text-center align-middle">
-                                  <Input
-                                    value={i.descricao}
-                                    onChange={(e) => updateItemField(idx, "descricao", e.target.value)}
-                                  />
-                                </TableCell>
-                                <TableCell className="w-[10%] text-center align-middle">
-                                  <Input
-                                    value={i.quantidade}
-                                    onChange={(e) => updateItemField(idx, "quantidade", parseFlex(e.target.value))}
-                                  />
-                                </TableCell>
-                                <TableCell className="w-[20%] text-center align-middle">
-                                  <Input
-                                    value={i.valor_unit}
-                                    onChange={(e) => updateItemField(idx, "valor_unit", parseFlex(e.target.value))}
-                                  />
-                                </TableCell>
-                                <TableCell className="w/[20%] text-center align-middle">
-                                  {BRL(rowTotal)}
-                                </TableCell>
-                                <TableCell className="text-center align-middle w-[10%]">
-                                  <div className="flex justify-center">
-                                    <Button type="button" variant="destructive" onClick={() => removeItem(idx)}>
-                                      Remover
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </tr>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
+            <div className="md:col-span-6">
+              <Label className="text-xs">Empresa</Label>
+              <Input name="company" value={form.company} onChange={onFormChange} className="h-11 w-full" />
+            </div>
 
-                  <div className="text-right font-semibold mt-3">
-                    Total: {BRL(orderTotal)}
-                  </div>
-                </div>
+            <div className="md:col-span-6">
+              <Label className="text-xs">Telefone</Label>
+              <Input name="phone" value={form.phone} onChange={onFormChange} className="h-11 w-full" placeholder="(00) 00000-0000" />
+            </div>
 
-                <div className="md:col-span-4 flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="secondary" onClick={() => { resetOrderForm(); setOpenOrder(false); }}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit">{ordEditId ? "Salvar Alterações" : "Adicionar Ordem"}</Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </section>
-      )}
+            <div className="md:col-span-6">
+              <Label className="text-xs">Estágio</Label>
+              <select name="stage" value={form.stage} onChange={onFormChange} className="border rounded px-3 h-11 w-full">
+                {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div className="md:col-span-6">
+              <Label className="text-xs">Valor (R$)</Label>
+              <Input name="value" value={form.value} onChange={onFormChange} className="h-11 w-full" placeholder="Ex.: 2.500,00" />
+            </div>
+
+            <div className="md:col-span-6">
+              <Label className="text-xs">Origem</Label>
+              <select name="source" value={form.source} onChange={onFormChange} className="border rounded px-3 h-11 w-full">
+                <option value="">Selecione</option>
+                {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div className="md:col-span-12">
+              <Label className="text-xs">Notas</Label>
+              <Textarea name="notes" value={form.notes} onChange={onFormChange} rows={4} />
+            </div>
+
+            <div className="md:col-span-12 flex items-center justify-end gap-2 pt-1">
+              <DialogFooter className="gap-2">
+                <Button type="button" variant="secondary" onClick={() => setFormOpen(false)} className="px-6">Cancelar</Button>
+                <Button type="submit" className="px-6">{editId ? "Salvar" : "Adicionar"}</Button>
+              </DialogFooter>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
