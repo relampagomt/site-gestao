@@ -13,7 +13,6 @@ import {
   UserCog,
   Truck,
   Bell,
-  ClipboardCheck,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button.jsx";
@@ -77,7 +76,6 @@ export default function AdminLayout() {
       { to: "/admin/clients", label: "Clientes", icon: Users },
       { to: "/admin/finance", label: "Finanças", icon: Wallet },
       { to: "/admin/users", label: "Usuários", icon: UserCog },
-      { to: "/admin/alerts", label: "Alertas", icon: Bell },
       { to: "/admin/orders", label: "OS", icon: ClipboardCheck },
     ];
     if (user?.role === "admin") {
