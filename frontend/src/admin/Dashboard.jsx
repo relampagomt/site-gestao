@@ -198,7 +198,7 @@ const Dashboard = () => {
         api.get('/materials').catch(() => ({ data: [] })),
         api.get('/actions').catch(() => ({ data: [] })),
         api.get('/vacancies').catch(() => ({ data: [] })),
-        api.get('/reports/monthly').catch(() => ({ data: [] }))
+        Promise.resolve({ data: [] })
       ]);
 
       const clients = Array.isArray(clientsRes.data) ? clientsRes.data : [];
